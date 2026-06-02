@@ -15,3 +15,90 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+.docs-prose {
+  color: #f7f8fb;
+  font-family: "Arial", sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.docs-prose h1,
+.docs-prose h2,
+.docs-prose h3,
+.docs-prose h4,
+.docs-prose h5,
+.docs-prose h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  color: #ffffff;
+}
+
+.docs-prose h1 {
+  margin: 0 0 28px;
+  font-size: 36px;
+}
+
+.docs-prose h2 {
+  margin: 28px 0 16px;
+  font-size: 24px;
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol,
+.docs-prose blockquote,
+.docs-prose pre,
+.docs-prose table {
+  margin: 0 0 16px;
+}
+
+.docs-prose a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+.docs-prose blockquote {
+  border-left: 3px solid #2563eb;
+  padding-left: 16px;
+  color: #d8deea;
+}
+
+.docs-prose pre {
+  overflow-x: auto;
+  border-radius: 16px;
+  background: #111827;
+  padding: 18px;
+  color: #e5e7eb;
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 24px;
+}
+
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.docs-prose th,
+.docs-prose td {
+  border: 1px solid #334155;
+  padding: 10px 12px;
+}
+
+.docs-prose img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.docs-prose hr {
+  margin: 28px 0;
+  border: 0;
+  border-top: 1px solid #334155;
+}
+

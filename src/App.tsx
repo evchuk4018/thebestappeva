@@ -14,14 +14,18 @@ import HomePage from './components/HomePage';
 import NutritionTracker from './components/NutritionTracker';
 import AiTab from './components/AiTab';
 import TaskManager from './components/TaskManager';
+import DocsHomePage from './components/docs/DocsHomePage';
+import DocsEditorPage from './components/docs/DocsEditorPage';
+import DocsNewRedirect from './components/docs/DocsNewRedirect';
 
 function AppContent() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null);
   const location = useLocation();
+  const isDocsRoute = location.pathname.startsWith('/docs');
 
   return (
     <div className="flex bg-zinc-950 text-zinc-50 h-[100dvh] overflow-hidden selection:bg-blue-500/30 font-sans">
-      <main className="flex-1 relative flex flex-col h-full overflow-hidden w-full max-w-5xl mx-auto md:border-x md:border-zinc-900">
+      <main className={`flex-1 relative flex flex-col h-full overflow-hidden w-full ${isDocsRoute ? '' : 'max-w-5xl mx-auto md:border-x md:border-zinc-900'}`}>
          <AnimatePresence mode="wait">
             {activeWorkout ? (
                <ActiveWorkout 
@@ -85,6 +89,48 @@ function AppContent() {
                       className="w-full h-full"
                     >
                       <TaskManager />
+                    </motion.div>
+                  }
+                />
+                <Route
+                  path="/docs"
+                  element={
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full h-full"
+                    >
+                      <DocsHomePage />
+                    </motion.div>
+                  }
+                />
+                <Route
+                  path="/docs/new"
+                  element={
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full h-full"
+                    >
+                      <DocsNewRedirect />
+                    </motion.div>
+                  }
+                />
+                <Route
+                  path="/docs/:docId"
+                  element={
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full h-full"
+                    >
+                      <DocsEditorPage />
                     </motion.div>
                   }
                 />

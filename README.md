@@ -1,6 +1,6 @@
 # thebestappeva
 
-This is a Vite + React app with workout, nutrition, AI chat, and task management screens.
+This is a Vite + React app with workout, nutrition, AI chat, task management, and a desktop-first Docs workspace.
 
 ## Local setup
 
@@ -33,6 +33,23 @@ The repo policy lives in `agent.md`.
 - Extract functions and components so each does one thing.
 - Keep authored project files at or below 300 lines.
 - Update documentation when a task changes behavior, structure, or developer workflow.
+
+## Docs workspace
+
+The app now includes a `/docs` module with:
+
+- `/docs`: template gallery, recent files, local search, `.docx` import, trash, duplicate, rename, and star actions.
+- `/docs/new`: blank-document creation redirect.
+- `/docs/:docId`: desktop-first document editor with local IndexedDB persistence, autosave, version history, document tabs, outline, citations, voice typing, `.docx` export, and print/PDF flow.
+
+Implementation notes:
+
+- Editor stack: `@tiptap/react`
+- Local persistence: `Dexie` / IndexedDB
+- `.docx` import: `mammoth`
+- `.docx` export: `docx`
+
+Documents are stored locally in the browser for a single user. There is no collaboration, comments, or server-side sync in the current implementation.
 
 ## Recent refactor
 
