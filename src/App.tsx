@@ -13,6 +13,7 @@ import { BottomNav } from './components/BottomNav';
 import HomePage from './components/HomePage';
 import NutritionTracker from './components/NutritionTracker';
 import AiTab from './components/AiTab';
+import TaskManager from './components/TaskManager';
 
 function AppContent() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null);
@@ -72,6 +73,20 @@ function AppContent() {
                       <AiTab />
                     </motion.div>
                   } 
+                />
+                <Route
+                  path="/tasks"
+                  element={
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full h-full"
+                    >
+                      <TaskManager />
+                    </motion.div>
+                  }
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
