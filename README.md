@@ -1,6 +1,6 @@
 # thebestappeva
 
-This is a Vite + React app with workout, nutrition, AI chat, task management, and a desktop-first Docs workspace.
+This is a Vite + React app with workout, nutrition, AI chat, task management, notes, and a desktop-first Docs workspace.
 
 ## Local setup
 
@@ -50,6 +50,20 @@ Implementation notes:
 - `.docx` export: `docx`
 
 Documents are stored locally in the browser for a single user. There is no collaboration, comments, or server-side sync in the current implementation.
+
+## Notes workspace
+
+The app now includes a `/notes` module with:
+
+- `/notes`: mobile-first quick capture, local search, pinned notes, quick-note filtering, and task-category-linked note organization
+- local IndexedDB persistence for title/body/tag/category metadata
+- seeded starter notes so the workspace is usable on first launch
+
+Implementation notes:
+
+- Local persistence: `Dexie` / IndexedDB
+- Project grouping source: existing task `category` values
+- Editing model: plain text note editor optimized for fast capture
 
 ## Recent refactor
 

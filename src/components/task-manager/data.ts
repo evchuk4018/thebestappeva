@@ -126,3 +126,7 @@ export function createInitialTasks(): Task[] {
     },
   ];
 }
+
+export function listTaskCategories(tasks = createInitialTasks()) {
+  return [...new Set(tasks.map((task) => task.category.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+}

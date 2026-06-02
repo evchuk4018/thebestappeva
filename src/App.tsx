@@ -14,6 +14,7 @@ import HomePage from './components/HomePage';
 import NutritionTracker from './components/NutritionTracker';
 import AiTab from './components/AiTab';
 import TaskManager from './components/TaskManager';
+import NotesPage from './components/NotesPage';
 import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
@@ -89,6 +90,20 @@ function AppContent() {
                       className="w-full h-full"
                     >
                       <TaskManager />
+                    </motion.div>
+                  }
+                />
+                <Route
+                  path="/notes"
+                  element={
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full h-full"
+                    >
+                      <NotesPage />
                     </motion.div>
                   }
                 />

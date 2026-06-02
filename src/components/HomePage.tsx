@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, Apple, Sparkles, ListTodo, FileText } from 'lucide-react';
+import { Dumbbell, Apple, Sparkles, ListTodo, FileText, NotebookPen } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function HomePage() {
@@ -75,6 +75,20 @@ export default function HomePage() {
       >
         <FileText size={44} strokeWidth={3} className="text-white text-opacity-95" />
         <span>Docs</span>
+      </motion.button>
+
+      <motion.button
+        id="btn-notes-start"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.96 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.5 }}
+        onClick={() => navigate('/notes')}
+        className="bg-red-600 hover:bg-red-500 text-white font-black text-2xl md:text-3xl py-12 px-10 rounded-3xl uppercase tracking-[0.2em] shadow-2xl shadow-red-950/60 hover:shadow-red-500/20 flex flex-col items-center justify-center gap-4 border border-red-500/30 cursor-pointer max-w-xs w-full transition-shadow duration-300"
+      >
+        <NotebookPen size={44} strokeWidth={3} className="text-white text-opacity-95" />
+        <span>Notes</span>
       </motion.button>
     </div>
   );
