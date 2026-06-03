@@ -9,25 +9,38 @@ import {
 
 // Mock Data
 
-const consumedData = [
+type DonutChartDatum = {
+  label: string;
+  value: number;
+  percent: number;
+  color: string;
+};
+
+type DonutChartProps = {
+  size?: number;
+  strokeWidth?: number;
+  centerText: string;
+  subText: string;
+  data: DonutChartDatum[];
+};
+
+const consumedData: DonutChartDatum[] = [
   { label: 'Protein', value: 66, percent: 22, color: '#34d399' },
   { label: 'Carbs', value: 158, percent: 54, color: '#3b82f6' },
   { label: 'Fat', value: 68, percent: 23, color: '#ef4444' },
 ];
 
-const expenditureData = [
+const expenditureData: DonutChartDatum[] = [
   { label: 'BMR', value: 1939, percent: 65, color: '#a855f7' },
   { label: 'Adjusted Baseline Activity', value: 961, percent: 32, color: '#2dd4bf' },
   { label: 'Exercise', value: 36, percent: 1, color: '#f97316' },
   { label: 'TEF', value: 29, percent: 1, color: '#6b7280' },
 ];
 
-function DonutChart({ size = 120, strokeWidth = 10, centerText, subText, data }) {
+function DonutChart({ size = 120, strokeWidth = 10, centerText, subText, data }: DonutChartProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   let currentOffset = 0;
-  
-  const total = data.reduce((sum, item) => sum + item.percent, 0);
 
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
