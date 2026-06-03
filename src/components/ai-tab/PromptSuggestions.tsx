@@ -5,7 +5,7 @@ const suggestionButtons = [
   { icon: GraduationCap, label: 'Learn' },
   { icon: PenTool, label: 'Write' },
   { icon: Coffee, label: 'Life stuff' },
-  { icon: Lightbulb, label: "Claude's choice" },
+  { icon: Lightbulb, label: "Model's choice" },
 ];
 
 export function PromptSuggestions({ onSelect }: { onSelect: (label: string) => void }) {

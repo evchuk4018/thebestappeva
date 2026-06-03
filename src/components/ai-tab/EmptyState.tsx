@@ -1,11 +1,16 @@
 import { ChatComposer } from './ChatComposer';
 import { PromptSuggestions } from './PromptSuggestions';
+import { OllamaAvailability, OllamaModel } from './types';
 
 interface EmptyStateProps {
-  currentModel: string;
+  availability: OllamaAvailability;
+  currentModel: string | null;
   inputValue: string;
   isModelDropdownOpen: boolean;
+  isModelLoading: boolean;
   isTyping: boolean;
+  models: OllamaModel[];
+  onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSelectModel: (model: string) => void;
@@ -29,13 +34,20 @@ export function EmptyState(props: EmptyStateProps) {
         </div>
       </div>
 
-      <h1 className="mb-8 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">Good evening, john skibidi</h1>
+      <h1 className="mb-3 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">Local Ollama chat</h1>
+      <p className="mb-8 max-w-xl text-sm leading-relaxed text-zinc-400">
+        Detect installed models, switch between them, and download new ones without leaving the app.
+      </p>
 
       <ChatComposer
+        availability={props.availability}
         currentModel={props.currentModel}
         inputValue={props.inputValue}
         isModelDropdownOpen={props.isModelDropdownOpen}
+        isModelLoading={props.isModelLoading}
         isTyping={props.isTyping}
+        models={props.models}
+        onAddModels={props.onAddModels}
         onInputChange={props.onInputChange}
         onKeyDown={props.onKeyDown}
         onSelectModel={props.onSelectModel}

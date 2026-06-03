@@ -3,26 +3,44 @@ import { AnimatePresence, motion } from 'motion/react';
 import { PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ActiveChatView } from './ai-tab/ActiveChatView';
+import { AddModelsModal } from './ai-tab/AddModelsModal';
+import { AiStatusBanner } from './ai-tab/AiStatusBanner';
 import { ChatComposer } from './ai-tab/ChatComposer';
-import { createInitialChats, modelOptions } from './ai-tab/data';
 import { EmptyState } from './ai-tab/EmptyState';
-import { appendMessage, buildAiResponse, createNewChat, getSuggestionPrompt } from './ai-tab/helpers';
+import { getSuggestionPrompt } from './ai-tab/helpers';
 import { MobileHeader } from './ai-tab/MobileHeader';
+import { pullModel } from './ai-tab/ollama-client';
+import { RuntimePill } from './ai-tab/RuntimePill';
 import { Sidebar } from './ai-tab/Sidebar';
-import { Chat } from './ai-tab/types';
+import { PullProgress } from './ai-tab/types';
+import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
 
 export default function AiTab() {
   const navigate = useNavigate();
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [addModelsOpen, setAddModelsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isPullingModel, setIsPullingModel] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [currentModel, setCurrentModel] = useState(modelOptions[0]);
-  const [chats, setChats] = useState<Chat[]>(createInitialChats);
+  const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const {
+    availableModels,
+    availability,
+    chats,
+    currentModel,
+    deleteChat,
+    isTyping,
+    lastError,
+    refreshModels,
+    selectedChatId,
+    sendMessage,
+    setCurrentModel,
+    setSelectedChatId,
+  } = useOllamaChat();
 
   useResponsiveSidebar({ setIsMobile, setSidebarOpen });
 
@@ -33,6 +51,11 @@ export default function AiTab() {
   }, [chats, isTyping, selectedChatId]);
 
   const activeChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
+  const isModelLoading = availability === 'connecting';
+  const openAddModels = () => {
+    setModelDropdownOpen(false);
+    setAddModelsOpen(true);
+  };
 
   const handleSuggestionClick = (label: string) => {
     setInputValue(getSuggestionPrompt(label));
@@ -40,10 +63,7 @@ export default function AiTab() {
 
   const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
-    if (selectedChatId === chatId) {
-      setSelectedChatId(null);
-    }
+    deleteChat(chatId);
   };
 
   const handleNewChat = () => {
@@ -53,41 +73,49 @@ export default function AiTab() {
     }
   };
 
-  const triggerAiReply = (chatId: string, messageText: string) => {
-    setIsTyping(true);
-    window.setTimeout(() => {
-      const assistantMessage = { role: 'assistant' as const, content: buildAiResponse(messageText) };
-      setChats((currentChats) => currentChats.map((chat) => (chat.id === chatId ? appendMessage(chat, assistantMessage) : chat)));
-      setIsTyping(false);
-    }, 1200);
+  const handleSend = async () => {
+    const nextMessage = inputValue.trim();
+    if (!nextMessage || isTyping || !currentModel) {
+      return;
+    }
+
+    setInputValue('');
+    await sendMessage(nextMessage);
   };
 
-  const handleSend = () => {
-    if (!inputValue.trim() || isTyping) {
-      return;
+  const handlePullModel = async (modelName: string) => {
+    setIsPullingModel(true);
+    setPullProgress({
+      model: modelName,
+      status: 'Preparing local download...',
+      done: false,
+    });
+
+    try {
+      await pullModel(modelName, (progress) => setPullProgress(progress));
+      await refreshModels(modelName);
+      setCurrentModel(modelName);
+      setPullProgress({
+        model: modelName,
+        status: 'Model installed successfully.',
+        done: true,
+      });
+    } catch (error) {
+      setPullProgress({
+        model: modelName,
+        status: error instanceof Error ? error.message : 'Model download failed.',
+        done: true,
+        error: error instanceof Error ? error.message : 'Model download failed.',
+      });
+    } finally {
+      setIsPullingModel(false);
     }
-
-    const userMessage = inputValue;
-    setInputValue('');
-
-    if (selectedChatId === null) {
-      const newChat = createNewChat(userMessage);
-      setChats((currentChats) => [newChat, ...currentChats]);
-      setSelectedChatId(newChat.id);
-      triggerAiReply(newChat.id, userMessage);
-      return;
-    }
-
-    setChats((currentChats) => currentChats.map((chat) => (
-      chat.id === selectedChatId ? appendMessage(chat, { role: 'user', content: userMessage }) : chat
-    )));
-    triggerAiReply(selectedChatId, userMessage);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -131,23 +159,24 @@ export default function AiTab() {
         )}
 
         <div className="flex h-16 select-none items-center justify-center pt-3">
-          <div className="inline-flex items-center gap-1 rounded-full border border-[#2f2f2b]/45 bg-[#121210]/40 px-3 py-1.5 text-xs text-zinc-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-500" />
-            <span>Free plan</span>
-            <span className="px-1 text-zinc-600">.</span>
-            <button type="button" className="font-medium text-[#e2875e] hover:underline">Upgrade</button>
-          </div>
+          <RuntimePill availability={availability} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
         </div>
 
         <div ref={chatContainerRef} className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
+          <AiStatusBanner availability={availability} lastError={lastError} onOpenAddModels={openAddModels} />
+
           {activeChat ? (
             <ActiveChatView activeChat={activeChat} currentModel={currentModel} isTyping={isTyping} />
           ) : (
             <EmptyState
+              availability={availability}
               currentModel={currentModel}
               inputValue={inputValue}
               isModelDropdownOpen={modelDropdownOpen}
+              isModelLoading={isModelLoading}
               isTyping={isTyping}
+              models={availableModels}
+              onAddModels={openAddModels}
               onInputChange={setInputValue}
               onKeyDown={handleKeyDown}
               onSelectModel={(model) => {
@@ -155,7 +184,7 @@ export default function AiTab() {
                 setModelDropdownOpen(false);
               }}
               onSelectSuggestion={handleSuggestionClick}
-              onSend={handleSend}
+              onSend={() => void handleSend()}
               onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
             />
           )}
@@ -165,21 +194,37 @@ export default function AiTab() {
           <div className="absolute bottom-0 left-0 right-0 z-20 flex justify-center border-t border-[#242422]/60 bg-[#1b1b19] px-4 py-4 md:px-8">
             <div className="w-full max-w-xl md:max-w-2xl">
               <ChatComposer
+                availability={availability}
                 compact
                 currentModel={currentModel}
                 inputValue={inputValue}
-                isModelDropdownOpen={false}
+                isModelDropdownOpen={modelDropdownOpen}
+                isModelLoading={isModelLoading}
                 isTyping={isTyping}
+                models={availableModels}
+                onAddModels={openAddModels}
                 onInputChange={setInputValue}
                 onKeyDown={handleKeyDown}
-                onSelectModel={setCurrentModel}
-                onSend={handleSend}
+                onSelectModel={(model) => {
+                  setCurrentModel(model);
+                  setModelDropdownOpen(false);
+                }}
+                onSend={() => void handleSend()}
                 onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
               />
             </div>
           </div>
         )}
       </div>
+
+      <AddModelsModal
+        installedModelNames={availableModels.map((model) => model.name)}
+        isOpen={addModelsOpen}
+        isPulling={isPullingModel}
+        pullProgress={pullProgress}
+        onClose={() => setAddModelsOpen(false)}
+        onPullModel={handlePullModel}
+      />
     </div>
   );
 }

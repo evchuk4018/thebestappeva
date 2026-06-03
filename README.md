@@ -13,6 +13,8 @@ npm run dev
 
 The dev server runs on `http://localhost:3000`.
 
+If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
+
 ## Validation
 
 Run these checks before pushing changes:
@@ -64,6 +66,21 @@ Implementation notes:
 - Local persistence: `Dexie` / IndexedDB
 - Project grouping source: existing task `category` values
 - Editing model: plain text note editor optimized for fast capture
+
+## AI workspace
+
+The app now includes a `/ai` module backed by the local Ollama runtime:
+
+- installed models are loaded from the local Ollama API and shown in the in-app model picker
+- chats and the selected model persist in `localStorage`
+- the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
+
+Implementation notes:
+
+- Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
+- Model discovery: `GET /api/tags`
+- Chat requests: `POST /api/chat`
+- Model downloads: `POST /api/pull`
 
 ## Recent refactor
 

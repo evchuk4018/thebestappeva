@@ -13,7 +13,6 @@
     "test:files": "node scripts/check-file-lengths.mjs"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tiptap/extension-character-count": "^3.24.0",
     "@tiptap/extension-color": "^3.24.0",

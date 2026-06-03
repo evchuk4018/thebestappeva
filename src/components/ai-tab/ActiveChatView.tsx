@@ -2,7 +2,7 @@ import { Chat } from './types';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
-  currentModel: string;
+  currentModel: string | null;
   isTyping: boolean;
 }
 
@@ -16,13 +16,15 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
             {activeChat.title}
           </h2>
         </div>
-        <span className="rounded border border-zinc-800 bg-[#272724] px-2.5 py-1 font-mono text-[10px] text-zinc-400">{currentModel}</span>
+        <span className="rounded border border-zinc-800 bg-[#272724] px-2.5 py-1 font-mono text-[10px] text-zinc-400">
+          {currentModel ?? 'No model'}
+        </span>
       </div>
 
       {activeChat.messages.map((message, index) => {
         const isUser = message.role === 'user';
         return (
-          <div key={`${message.role}-${index}`} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+          <div key={`${message.role}-${message.createdAt}-${index}`} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
             <div className="mb-1.5 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
               {isUser ? (
                 <>
@@ -34,10 +36,10 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
                 <>
                   <span className="flex items-center gap-1">
                     <span className="text-[#e2875e]">*</span>
-                    <span>Claude</span>
+                    <span>{message.model ?? 'Ollama'}</span>
                   </span>
                   <span className="h-1 w-1 rounded-full bg-zinc-600" />
-                  <span>Coach Model</span>
+                  <span>Local model</span>
                 </>
               )}
             </div>
@@ -55,7 +57,7 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
         <div className="flex flex-col items-start">
           <div className="mb-1 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
             <span className="text-[#e2875e]">*</span>
-            <span>Claude AI is processing...</span>
+            <span>{currentModel ? `${currentModel} is generating...` : 'Local model is generating...'}</span>
           </div>
           <div className="flex items-center gap-1 rounded-2xl border border-transparent px-4 py-2">
             {[0, 0.15, 0.3].map((delay) => (

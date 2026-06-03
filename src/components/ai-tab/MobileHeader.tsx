@@ -14,7 +14,7 @@ export function MobileHeader({ onNewChat, onToggleSidebar }: MobileHeaderProps) 
       </button>
       <span className="flex items-center gap-1 font-serif text-xl font-medium tracking-tight text-[#efeae4]/95">
         <span className="inline-block h-4 w-4 rounded-full bg-[#e2875e]/20 text-center text-xs font-bold leading-none text-[#e2875e]">*</span>
-        Claude
+        Ollama
       </span>
       <button type="button" onClick={onNewChat} className="rounded-full p-1.5 hover:bg-[#20201e]">
         <Plus size={20} />

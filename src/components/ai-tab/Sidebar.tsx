@@ -56,7 +56,7 @@ export function Sidebar({
     >
       <div className="flex h-0 flex-1 flex-col overflow-y-auto">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
-          <span className="font-serif text-2xl font-medium tracking-wide text-[#efeae4]">Claude</span>
+          <span className="font-serif text-2xl font-medium tracking-wide text-[#efeae4]">Ollama</span>
           <div className="flex items-center gap-1.5">
             <button type="button" className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#20201e] hover:text-zinc-200">
               <Search size={16} />
@@ -129,7 +129,7 @@ export function Sidebar({
                   <button
                     type="button"
                     onClick={(event) => onDeleteChat(chat.id, event)}
-                    className="absolute right-1.5 top-1/2 rounded p-1 text-zinc-500 opacity-0 duration-100 hover:bg-[#20201e] hover:text-red-400 group-hover:opacity-100 -translate-y-1/2"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-500 opacity-0 duration-100 hover:bg-[#20201e] hover:text-red-400 group-hover:opacity-100"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -154,7 +154,7 @@ export function Sidebar({
             </button>
             <div className="flex flex-col text-left">
               <span className="max-w-[124px] truncate text-xs font-semibold text-[#efeae4]">john skibidi</span>
-              <span className="text-[10px] leading-none text-zinc-500">Free plan</span>
+              <span className="text-[10px] leading-none text-zinc-500">Local runtime</span>
             </div>
           </div>
 
