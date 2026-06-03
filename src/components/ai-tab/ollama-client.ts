@@ -1,4 +1,4 @@
-import { ModelMessage, OllamaModel, PullProgress } from './types';
+import { OllamaModel, PullProgress } from './types';
 import { normalizeModelName, sortModels } from './helpers';
 
 const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
@@ -33,11 +33,13 @@ interface OllamaChatResponse {
   message?: {
     content?: string;
     thinking?: string;
+    tool_calls?: OllamaToolCall[];
   };
 }
 
 interface OllamaChatOptions {
   think?: boolean;
+  tools?: OllamaToolDefinition[];
 }
 
 interface OllamaPullEvent {
@@ -48,9 +50,70 @@ interface OllamaPullEvent {
   total?: number;
 }
 
+interface OllamaToolCall {
+  id?: string;
+  function?: {
+    index?: number;
+    name?: string;
+    description?: string;
+    arguments?: Record<string, unknown>;
+  };
+}
+
+export interface OllamaChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  thinking?: string;
+  tool_name?: string;
+  tool_calls?: Array<{
+    function: {
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+  }>;
+}
+
+export interface OllamaToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<
+        string,
+        {
+          type: 'string' | 'number' | 'boolean';
+          description: string;
+        }
+      >;
+      required?: string[];
+    };
+  };
+}
+
 async function readJson<T>(response: Response) {
   if (!response.ok) {
-    throw new OllamaClientError(`Ollama request failed with ${response.status}.`, 'response');
+    const rawBody = (await response.text()).trim();
+
+    if (!rawBody) {
+      throw new OllamaClientError(`Ollama request failed with ${response.status}.`, 'response');
+    }
+
+    let detail = rawBody;
+
+    try {
+      const payload = JSON.parse(rawBody) as { error?: string };
+      detail = typeof payload.error === 'string' ? payload.error.trim() : rawBody;
+    } catch {
+      detail = rawBody;
+    }
+
+    if (!detail || detail === rawBody && (rawBody.startsWith('{') || rawBody.startsWith('['))) {
+      throw new OllamaClientError(`Ollama request failed with ${response.status}.`, 'response');
+    }
+
+    throw new OllamaClientError(`Ollama request failed with ${response.status}: ${detail}`, 'response');
   }
 
   try {
@@ -96,7 +159,7 @@ export async function listModels() {
   }
 }
 
-export async function chatWithModel(model: string, messages: ModelMessage[], options: OllamaChatOptions = {}) {
+export async function chatWithModel(model: string, messages: OllamaChatMessage[], options: OllamaChatOptions = {}) {
   try {
     const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',
@@ -106,14 +169,34 @@ export async function chatWithModel(model: string, messages: ModelMessage[], opt
         stream: false,
         think: options.think,
         messages,
+        tools: options.tools?.length ? options.tools : undefined,
       }),
     });
 
     const payload = await readJson<OllamaChatResponse>(response);
+    const toolCalls =
+      payload.message?.tool_calls
+        ?.map((toolCall) => {
+          const functionName = toolCall.function?.name?.trim();
+          if (!functionName) {
+            return null;
+          }
+
+          return {
+            function: {
+              name: functionName,
+              arguments: toolCall.function?.arguments ?? {},
+            },
+          };
+        })
+        .filter(Boolean) as OllamaChatMessage['tool_calls'];
+    const content = payload.message?.content?.trim() || '';
+
     return {
       model: payload.model ?? model,
-      content: payload.message?.content?.trim() || 'The selected model returned an empty response.',
+      content: content || (toolCalls?.length ? '' : 'The selected model returned an empty response.'),
       thinking: payload.message?.thinking?.trim() || undefined,
+      toolCalls,
     };
   } catch (error) {
     throw normalizeOllamaError(error, 'Unable to reach local Ollama.');
