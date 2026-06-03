@@ -4,23 +4,15 @@ import {
   createAssistantErrorMessage,
   createAssistantMessage,
   createNewChat,
-  createToolCallMessage,
-  createToolResultMessage,
   createUserMessage,
 } from './helpers';
-import { chatWithModel, listModels, OllamaChatMessage } from './ollama-client';
+import { chatWithModel, listModels } from './ollama-client';
 import { buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
 import { loadStoredChats, loadStoredEnabledTools, loadStoredSelectedModel, saveStoredChats, saveStoredEnabledTools, saveStoredSelectedModel } from './storage';
 import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
-import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
-import { buildModelMessages, buildOllamaTools, buildPlainModelMessages, formatToolResultContent } from './tools/prompting';
+import { buildPlainModelMessages } from './tools/prompting';
 import { getToolRegistryEntries } from './tools/registry';
-
-interface ResolvedTurn {
-  chat: Chat;
-  availability: OllamaAvailability;
-  lastError: string | null;
-}
+import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
 
 export function useOllamaChat() {
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
@@ -147,82 +139,13 @@ export function useOllamaChat() {
   }
 
   async function sendThinkingReply(chat: Chat, model: string): Promise<ResolvedTurn> {
-    let workingChat = chat;
-    let toolCallCount = 0;
-    let requestMessages = buildModelMessages(workingChat.messages);
-    const availableTools = buildOllamaTools(activeToolEntries);
-
-    while (true) {
-      let reply;
-      try {
-        reply = await chatWithModel(model, requestMessages, {
-          think: true,
-          tools: availableTools,
-        });
-      } catch (error) {
-        const clientError = normalizeTurnError(error);
-        return {
-          chat: appendMessage(workingChat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
-          availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
-          lastError: clientError.message,
-        };
-      }
-
-      if (!reply.toolCalls?.length) {
-        return {
-          chat: appendMessage(workingChat, createAssistantMessage(reply.content, reply.model, reply.thinking)),
-          availability: 'ready',
-          lastError: null,
-        };
-      }
-
-      if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALL_DEPTH) {
-        return {
-          chat: appendMessage(
-            workingChat,
-            createAssistantErrorMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
-          ),
-          availability: 'ready',
-          lastError: 'Tool-call limit reached for this turn.',
-        };
-      }
-
-      requestMessages = [
-        ...requestMessages,
-        {
-          role: 'assistant',
-          content: reply.content,
-          thinking: reply.thinking,
-          tool_calls: reply.toolCalls,
-        } satisfies OllamaChatMessage,
-      ];
-
-      for (const toolCall of reply.toolCalls) {
-        const invocation = {
-          toolId: resolveToolId(toolCall.function.name),
-          functionName: toolCall.function.name,
-          args: toolCall.function.arguments ?? {},
-          createdAt: new Date().toISOString(),
-        };
-
-        workingChat = appendMessage(workingChat, createToolCallMessage(invocation));
-        setChats((currentChats) => replaceChat(currentChats, workingChat));
-
-        const result = await executeToolInvocation(invocation, activeToolEntries);
-        workingChat = appendMessage(workingChat, createToolResultMessage(result));
-        setChats((currentChats) => replaceChat(currentChats, workingChat));
-        requestMessages = [
-          ...requestMessages,
-          {
-            role: 'tool',
-            tool_name: invocation.functionName,
-            content: formatToolResultContent(result),
-          } satisfies OllamaChatMessage,
-        ];
-      }
-
-      toolCallCount += reply.toolCalls.length;
-    }
+    return resolveThinkingTurn({
+      chat,
+      model,
+      activeToolEntries,
+      onProgress: (nextChat) => setChats((currentChats) => replaceChat(currentChats, nextChat)),
+      resolveToolId,
+    });
   }
 
   async function sendMessage(content: string) {

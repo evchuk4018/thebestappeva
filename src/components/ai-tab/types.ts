@@ -9,31 +9,39 @@ export interface UserMessage {
 
 export type AssistantMessageStatus = 'complete' | 'error';
 
+interface BaseAssistantTraceStep {
+  id: string;
+  createdAt: string;
+}
+
+export interface AssistantThinkingTraceStep extends BaseAssistantTraceStep {
+  kind: 'thinking';
+  content: string;
+}
+
+export interface AssistantToolCallTraceStep extends BaseAssistantTraceStep {
+  kind: 'tool-call';
+  invocation: ToolInvocation;
+}
+
+export interface AssistantToolResultTraceStep extends BaseAssistantTraceStep {
+  kind: 'tool-result';
+  result: ToolResult;
+}
+
+export type AssistantTraceStep = AssistantThinkingTraceStep | AssistantToolCallTraceStep | AssistantToolResultTraceStep;
+
 export interface AssistantMessage {
   id: string;
   kind: 'assistant';
   content: string;
   createdAt: string;
   model?: string;
-  thinking?: string;
+  trace?: AssistantTraceStep[];
   status: AssistantMessageStatus;
 }
 
-export interface ToolCallMessage {
-  id: string;
-  kind: 'tool-call';
-  createdAt: string;
-  invocation: ToolInvocation;
-}
-
-export interface ToolResultMessage {
-  id: string;
-  kind: 'tool-result';
-  createdAt: string;
-  result: ToolResult;
-}
-
-export type AiMessage = UserMessage | AssistantMessage | ToolCallMessage | ToolResultMessage;
+export type AiMessage = UserMessage | AssistantMessage;
 
 export type ChatMode = 'thinking' | 'flash';
 

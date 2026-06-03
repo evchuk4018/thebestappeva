@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AssistantTracePanel } from './AssistantTracePanel';
 import { AssistantMessage } from './types';
 
 interface AssistantMessageCardProps {
@@ -8,12 +9,18 @@ interface AssistantMessageCardProps {
 
 export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
-  const hasThinking = Boolean(message.thinking?.trim());
+  const hasTrace = Boolean(message.trace?.length);
   const isError = message.status === 'error';
   const cardClassName = isError
     ? 'rounded-2xl border border-[#5a2c2c] bg-[#2a1717] p-4 text-[#ffd9d9]'
     : 'rounded-2xl border border-transparent bg-transparent p-4';
   const metaLabel = isError ? 'Local model error' : 'Local model';
+
+  useEffect(() => {
+    if (hasTrace && !message.content.trim()) {
+      setShowThinking(true);
+    }
+  }, [hasTrace, message.content]);
 
   return (
     <div className="flex max-w-full flex-col items-start">
@@ -27,7 +34,7 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
       </div>
 
       <div className="flex max-w-full flex-col gap-3 rounded-2xl border border-transparent bg-transparent text-left text-sm leading-relaxed text-zinc-200 shadow-sm">
-        {hasThinking && (
+        {hasTrace && (
           <div className="w-full rounded-2xl border border-[#2f2f2b] bg-[#171715]">
             <button
               type="button"
@@ -38,11 +45,7 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
               <span>Thinking</span>
               <ChevronDown size={14} className={`transition ${showThinking ? 'rotate-180' : ''}`} />
             </button>
-            {showThinking && (
-              <div className="border-t border-[#2a2a27] px-4 py-3">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{message.thinking}</p>
-              </div>
-            )}
+            {showThinking && message.trace && <AssistantTracePanel steps={message.trace} />}
           </div>
         )}
 

@@ -1,6 +1,5 @@
 import { AssistantMessageCard } from './AssistantMessageCard';
 import { Chat } from './types';
-import { ToolMessageCard } from './ToolMessageCard';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
@@ -24,10 +23,6 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
       </div>
 
       {activeChat.messages.map((message) => {
-        if (message.kind === 'tool-call' || message.kind === 'tool-result') {
-          return <ToolMessageCard key={message.id} message={message} />;
-        }
-
         const isUser = message.kind === 'user';
         if (!isUser) {
           return <AssistantMessageCard key={message.id} message={message} />;

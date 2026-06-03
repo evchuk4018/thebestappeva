@@ -2,12 +2,11 @@ import {
   AiMessage,
   AssistantMessage,
   AssistantMessageStatus,
+  AssistantTraceStep,
   Chat,
   ChatMode,
   OllamaModel,
   PullProgress,
-  ToolCallMessage,
-  ToolResultMessage,
   UserMessage,
 } from './types';
 import { suggestionPrompts } from './data';
@@ -29,38 +28,55 @@ export function createUserMessage(content: string): UserMessage {
 export function createAssistantMessage(
   content: string,
   model?: string,
-  thinking?: string,
-  status: AssistantMessageStatus = 'complete',
+  options: {
+    status?: AssistantMessageStatus;
+    trace?: AssistantTraceStep[];
+  } = {},
 ): AssistantMessage {
   return {
     id: createId('msg'),
     kind: 'assistant',
     content: content.trim(),
     model,
-    thinking: thinking?.trim() || undefined,
-    status,
+    trace: options.trace?.length ? options.trace : undefined,
+    status: options.status ?? 'complete',
     createdAt: new Date().toISOString(),
   };
 }
 
-export function createAssistantErrorMessage(content: string, model?: string, thinking?: string): AssistantMessage {
-  return createAssistantMessage(content, model, thinking, 'error');
+export function createAssistantErrorMessage(
+  content: string,
+  model?: string,
+  options: {
+    trace?: AssistantTraceStep[];
+  } = {},
+): AssistantMessage {
+  return createAssistantMessage(content, model, { status: 'error', trace: options.trace });
 }
 
-export function createToolCallMessage(invocation: ToolInvocation): ToolCallMessage {
+export function createThinkingTraceStep(content: string, createdAt = new Date().toISOString()): AssistantTraceStep {
   return {
-    id: createId('msg'),
+    id: createId('trace'),
+    kind: 'thinking',
+    content: content.trim(),
+    createdAt,
+  };
+}
+
+export function createToolCallTraceStep(invocation: ToolInvocation): AssistantTraceStep {
+  return {
+    id: createId('trace'),
     kind: 'tool-call',
     createdAt: invocation.createdAt,
     invocation,
   };
 }
 
-export function createToolResultMessage(result: ToolResult): ToolResultMessage {
+export function createToolResultTraceStep(result: ToolResult, createdAt = new Date().toISOString()): AssistantTraceStep {
   return {
-    id: createId('msg'),
+    id: createId('trace'),
     kind: 'tool-result',
-    createdAt: new Date().toISOString(),
+    createdAt,
     result,
   };
 }
@@ -85,6 +101,18 @@ export function appendMessage(chat: Chat, message: AiMessage): Chat {
     ...chat,
     messages: [...chat.messages, message],
     updatedAt: message.createdAt,
+  };
+}
+
+export function upsertMessage(chat: Chat, message: AiMessage, updatedAt = new Date().toISOString()): Chat {
+  const nextMessages = chat.messages.some((current) => current.id === message.id)
+    ? chat.messages.map((current) => (current.id === message.id ? message : current))
+    : [...chat.messages, message];
+
+  return {
+    ...chat,
+    messages: nextMessages,
+    updatedAt,
   };
 }
 

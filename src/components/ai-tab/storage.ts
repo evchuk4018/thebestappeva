@@ -1,6 +1,7 @@
-import { AiMessage, Chat, ChatMode } from './types';
+import { AiMessage, AssistantTraceStep, Chat, ChatMode } from './types';
+import { ToolInvocation, ToolResult } from './tools/types';
 
-const chatsStorageKey = 'ai-tab.local-chats';
+const chatsStorageKey = 'ai-tab.local-chats.v2';
 const modelStorageKey = 'ai-tab.selected-model';
 const enabledToolsStorageKey = 'ai-tab.enabled-tools';
 
@@ -19,6 +20,91 @@ function migrateAssistantStatus(status: unknown) {
   return status === 'error' ? 'error' : 'complete';
 }
 
+function migrateToolInvocation(invocation: unknown): ToolInvocation | null {
+  if (
+    !isRecord(invocation) ||
+    typeof invocation.toolId !== 'string' ||
+    typeof invocation.functionName !== 'string' ||
+    !isRecord(invocation.args) ||
+    typeof invocation.createdAt !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    toolId: invocation.toolId,
+    functionName: invocation.functionName,
+    args: invocation.args,
+    createdAt: invocation.createdAt,
+  };
+}
+
+function migrateToolResult(result: unknown): ToolResult | null {
+  if (
+    !isRecord(result) ||
+    typeof result.toolId !== 'string' ||
+    typeof result.functionName !== 'string' ||
+    typeof result.ok !== 'boolean' ||
+    typeof result.summary !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    toolId: result.toolId,
+    functionName: result.functionName,
+    ok: result.ok,
+    summary: result.summary,
+    data: isRecord(result.data) ? result.data : undefined,
+    error: typeof result.error === 'string' ? result.error : undefined,
+  };
+}
+
+function migrateTraceStep(step: unknown): AssistantTraceStep | null {
+  if (!isRecord(step) || typeof step.kind !== 'string' || typeof step.id !== 'string' || typeof step.createdAt !== 'string') {
+    return null;
+  }
+
+  if (step.kind === 'thinking' && typeof step.content === 'string') {
+    return {
+      id: step.id,
+      kind: 'thinking',
+      content: step.content,
+      createdAt: step.createdAt,
+    };
+  }
+
+  if (step.kind === 'tool-call') {
+    const invocation = migrateToolInvocation(step.invocation);
+    if (!invocation) {
+      return null;
+    }
+
+    return {
+      id: step.id,
+      kind: 'tool-call',
+      invocation,
+      createdAt: step.createdAt,
+    };
+  }
+
+  if (step.kind === 'tool-result') {
+    const result = migrateToolResult(step.result);
+    if (!result) {
+      return null;
+    }
+
+    return {
+      id: step.id,
+      kind: 'tool-result',
+      result,
+      createdAt: step.createdAt,
+    };
+  }
+
+  return null;
+}
+
 function migrateMessage(message: unknown): AiMessage | null {
   if (!isRecord(message)) {
     return null;
@@ -27,12 +113,17 @@ function migrateMessage(message: unknown): AiMessage | null {
   const kind = typeof message.kind === 'string' ? message.kind : '';
   if (kind === 'assistant') {
     return {
-      ...message,
+      id: typeof message.id === 'string' ? message.id : `migrated-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: 'assistant',
+      content: typeof message.content === 'string' ? message.content : '',
+      createdAt: typeof message.createdAt === 'string' ? message.createdAt : new Date().toISOString(),
+      model: typeof message.model === 'string' ? message.model : undefined,
+      trace: Array.isArray(message.trace) ? message.trace.map(migrateTraceStep).filter(Boolean) as AssistantTraceStep[] : undefined,
       status: migrateAssistantStatus(message.status),
     } as AiMessage;
   }
 
-  if (kind === 'user' || kind === 'tool-call' || kind === 'tool-result') {
+  if (kind === 'user' && typeof message.id === 'string' && typeof message.content === 'string' && typeof message.createdAt === 'string') {
     return message as unknown as AiMessage;
   }
 

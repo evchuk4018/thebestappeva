@@ -1,40 +1,60 @@
 import { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
-import { AiMessage } from '../types';
+import { AiMessage, AssistantMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
-function toModelMessage(message: AiMessage): OllamaChatMessage | null {
-  if (message.kind === 'user') {
-    return { role: 'user', content: message.content };
-  }
+function buildAssistantTraceMessages(message: AssistantMessage) {
+  const traceMessages: OllamaChatMessage[] = [];
+  let pendingThinking: string[] = [];
 
-  if (message.kind === 'assistant') {
-    return {
+  const flushPendingAssistant = (content: string, toolCalls?: OllamaChatMessage['tool_calls']) => {
+    const combinedThinking = pendingThinking.join('\n\n').trim();
+    traceMessages.push({
       role: 'assistant',
-      content: message.content,
-      thinking: message.thinking,
-    };
-  }
+      content,
+      thinking: combinedThinking || undefined,
+      tool_calls: toolCalls,
+    });
+    pendingThinking = [];
+  };
 
-  if (message.kind === 'tool-call') {
-    return {
-      role: 'assistant',
-      content: '',
-      tool_calls: [
+  for (const step of message.trace ?? []) {
+    if (step.kind === 'thinking') {
+      pendingThinking.push(step.content);
+      continue;
+    }
+
+    if (step.kind === 'tool-call') {
+      flushPendingAssistant('', [
         {
           function: {
-            name: message.invocation.functionName,
-            arguments: message.invocation.args,
+            name: step.invocation.functionName,
+            arguments: step.invocation.args,
           },
         },
-      ],
-    };
+      ]);
+      continue;
+    }
+
+    traceMessages.push({
+      role: 'tool',
+      tool_name: step.result.functionName,
+      content: formatToolResultContent(step.result),
+    });
   }
 
-  return {
-    role: 'tool',
-    tool_name: message.result.functionName,
-    content: formatToolResultContent(message.result),
-  };
+  if (message.content.trim() || pendingThinking.length) {
+    flushPendingAssistant(message.content);
+  }
+
+  return traceMessages;
+}
+
+function toModelMessages(message: AiMessage) {
+  if (message.kind === 'user') {
+    return [{ role: 'user', content: message.content }] satisfies OllamaChatMessage[];
+  }
+
+  return buildAssistantTraceMessages(message);
 }
 
 function toPlainModelMessage(message: AiMessage): OllamaChatMessage | null {
@@ -68,7 +88,7 @@ export function formatToolResultContent(result: {
 }
 
 export function buildModelMessages(messages: AiMessage[]) {
-  return messages.map(toModelMessage).filter(Boolean) as OllamaChatMessage[];
+  return messages.flatMap(toModelMessages);
 }
 
 export function buildPlainModelMessages(messages: AiMessage[]) {
