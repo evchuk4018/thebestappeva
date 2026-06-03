@@ -16,9 +16,12 @@ import { PullProgress } from './ai-tab/types';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
 
+type SidebarPanel = 'chats' | 'tools';
+
 export default function AiTab() {
   const navigate = useNavigate();
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [activePanel, setActivePanel] = useState<SidebarPanel>('chats');
   const [addModelsOpen, setAddModelsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isMobile, setIsMobile] = useState(false);
@@ -40,6 +43,8 @@ export default function AiTab() {
     sendMessage,
     setCurrentModel,
     setSelectedChatId,
+    toggleTool,
+    tools,
   } = useOllamaChat();
 
   useResponsiveSidebar({ setIsMobile, setSidebarOpen });
@@ -67,6 +72,7 @@ export default function AiTab() {
   };
 
   const handleNewChat = () => {
+    setActivePanel('chats');
     setSelectedChatId(null);
     if (isMobile) {
       setSidebarOpen(false);
@@ -136,15 +142,22 @@ export default function AiTab() {
       </AnimatePresence>
 
       <Sidebar
+        activePanel={activePanel}
         chats={chats}
         isMobile={isMobile}
         selectedChatId={selectedChatId}
         sidebarOpen={sidebarOpen}
+        tools={tools}
         onClose={() => setSidebarOpen(false)}
         onDeleteChat={handleDeleteChat}
         onNavigateHome={() => navigate('/')}
         onNewChat={handleNewChat}
-        onSelectChat={setSelectedChatId}
+        onSelectChat={(chatId) => {
+          setActivePanel('chats');
+          setSelectedChatId(chatId);
+        }}
+        onSelectPanel={setActivePanel}
+        onToggleTool={toggleTool}
       />
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">

@@ -1,53 +1,51 @@
-import {
-  Briefcase,
-  ChevronUp,
-  Download,
-  Layers,
-  LayoutGrid,
-  MessageSquare,
-  PanelLeftClose,
-  Plus,
-  Search,
-  Sliders,
-  Terminal,
-  Trash2,
-} from 'lucide-react';
+import { ChevronUp, Download, MessageSquare, PanelLeftClose, Plus, Search, Wrench } from 'lucide-react';
 import { Chat } from './types';
+import { SidebarChatsPanel } from './SidebarChatsPanel';
+import { ToolsPanel } from './ToolsPanel';
+import { ToolDefinition } from './tools/types';
+
+type SidebarPanel = 'chats' | 'tools';
+
+interface SidebarTool extends ToolDefinition {
+  enabled: boolean;
+}
 
 interface SidebarProps {
+  activePanel: SidebarPanel;
   chats: Chat[];
   isMobile: boolean;
   selectedChatId: string | null;
   sidebarOpen: boolean;
+  tools: SidebarTool[];
   onClose: () => void;
   onDeleteChat: (chatId: string, event: React.MouseEvent) => void;
   onNavigateHome: () => void;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
+  onSelectPanel: (panel: SidebarPanel) => void;
+  onToggleTool: (toolId: string, enabled: boolean) => void;
 }
 
+const panelItems = [
+  { icon: MessageSquare, label: 'Chats', value: 'chats' },
+  { icon: Wrench, label: 'Tools', value: 'tools' },
+] as const;
+
 export function Sidebar({
+  activePanel,
   chats,
   isMobile,
   selectedChatId,
   sidebarOpen,
+  tools,
   onClose,
   onDeleteChat,
   onNavigateHome,
   onNewChat,
   onSelectChat,
+  onSelectPanel,
+  onToggleTool,
 }: SidebarProps) {
-  const menuItems = [
-    { icon: MessageSquare, label: 'Chats' },
-    { icon: Briefcase, label: 'Projects' },
-    { icon: Layers, label: 'Artifacts' },
-    { icon: Sliders, label: 'Customize' },
-  ];
-  const productItems = [
-    { icon: LayoutGrid, label: 'Cowork' },
-    { icon: Terminal, label: 'Code' },
-  ];
-
   return (
     <div
       className={`fixed bottom-0 left-0 top-0 z-40 flex h-full w-72 transform flex-col justify-between border-r border-[#242422]/60 bg-[#121210] transition-transform duration-300 md:relative md:w-64 lg:w-72 ${
@@ -70,7 +68,10 @@ export function Sidebar({
         <div className="flex flex-col gap-1 px-3 py-2">
           <button
             type="button"
-            onClick={onNewChat}
+            onClick={() => {
+              onSelectPanel('chats');
+              onNewChat();
+            }}
             className="flex w-full items-center justify-between rounded-xl border border-[#2f2f2b] px-4 py-2.5 text-left text-sm font-medium text-[#efeae4] duration-150 hover:bg-[#1a1a18]"
           >
             <span className="flex items-center gap-2">
@@ -81,64 +82,40 @@ export function Sidebar({
           </button>
         </div>
 
-        <div className="flex flex-col gap-0.5 px-2 py-1.5 text-sm font-normal text-zinc-400">
-          {menuItems.map(({ icon: Icon, label }) => (
-            <button key={label} type="button" className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-[#1a1a18]">
-              <Icon size={16} className="text-zinc-500" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 px-2">
-          <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Products</div>
-          <div className="flex flex-col gap-0.5 text-sm text-zinc-400">
-            {productItems.map(({ icon: Icon, label }) => (
-              <button key={label} type="button" className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-[#1a1a18]">
-                <Icon size={16} className="text-zinc-600" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-1 flex-col px-2 pb-4">
-          <div className="mb-1.5 flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-            <span>Recents</span>
-            <button type="button" className="rounded p-0.5 text-zinc-600 hover:text-zinc-400">
-              <Sliders size={11} />
-            </button>
-          </div>
-          <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto pr-1">
-            {chats.map((chat) => {
-              const isActive = chat.id === selectedChatId;
+        <div className="mt-3 px-3">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Workspace</div>
+          <div className="grid grid-cols-2 gap-2">
+            {panelItems.map(({ icon: Icon, label, value }) => {
+              const isActive = activePanel === value;
               return (
-                <div
-                  key={chat.id}
-                  onClick={() => {
-                    onSelectChat(chat.id);
-                    if (isMobile) {
-                      onClose();
-                    }
-                  }}
-                  className={`group relative flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-left text-xs duration-150 ${
-                    isActive ? 'bg-[#272724] font-medium text-[#efeae4]' : 'text-zinc-400 hover:bg-[#1a1a18] hover:text-[#efeae4]'
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onSelectPanel(value)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                    isActive ? 'bg-[#1f262f] text-[#efeae4]' : 'bg-[#171715] text-zinc-400 hover:bg-[#1a1a18] hover:text-zinc-200'
                   }`}
                 >
-                  <span className="w-full truncate pr-4">{chat.title}</span>
-                  <button
-                    type="button"
-                    onClick={(event) => onDeleteChat(chat.id, event)}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-500 opacity-0 duration-100 hover:bg-[#20201e] hover:text-red-400 group-hover:opacity-100"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+                  <Icon size={15} className={isActive ? 'text-[#8db4d0]' : 'text-zinc-500'} />
+                  <span>{label}</span>
+                </button>
               );
             })}
-            {chats.length === 0 && <div className="px-3 py-4 text-xs italic text-zinc-600">No chats yet</div>}
           </div>
         </div>
+
+        {activePanel === 'chats' ? (
+          <SidebarChatsPanel
+            chats={chats}
+            isMobile={isMobile}
+            selectedChatId={selectedChatId}
+            onClose={onClose}
+            onDeleteChat={onDeleteChat}
+            onSelectChat={onSelectChat}
+          />
+        ) : (
+          <ToolsPanel tools={tools} onToggleTool={onToggleTool} />
+        )}
       </div>
 
       <div className="flex flex-col gap-2 border-t border-[#242422]/60 bg-[#11110f] p-3">

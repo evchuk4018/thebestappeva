@@ -1,14 +1,40 @@
-export interface Message {
-  role: 'user' | 'assistant';
+import { ToolInvocation, ToolResult } from './tools/types';
+
+export interface UserMessage {
+  id: string;
+  kind: 'user';
+  content: string;
+  createdAt: string;
+}
+
+export interface AssistantMessage {
+  id: string;
+  kind: 'assistant';
   content: string;
   createdAt: string;
   model?: string;
 }
 
+export interface ToolCallMessage {
+  id: string;
+  kind: 'tool-call';
+  createdAt: string;
+  invocation: ToolInvocation;
+}
+
+export interface ToolResultMessage {
+  id: string;
+  kind: 'tool-result';
+  createdAt: string;
+  result: ToolResult;
+}
+
+export type AiMessage = UserMessage | AssistantMessage | ToolCallMessage | ToolResultMessage;
+
 export interface Chat {
   id: string;
   title: string;
-  messages: Message[];
+  messages: AiMessage[];
   updatedAt: string;
 }
 
@@ -37,6 +63,11 @@ export interface CatalogModel {
   description: string;
   tags: string[];
   sizes: string[];
+}
+
+export interface ModelMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
 }
 
 export type OllamaAvailability = 'connecting' | 'ready' | 'no-models' | 'unavailable';

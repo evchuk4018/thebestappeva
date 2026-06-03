@@ -1,4 +1,5 @@
 import { Chat } from './types';
+import { ToolMessageCard } from './ToolMessageCard';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
@@ -21,10 +22,14 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
         </span>
       </div>
 
-      {activeChat.messages.map((message, index) => {
-        const isUser = message.role === 'user';
+      {activeChat.messages.map((message) => {
+        if (message.kind === 'tool-call' || message.kind === 'tool-result') {
+          return <ToolMessageCard key={message.id} message={message} />;
+        }
+
+        const isUser = message.kind === 'user';
         return (
-          <div key={`${message.role}-${message.createdAt}-${index}`} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+          <div key={message.id} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
             <div className="mb-1.5 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
               {isUser ? (
                 <>

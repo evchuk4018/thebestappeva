@@ -1,12 +1,54 @@
-import { Chat, Message, OllamaModel, PullProgress } from './types';
+import { AiMessage, AssistantMessage, Chat, OllamaModel, PullProgress, ToolCallMessage, ToolResultMessage, UserMessage } from './types';
 import { suggestionPrompts } from './data';
+import { ToolInvocation, ToolResult } from './tools/types';
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createUserMessage(content: string): UserMessage {
+  return {
+    id: createId('msg'),
+    kind: 'user',
+    content: content.trim(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function createAssistantMessage(content: string, model?: string): AssistantMessage {
+  return {
+    id: createId('msg'),
+    kind: 'assistant',
+    content: content.trim(),
+    model,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function createToolCallMessage(invocation: ToolInvocation): ToolCallMessage {
+  return {
+    id: createId('msg'),
+    kind: 'tool-call',
+    createdAt: invocation.createdAt,
+    invocation,
+  };
+}
+
+export function createToolResultMessage(result: ToolResult): ToolResultMessage {
+  return {
+    id: createId('msg'),
+    kind: 'tool-result',
+    createdAt: new Date().toISOString(),
+    result,
+  };
+}
 
 export function createChatTitle(message: string) {
   const summary = message.trim().split(/\s+/).slice(0, 5).join(' ');
   return summary.length > 42 ? `${summary.slice(0, 42)}...` : summary || 'New local chat';
 }
 
-export function createNewChat(message: Message): Chat {
+export function createNewChat(message: UserMessage): Chat {
   return {
     id: `chat-${Date.now()}`,
     title: createChatTitle(message.content),
@@ -15,7 +57,7 @@ export function createNewChat(message: Message): Chat {
   };
 }
 
-export function appendMessage(chat: Chat, message: Message): Chat {
+export function appendMessage(chat: Chat, message: AiMessage): Chat {
   return {
     ...chat,
     messages: [...chat.messages, message],

@@ -1,4 +1,4 @@
-import { Message, OllamaModel, PullProgress } from './types';
+import { ModelMessage, OllamaModel, PullProgress } from './types';
 import { normalizeModelName, sortModels } from './helpers';
 
 const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
@@ -55,14 +55,14 @@ export async function listModels() {
   );
 }
 
-export async function chatWithModel(model: string, messages: Message[]) {
+export async function chatWithModel(model: string, messages: ModelMessage[]) {
   const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       stream: false,
-      messages: messages.map(({ role, content }) => ({ role, content })),
+      messages,
     }),
   });
 

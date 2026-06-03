@@ -72,7 +72,11 @@ Implementation notes:
 The app now includes a `/ai` module backed by the local Ollama runtime:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
-- chats and the selected model persist in `localStorage`
+- chats, selected model, and enabled tools persist in `localStorage`
+- the left sidebar now has `Chats` and `Tools` panels
+- the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
+- the first browser-side tool is `/weather`, which can load current conditions for a place query on demand
+- tool calls are automatic: the app injects enabled-tool context into the model prompt, parses machine-readable tool requests, runs the tool, and sends the tool result back into the conversation before the final assistant reply
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
 
 Implementation notes:
@@ -81,6 +85,8 @@ Implementation notes:
 - Model discovery: `GET /api/tags`
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
+- Tool execution: browser-only runtime under `src/components/ai-tab/tools`
+- Weather data: Open-Meteo geocoding + forecast APIs with no API key
 
 ## Recent refactor
 
