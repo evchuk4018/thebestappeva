@@ -23,10 +23,11 @@ function AppContent() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null);
   const location = useLocation();
   const isDocsRoute = location.pathname.startsWith('/docs');
+  const usesFullBleedLayout = isDocsRoute || location.pathname === '/ai';
 
   return (
     <div className="flex bg-zinc-950 text-zinc-50 h-[100dvh] overflow-hidden selection:bg-blue-500/30 font-sans">
-      <main className={`flex-1 relative flex flex-col h-full overflow-hidden w-full ${isDocsRoute ? '' : 'max-w-5xl mx-auto md:border-x md:border-zinc-900'}`}>
+      <main className={`flex-1 relative flex flex-col h-full overflow-hidden w-full ${usesFullBleedLayout ? '' : 'max-w-5xl mx-auto md:border-x md:border-zinc-900'}`}>
          <AnimatePresence mode="wait">
             {activeWorkout ? (
                <ActiveWorkout 
