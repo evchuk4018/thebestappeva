@@ -162,7 +162,7 @@ export default function AiTab() {
         onToggleTool={toggleTool}
       />
 
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {!sidebarOpen && !isMobile && (
           <button
             type="button"
@@ -177,7 +177,7 @@ export default function AiTab() {
           <RuntimePill availability={availability} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
         </div>
 
-        <div ref={chatContainerRef} className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
+        <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
           <AiStatusBanner availability={availability} lastError={lastError} onOpenAddModels={openAddModels} />
 
           {activeChat ? (

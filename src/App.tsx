@@ -27,7 +27,7 @@ function AppContent() {
 
   return (
     <div className="flex bg-zinc-950 text-zinc-50 h-[100dvh] overflow-hidden selection:bg-blue-500/30 font-sans">
-      <main className={`flex-1 relative flex flex-col h-full overflow-hidden w-full ${usesFullBleedLayout ? '' : 'max-w-5xl mx-auto md:border-x md:border-zinc-900'}`}>
+      <main className={`relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden ${usesFullBleedLayout ? '' : 'mx-auto max-w-5xl md:border-x md:border-zinc-900'}`}>
          <AnimatePresence mode="wait">
             {activeWorkout ? (
                <ActiveWorkout 
@@ -74,7 +74,7 @@ function AppContent() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.98 }}
                       transition={{ duration: 0.2 }}
-                      className="w-full h-full"
+                      className="h-full min-h-0 w-full"
                     >
                       <AiTab />
                     </motion.div>

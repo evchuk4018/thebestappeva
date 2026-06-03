@@ -10,7 +10,7 @@ interface ActiveChatViewProps {
 
 export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveChatViewProps) {
   return (
-    <div className="flex h-full w-full max-w-xl flex-col gap-6 py-6 pb-24 md:max-w-2xl">
+    <div className="flex w-full max-w-xl flex-col gap-6 py-6 pb-24 md:max-w-2xl">
       <div className="flex items-center justify-between border-b border-[#2d2d2a]/50 pb-4">
         <div className="flex flex-col text-left">
           <span className="text-xs font-mono text-zinc-500">Conversation Thread</span>
