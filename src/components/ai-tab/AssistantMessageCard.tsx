@@ -9,6 +9,11 @@ interface AssistantMessageCardProps {
 export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasThinking = Boolean(message.thinking?.trim());
+  const isError = message.status === 'error';
+  const cardClassName = isError
+    ? 'rounded-2xl border border-[#5a2c2c] bg-[#2a1717] p-4 text-[#ffd9d9]'
+    : 'rounded-2xl border border-transparent bg-transparent p-4';
+  const metaLabel = isError ? 'Local model error' : 'Local model';
 
   return (
     <div className="flex max-w-full flex-col items-start">
@@ -18,7 +23,7 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
           <span>{message.model ?? 'Ollama'}</span>
         </span>
         <span className="h-1 w-1 rounded-full bg-zinc-600" />
-        <span>Local model</span>
+        <span>{metaLabel}</span>
       </div>
 
       <div className="flex max-w-full flex-col gap-3 rounded-2xl border border-transparent bg-transparent text-left text-sm leading-relaxed text-zinc-200 shadow-sm">
@@ -41,7 +46,8 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
           </div>
         )}
 
-        <div className="rounded-2xl border border-transparent bg-transparent p-4">
+        <div className={cardClassName}>
+          {isError && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#ffb3b3]">Failed reply</p>}
           <p className="whitespace-pre-line">{message.content}</p>
         </div>
       </div>

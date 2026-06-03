@@ -1,4 +1,15 @@
-import { AiMessage, AssistantMessage, Chat, ChatMode, OllamaModel, PullProgress, ToolCallMessage, ToolResultMessage, UserMessage } from './types';
+import {
+  AiMessage,
+  AssistantMessage,
+  AssistantMessageStatus,
+  Chat,
+  ChatMode,
+  OllamaModel,
+  PullProgress,
+  ToolCallMessage,
+  ToolResultMessage,
+  UserMessage,
+} from './types';
 import { suggestionPrompts } from './data';
 import { ToolInvocation, ToolResult } from './tools/types';
 
@@ -15,15 +26,25 @@ export function createUserMessage(content: string): UserMessage {
   };
 }
 
-export function createAssistantMessage(content: string, model?: string, thinking?: string): AssistantMessage {
+export function createAssistantMessage(
+  content: string,
+  model?: string,
+  thinking?: string,
+  status: AssistantMessageStatus = 'complete',
+): AssistantMessage {
   return {
     id: createId('msg'),
     kind: 'assistant',
     content: content.trim(),
     model,
     thinking: thinking?.trim() || undefined,
+    status,
     createdAt: new Date().toISOString(),
   };
+}
+
+export function createAssistantErrorMessage(content: string, model?: string, thinking?: string): AssistantMessage {
+  return createAssistantMessage(content, model, thinking, 'error');
 }
 
 export function createToolCallMessage(invocation: ToolInvocation): ToolCallMessage {

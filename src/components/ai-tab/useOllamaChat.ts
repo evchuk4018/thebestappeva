@@ -1,6 +1,14 @@
 import { useEffect, useEffectEvent, useState } from 'react';
-import { appendMessage, createAssistantMessage, createNewChat, createToolCallMessage, createToolResultMessage, createUserMessage } from './helpers';
-import { chatWithModel, listModels } from './ollama-client';
+import {
+  appendMessage,
+  createAssistantErrorMessage,
+  createAssistantMessage,
+  createNewChat,
+  createToolCallMessage,
+  createToolResultMessage,
+  createUserMessage,
+} from './helpers';
+import { chatWithModel, listModels, OllamaClientError } from './ollama-client';
 import { loadStoredChats, loadStoredEnabledTools, loadStoredSelectedModel, saveStoredChats, saveStoredEnabledTools, saveStoredSelectedModel } from './storage';
 import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
 import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
@@ -19,6 +27,32 @@ function replaceChat(currentChats: Chat[], nextChat: Chat) {
 
 function updateChatMode(currentChats: Chat[], chatId: string, mode: ChatMode) {
   return currentChats.map((chat) => (chat.id === chatId ? { ...chat, mode } : chat));
+}
+
+interface ResolvedTurn {
+  chat: Chat;
+  availability: OllamaAvailability;
+  lastError: string | null;
+}
+
+function buildTurnFailureMessage(error: OllamaClientError) {
+  if (error.kind === 'connection') {
+    return 'I could not reach the local Ollama runtime for this turn. Check that Ollama is still running, then try again.';
+  }
+
+  return `I hit a local runtime error before I could finish this reply.\n\n${error.message}`;
+}
+
+function normalizeTurnError(error: unknown) {
+  if (error instanceof OllamaClientError) {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return new OllamaClientError(error.message, 'response');
+  }
+
+  return new OllamaClientError('Unable to complete this reply.', 'response');
 }
 
 export function useOllamaChat() {
@@ -122,28 +156,60 @@ export function useOllamaChat() {
     setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
   }
 
-  async function sendFlashReply(chat: Chat, model: string) {
-    const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false });
-    return appendMessage(chat, createAssistantMessage(reply.content, reply.model));
+  async function sendFlashReply(chat: Chat, model: string): Promise<ResolvedTurn> {
+    try {
+      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false });
+      return {
+        chat: appendMessage(chat, createAssistantMessage(reply.content, reply.model)),
+        availability: 'ready',
+        lastError: null,
+      };
+    } catch (error) {
+      const clientError = normalizeTurnError(error);
+      return {
+        chat: appendMessage(chat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
+        availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
+        lastError: clientError.message,
+      };
+    }
   }
 
-  async function sendThinkingReply(chat: Chat, model: string) {
+  async function sendThinkingReply(chat: Chat, model: string): Promise<ResolvedTurn> {
     let workingChat = chat;
     let toolCallCount = 0;
 
     while (true) {
-      const reply = await chatWithModel(model, buildModelMessages(workingChat.messages, activeToolEntries), { think: true });
+      let reply;
+      try {
+        reply = await chatWithModel(model, buildModelMessages(workingChat.messages, activeToolEntries), { think: true });
+      } catch (error) {
+        const clientError = normalizeTurnError(error);
+        return {
+          chat: appendMessage(workingChat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
+          availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
+          lastError: clientError.message,
+        };
+      }
+
       const parsedToolCall = parseToolCall(reply.content);
 
       if (!parsedToolCall) {
-        return appendMessage(workingChat, createAssistantMessage(reply.content, reply.model, reply.thinking));
+        return {
+          chat: appendMessage(workingChat, createAssistantMessage(reply.content, reply.model, reply.thinking)),
+          availability: 'ready',
+          lastError: null,
+        };
       }
 
       if (toolCallCount >= MAX_TOOL_CALL_DEPTH) {
-        return appendMessage(
-          workingChat,
-          createAssistantMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
-        );
+        return {
+          chat: appendMessage(
+            workingChat,
+            createAssistantErrorMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
+          ),
+          availability: 'ready',
+          lastError: 'Tool-call limit reached for this turn.',
+        };
       }
 
       const invocation = {
@@ -181,16 +247,11 @@ export function useOllamaChat() {
     setIsTyping(true);
     setLastError(null);
 
-    try {
-      const nextChat = nextChatMode === 'flash' ? await sendFlashReply(baseChat, currentModel) : await sendThinkingReply(baseChat, currentModel);
-      setChats((currentChats) => replaceChat(currentChats, nextChat));
-      setAvailability('ready');
-    } catch (error) {
-      setAvailability('unavailable');
-      setLastError(error instanceof Error ? error.message : 'Unable to reach local Ollama.');
-    } finally {
-      setIsTyping(false);
-    }
+    const resolvedTurn = nextChatMode === 'flash' ? await sendFlashReply(baseChat, currentModel) : await sendThinkingReply(baseChat, currentModel);
+    setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
+    setAvailability(resolvedTurn.availability);
+    setLastError(resolvedTurn.lastError);
+    setIsTyping(false);
   }
 
   function deleteChat(chatId: string) {

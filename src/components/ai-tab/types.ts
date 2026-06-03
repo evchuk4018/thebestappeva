@@ -7,6 +7,8 @@ export interface UserMessage {
   createdAt: string;
 }
 
+export type AssistantMessageStatus = 'complete' | 'error';
+
 export interface AssistantMessage {
   id: string;
   kind: 'assistant';
@@ -14,6 +16,7 @@ export interface AssistantMessage {
   createdAt: string;
   model?: string;
   thinking?: string;
+  status: AssistantMessageStatus;
 }
 
 export interface ToolCallMessage {

@@ -15,13 +15,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function migrateAssistantStatus(status: unknown) {
+  return status === 'error' ? 'error' : 'complete';
+}
+
 function migrateMessage(message: unknown): AiMessage | null {
   if (!isRecord(message)) {
     return null;
   }
 
   const kind = typeof message.kind === 'string' ? message.kind : '';
-  if (kind === 'user' || kind === 'assistant' || kind === 'tool-call' || kind === 'tool-result') {
+  if (kind === 'assistant') {
+    return {
+      ...message,
+      status: migrateAssistantStatus(message.status),
+    } as AiMessage;
+  }
+
+  if (kind === 'user' || kind === 'tool-call' || kind === 'tool-result') {
     return message as unknown as AiMessage;
   }
 
@@ -32,6 +43,7 @@ function migrateMessage(message: unknown): AiMessage | null {
       kind: legacy.role,
       content: legacy.content,
       model: legacy.model,
+      status: 'complete',
       createdAt: legacy.createdAt ?? new Date().toISOString(),
     } as AiMessage;
   }

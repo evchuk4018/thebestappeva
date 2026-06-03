@@ -29,5 +29,16 @@ export async function executeToolInvocation(invocation: ToolInvocation, entries:
     };
   }
 
-  return entry.execute(invocation);
+  try {
+    return await entry.execute(invocation);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The tool failed unexpectedly.';
+    return {
+      toolId: invocation.toolId,
+      functionName: invocation.functionName,
+      ok: false,
+      summary: message,
+      error: message,
+    };
+  }
 }
