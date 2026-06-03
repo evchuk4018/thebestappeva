@@ -1,4 +1,4 @@
-import { AiMessage, Chat } from './types';
+import { AiMessage, Chat, ChatMode } from './types';
 
 const chatsStorageKey = 'ai-tab.local-chats';
 const modelStorageKey = 'ai-tab.selected-model';
@@ -45,10 +45,12 @@ function migrateChat(chat: unknown): Chat | null {
   }
 
   const messages = chat.messages.map(migrateMessage).filter(Boolean) as AiMessage[];
+  const mode = chat.mode === 'flash' ? ('flash' as ChatMode) : ('thinking' as ChatMode);
   return {
     id: chat.id,
     title: chat.title,
     messages,
+    mode,
     updatedAt: typeof chat.updatedAt === 'string' ? chat.updatedAt : messages.at(-1)?.createdAt ?? new Date().toISOString(),
   };
 }

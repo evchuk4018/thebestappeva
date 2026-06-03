@@ -2,10 +2,10 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import { appendMessage, createAssistantMessage, createNewChat, createToolCallMessage, createToolResultMessage, createUserMessage } from './helpers';
 import { chatWithModel, listModels } from './ollama-client';
 import { loadStoredChats, loadStoredEnabledTools, loadStoredSelectedModel, saveStoredChats, saveStoredEnabledTools, saveStoredSelectedModel } from './storage';
-import { Chat, OllamaAvailability, OllamaModel } from './types';
+import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
 import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
 import { parseToolCall } from './tools/parser';
-import { buildModelMessages } from './tools/prompting';
+import { buildModelMessages, buildPlainModelMessages } from './tools/prompting';
 import { getToolRegistryEntries } from './tools/registry';
 
 function replaceChat(currentChats: Chat[], nextChat: Chat) {
@@ -17,12 +17,17 @@ function replaceChat(currentChats: Chat[], nextChat: Chat) {
   return currentChats.map((chat) => (chat.id === nextChat.id ? nextChat : chat));
 }
 
+function updateChatMode(currentChats: Chat[], chatId: string, mode: ChatMode) {
+  return currentChats.map((chat) => (chat.id === chatId ? { ...chat, mode } : chat));
+}
+
 export function useOllamaChat() {
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
   const [availability, setAvailability] = useState<OllamaAvailability>('connecting');
   const [chats, setChats] = useState<Chat[]>(loadStoredChats);
   const [currentModel, setCurrentModel] = useState<string | null>(loadStoredSelectedModel);
   const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(loadStoredEnabledTools);
+  const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -33,6 +38,8 @@ export function useOllamaChat() {
     enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
   }));
   const activeToolEntries = toolRegistryEntries.filter(({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault);
+  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
+  const chatMode = selectedChat?.mode ?? draftMode;
 
   async function refreshModels(preferredModel?: string | null) {
     try {
@@ -95,77 +102,88 @@ export function useOllamaChat() {
     return () => window.clearInterval(intervalId);
   }, [availability, refreshModelsOnEffect]);
 
+  function selectChat(chatId: string | null) {
+    setSelectedChatId(chatId);
+    if (!chatId) {
+      setDraftMode('thinking');
+    }
+  }
+
+  function setChatMode(mode: ChatMode) {
+    if (selectedChatId) {
+      setChats((currentChats) => updateChatMode(currentChats, selectedChatId, mode));
+      return;
+    }
+
+    setDraftMode(mode);
+  }
+
+  function toggleChatMode() {
+    setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
+  }
+
+  async function sendFlashReply(chat: Chat, model: string) {
+    const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false });
+    return appendMessage(chat, createAssistantMessage(reply.content, reply.model));
+  }
+
+  async function sendThinkingReply(chat: Chat, model: string) {
+    let workingChat = chat;
+    let toolCallCount = 0;
+
+    while (true) {
+      const reply = await chatWithModel(model, buildModelMessages(workingChat.messages, activeToolEntries), { think: true });
+      const parsedToolCall = parseToolCall(reply.content);
+
+      if (!parsedToolCall) {
+        return appendMessage(workingChat, createAssistantMessage(reply.content, reply.model, reply.thinking));
+      }
+
+      if (toolCallCount >= MAX_TOOL_CALL_DEPTH) {
+        return appendMessage(
+          workingChat,
+          createAssistantMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
+        );
+      }
+
+      const invocation = {
+        toolId: parsedToolCall.tool,
+        functionName: parsedToolCall.function,
+        args: parsedToolCall.arguments ?? {},
+        createdAt: new Date().toISOString(),
+      };
+
+      workingChat = appendMessage(workingChat, createToolCallMessage(invocation));
+      setChats((currentChats) => replaceChat(currentChats, workingChat));
+
+      const result = await executeToolInvocation(invocation, activeToolEntries);
+      workingChat = appendMessage(workingChat, createToolResultMessage(result));
+      setChats((currentChats) => replaceChat(currentChats, workingChat));
+      toolCallCount += 1;
+    }
+  }
+
   async function sendMessage(content: string) {
     if (!currentModel || isTyping || !content.trim()) {
       return;
     }
 
     const userMessage = createUserMessage(content);
-    let workingChat: Chat | null = null;
-    let nextChatId = selectedChatId;
+    const nextChatMode = chatMode;
+    const baseChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, nextChatMode);
 
-    if (!selectedChatId) {
-      workingChat = createNewChat(userMessage);
-      nextChatId = workingChat.id;
-      setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
-      setSelectedChatId(workingChat.id);
-    } else {
-      const activeChat = chats.find((chat) => chat.id === selectedChatId);
-      if (!activeChat) {
-        return;
-      }
-
-      workingChat = appendMessage(activeChat, userMessage);
-      setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
+    if (!selectedChat) {
+      setSelectedChatId(baseChat.id);
+      setDraftMode('thinking');
     }
 
+    setChats((currentChats) => replaceChat(currentChats, baseChat));
     setIsTyping(true);
     setLastError(null);
 
     try {
-      let toolCallCount = 0;
-
-      while (workingChat) {
-        const reply = await chatWithModel(currentModel, buildModelMessages(workingChat.messages, activeToolEntries));
-        const parsedToolCall = parseToolCall(reply.content);
-
-        if (!parsedToolCall) {
-          const assistantMessage = createAssistantMessage(reply.content, reply.model);
-          workingChat = appendMessage(workingChat, assistantMessage);
-          setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
-          setAvailability('ready');
-          break;
-        }
-
-        if (toolCallCount >= MAX_TOOL_CALL_DEPTH) {
-          const assistantMessage = createAssistantMessage(
-            'I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.',
-            reply.model,
-          );
-          workingChat = appendMessage(workingChat, assistantMessage);
-          setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
-          break;
-        }
-
-        const invocation = {
-          toolId: parsedToolCall.tool,
-          functionName: parsedToolCall.function,
-          args: parsedToolCall.arguments ?? {},
-          createdAt: new Date().toISOString(),
-        };
-
-        workingChat = appendMessage(workingChat, createToolCallMessage(invocation));
-        setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
-
-        const result = await executeToolInvocation(invocation, activeToolEntries);
-        workingChat = appendMessage(workingChat, createToolResultMessage(result));
-        setChats((currentChats) => replaceChat(currentChats, workingChat as Chat));
-        toolCallCount += 1;
-      }
-
-      if (nextChatId) {
-        setSelectedChatId(nextChatId);
-      }
+      const nextChat = nextChatMode === 'flash' ? await sendFlashReply(baseChat, currentModel) : await sendThinkingReply(baseChat, currentModel);
+      setChats((currentChats) => replaceChat(currentChats, nextChat));
       setAvailability('ready');
     } catch (error) {
       setAvailability('unavailable');
@@ -178,7 +196,7 @@ export function useOllamaChat() {
   function deleteChat(chatId: string) {
     setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
     if (selectedChatId === chatId) {
-      setSelectedChatId(null);
+      selectChat(null);
     }
   }
 
@@ -189,16 +207,18 @@ export function useOllamaChat() {
   return {
     availableModels,
     availability,
+    chatMode,
     chats,
     currentModel,
     deleteChat,
     isTyping,
     lastError,
     refreshModels,
+    selectChat,
     selectedChatId,
     sendMessage,
     setCurrentModel,
-    setSelectedChatId,
+    toggleChatMode,
     toggleTool,
     tools,
   };

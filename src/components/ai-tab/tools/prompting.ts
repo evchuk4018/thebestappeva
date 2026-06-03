@@ -77,9 +77,25 @@ function toModelMessage(message: AiMessage): ModelMessage {
   };
 }
 
+function toPlainModelMessage(message: AiMessage): ModelMessage | null {
+  if (message.kind === 'user') {
+    return { role: 'user', content: message.content };
+  }
+
+  if (message.kind === 'assistant') {
+    return { role: 'assistant', content: message.content };
+  }
+
+  return null;
+}
+
 export function buildModelMessages(messages: AiMessage[], entries: ToolRegistryEntry[]) {
   return [
     { role: 'system', content: buildToolSystemPrompt(entries) } satisfies ModelMessage,
     ...messages.map(toModelMessage),
   ];
+}
+
+export function buildPlainModelMessages(messages: AiMessage[]) {
+  return messages.map(toPlainModelMessage).filter(Boolean) as ModelMessage[];
 }

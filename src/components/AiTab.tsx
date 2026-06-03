@@ -33,16 +33,18 @@ export default function AiTab() {
   const {
     availableModels,
     availability,
+    chatMode,
     chats,
     currentModel,
     deleteChat,
     isTyping,
     lastError,
     refreshModels,
+    selectChat,
     selectedChatId,
     sendMessage,
+    toggleChatMode,
     setCurrentModel,
-    setSelectedChatId,
     toggleTool,
     tools,
   } = useOllamaChat();
@@ -73,7 +75,7 @@ export default function AiTab() {
 
   const handleNewChat = () => {
     setActivePanel('chats');
-    setSelectedChatId(null);
+    selectChat(null);
     if (isMobile) {
       setSidebarOpen(false);
     }
@@ -154,7 +156,7 @@ export default function AiTab() {
         onNewChat={handleNewChat}
         onSelectChat={(chatId) => {
           setActivePanel('chats');
-          setSelectedChatId(chatId);
+          selectChat(chatId);
         }}
         onSelectPanel={setActivePanel}
         onToggleTool={toggleTool}
@@ -183,6 +185,7 @@ export default function AiTab() {
           ) : (
             <EmptyState
               availability={availability}
+              chatMode={chatMode}
               currentModel={currentModel}
               inputValue={inputValue}
               isModelDropdownOpen={modelDropdownOpen}
@@ -198,6 +201,7 @@ export default function AiTab() {
               }}
               onSelectSuggestion={handleSuggestionClick}
               onSend={() => void handleSend()}
+              onToggleMode={toggleChatMode}
               onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
             />
           )}
@@ -208,6 +212,7 @@ export default function AiTab() {
             <div className="w-full max-w-xl md:max-w-2xl">
               <ChatComposer
                 availability={availability}
+                chatMode={chatMode}
                 compact
                 currentModel={currentModel}
                 inputValue={inputValue}
@@ -223,6 +228,7 @@ export default function AiTab() {
                   setModelDropdownOpen(false);
                 }}
                 onSend={() => void handleSend()}
+                onToggleMode={toggleChatMode}
                 onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
               />
             </div>

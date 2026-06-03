@@ -1,4 +1,4 @@
-import { AiMessage, AssistantMessage, Chat, OllamaModel, PullProgress, ToolCallMessage, ToolResultMessage, UserMessage } from './types';
+import { AiMessage, AssistantMessage, Chat, ChatMode, OllamaModel, PullProgress, ToolCallMessage, ToolResultMessage, UserMessage } from './types';
 import { suggestionPrompts } from './data';
 import { ToolInvocation, ToolResult } from './tools/types';
 
@@ -15,12 +15,13 @@ export function createUserMessage(content: string): UserMessage {
   };
 }
 
-export function createAssistantMessage(content: string, model?: string): AssistantMessage {
+export function createAssistantMessage(content: string, model?: string, thinking?: string): AssistantMessage {
   return {
     id: createId('msg'),
     kind: 'assistant',
     content: content.trim(),
     model,
+    thinking: thinking?.trim() || undefined,
     createdAt: new Date().toISOString(),
   };
 }
@@ -48,11 +49,12 @@ export function createChatTitle(message: string) {
   return summary.length > 42 ? `${summary.slice(0, 42)}...` : summary || 'New local chat';
 }
 
-export function createNewChat(message: UserMessage): Chat {
+export function createNewChat(message: UserMessage, mode: ChatMode): Chat {
   return {
     id: `chat-${Date.now()}`,
     title: createChatTitle(message.content),
     messages: [message],
+    mode,
     updatedAt: message.createdAt,
   };
 }

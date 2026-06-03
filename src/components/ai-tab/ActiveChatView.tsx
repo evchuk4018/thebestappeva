@@ -1,3 +1,4 @@
+import { AssistantMessageCard } from './AssistantMessageCard';
 import { Chat } from './types';
 import { ToolMessageCard } from './ToolMessageCard';
 
@@ -28,30 +29,19 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
         }
 
         const isUser = message.kind === 'user';
+        if (!isUser) {
+          return <AssistantMessageCard key={message.id} message={message} />;
+        }
+
         return (
           <div key={message.id} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
             <div className="mb-1.5 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
-              {isUser ? (
-                <>
-                  <span>john skibidi</span>
-                  <span className="h-1 w-1 rounded-full bg-zinc-600" />
-                  <span>User</span>
-                </>
-              ) : (
-                <>
-                  <span className="flex items-center gap-1">
-                    <span className="text-[#e2875e]">*</span>
-                    <span>{message.model ?? 'Ollama'}</span>
-                  </span>
-                  <span className="h-1 w-1 rounded-full bg-zinc-600" />
-                  <span>Local model</span>
-                </>
-              )}
+              <span>john skibidi</span>
+              <span className="h-1 w-1 rounded-full bg-zinc-600" />
+              <span>User</span>
             </div>
 
-            <div className={`rounded-2xl border p-4 text-left text-sm leading-relaxed shadow-sm ${
-              isUser ? 'max-w-[85%] border-[#2f2f2b]/80 bg-[#21211f]/60 text-zinc-100' : 'max-w-full border-transparent bg-transparent text-zinc-200'
-            }`}>
+            <div className="max-w-[85%] rounded-2xl border border-[#2f2f2b]/80 bg-[#21211f]/60 p-4 text-left text-sm leading-relaxed text-zinc-100 shadow-sm">
               <p className="whitespace-pre-line">{message.content}</p>
             </div>
           </div>

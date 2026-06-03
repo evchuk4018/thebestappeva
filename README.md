@@ -72,11 +72,14 @@ Implementation notes:
 The app now includes a `/ai` module backed by the local Ollama runtime:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
-- chats, selected model, and enabled tools persist in `localStorage`
+- chats, per-chat mode, selected model, and enabled tools persist in `localStorage`
 - the left sidebar now has `Chats` and `Tools` panels
+- each chat has a mode toggle beside the model picker:
+  - `Thinking` enables Ollama thinking and shows the returned reasoning trace in a collapsible block
+  - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - the first browser-side tool is `/weather`, which can load current conditions for a place query on demand
-- tool calls are automatic: the app injects enabled-tool context into the model prompt, parses machine-readable tool requests, runs the tool, and sends the tool result back into the conversation before the final assistant reply
+- tool calls are automatic in `Thinking` mode: the app injects enabled-tool context into the model prompt, parses machine-readable tool requests, runs the tool, and sends the tool result back into the conversation before the final assistant reply
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
 
 Implementation notes:

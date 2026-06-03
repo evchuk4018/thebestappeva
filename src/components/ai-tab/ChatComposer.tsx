@@ -1,9 +1,11 @@
+import { ChatModeToggle } from './ChatModeToggle';
 import { ArrowRight, Headphones, Mic, Paperclip, Send } from 'lucide-react';
 import { ModelPicker } from './ModelPicker';
-import { OllamaAvailability, OllamaModel } from './types';
+import { ChatMode, OllamaAvailability, OllamaModel } from './types';
 
 interface ChatComposerProps {
   availability: OllamaAvailability;
+  chatMode: ChatMode;
   compact?: boolean;
   currentModel: string | null;
   inputValue: string;
@@ -16,6 +18,7 @@ interface ChatComposerProps {
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onSend: () => void;
   onSelectModel: (model: string) => void;
+  onToggleMode: () => void;
   onToggleModelDropdown: () => void;
 }
 
@@ -37,6 +40,7 @@ function getPlaceholder(availability: OllamaAvailability, currentModel: string |
 
 export function ChatComposer({
   availability,
+  chatMode,
   compact = false,
   currentModel,
   inputValue,
@@ -49,6 +53,7 @@ export function ChatComposer({
   onKeyDown,
   onSend,
   onSelectModel,
+  onToggleMode,
   onToggleModelDropdown,
 }: ChatComposerProps) {
   const isDisabled = !inputValue.trim() || isTyping || !currentModel;
@@ -71,16 +76,19 @@ export function ChatComposer({
             />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <ModelPicker
-              currentModel={currentModel}
-              isLoading={isModelLoading}
-              isOpen={isModelDropdownOpen}
-              models={models}
-              onAddModels={onAddModels}
-              onClose={onToggleModelDropdown}
-              onSelect={onSelectModel}
-              onToggle={onToggleModelDropdown}
-            />
+            <div className="flex items-center gap-2">
+              <ChatModeToggle mode={chatMode} onToggle={onToggleMode} />
+              <ModelPicker
+                currentModel={currentModel}
+                isLoading={isModelLoading}
+                isOpen={isModelDropdownOpen}
+                models={models}
+                onAddModels={onAddModels}
+                onClose={onToggleModelDropdown}
+                onSelect={onSelectModel}
+                onToggle={onToggleModelDropdown}
+              />
+            </div>
             <div className="flex items-center gap-1.5 text-zinc-500">
               <button type="button" className="rounded-lg p-1.5 hover:bg-zinc-800 hover:text-zinc-300">
                 <Paperclip size={16} />
@@ -122,6 +130,7 @@ export function ChatComposer({
         </div>
 
         <div className="flex items-center gap-2">
+          <ChatModeToggle mode={chatMode} onToggle={onToggleMode} />
           <ModelPicker
             currentModel={currentModel}
             isLoading={isModelLoading}

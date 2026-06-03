@@ -13,6 +13,7 @@ export interface AssistantMessage {
   content: string;
   createdAt: string;
   model?: string;
+  thinking?: string;
 }
 
 export interface ToolCallMessage {
@@ -31,10 +32,13 @@ export interface ToolResultMessage {
 
 export type AiMessage = UserMessage | AssistantMessage | ToolCallMessage | ToolResultMessage;
 
+export type ChatMode = 'thinking' | 'flash';
+
 export interface Chat {
   id: string;
   title: string;
   messages: AiMessage[];
+  mode: ChatMode;
   updatedAt: string;
 }
 

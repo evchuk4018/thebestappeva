@@ -20,7 +20,12 @@ interface OllamaChatResponse {
   model?: string;
   message?: {
     content?: string;
+    thinking?: string;
   };
+}
+
+interface OllamaChatOptions {
+  think?: boolean;
 }
 
 interface OllamaPullEvent {
@@ -55,13 +60,14 @@ export async function listModels() {
   );
 }
 
-export async function chatWithModel(model: string, messages: ModelMessage[]) {
+export async function chatWithModel(model: string, messages: ModelMessage[], options: OllamaChatOptions = {}) {
   const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       stream: false,
+      think: options.think,
       messages,
     }),
   });
@@ -70,6 +76,7 @@ export async function chatWithModel(model: string, messages: ModelMessage[]) {
   return {
     model: payload.model ?? model,
     content: payload.message?.content?.trim() || 'The selected model returned an empty response.',
+    thinking: payload.message?.thinking?.trim() || undefined,
   };
 }
 

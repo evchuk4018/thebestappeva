@@ -1,9 +1,10 @@
 import { ChatComposer } from './ChatComposer';
 import { PromptSuggestions } from './PromptSuggestions';
-import { OllamaAvailability, OllamaModel } from './types';
+import { ChatMode, OllamaAvailability, OllamaModel } from './types';
 
 interface EmptyStateProps {
   availability: OllamaAvailability;
+  chatMode: ChatMode;
   currentModel: string | null;
   inputValue: string;
   isModelDropdownOpen: boolean;
@@ -16,6 +17,7 @@ interface EmptyStateProps {
   onSelectModel: (model: string) => void;
   onSelectSuggestion: (label: string) => void;
   onSend: () => void;
+  onToggleMode: () => void;
   onToggleModelDropdown: () => void;
 }
 
@@ -41,6 +43,7 @@ export function EmptyState(props: EmptyStateProps) {
 
       <ChatComposer
         availability={props.availability}
+        chatMode={props.chatMode}
         currentModel={props.currentModel}
         inputValue={props.inputValue}
         isModelDropdownOpen={props.isModelDropdownOpen}
@@ -52,6 +55,7 @@ export function EmptyState(props: EmptyStateProps) {
         onKeyDown={props.onKeyDown}
         onSelectModel={props.onSelectModel}
         onSend={props.onSend}
+        onToggleMode={props.onToggleMode}
         onToggleModelDropdown={props.onToggleModelDropdown}
       />
 
