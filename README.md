@@ -78,7 +78,8 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
   - `Thinking` enables Ollama thinking and shows the returned reasoning trace in a collapsible block
   - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
-- the first browser-side tool is `/weather`, which can load current conditions for a place query on demand
+- browser-side starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, and `/online-status`
+- weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
@@ -94,7 +95,9 @@ Implementation notes:
 - Model downloads: `POST /api/pull`
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: browser-only runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key
+- This pass remains frontend-only with no backend proxy routes or provider keys
 
 ## Recent refactor
 

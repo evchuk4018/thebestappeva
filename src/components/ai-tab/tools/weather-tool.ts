@@ -1,116 +1,62 @@
 import { isAbortError } from '../abort-utils';
+import { formatCoordinate, getCurrentPosition } from './browser-context';
+import { buildLocationLabel, fetchCurrentWeather, geocodeWeatherQuery, getWeatherLabel } from './weather-service';
 import { ToolExecutionContext, ToolRegistryEntry, ToolResult } from './types';
-
-interface OpenMeteoGeocodingResponse {
-  results?: Array<{
-    name: string;
-    admin1?: string;
-    country?: string;
-    latitude: number;
-    longitude: number;
-  }>;
-}
-
-interface OpenMeteoForecastResponse {
-  current?: {
-    temperature_2m?: number;
-    apparent_temperature?: number;
-    relative_humidity_2m?: number;
-    precipitation?: number;
-    weather_code?: number;
-    wind_speed_10m?: number;
-  };
-  current_units?: {
-    temperature_2m?: string;
-    apparent_temperature?: string;
-    relative_humidity_2m?: string;
-    precipitation?: string;
-    wind_speed_10m?: string;
-  };
-}
-
-function getWeatherLabel(code?: number) {
-  const labels: Record<number, string> = {
-    0: 'clear skies',
-    1: 'mostly clear',
-    2: 'partly cloudy',
-    3: 'overcast',
-    45: 'foggy',
-    48: 'rime fog',
-    51: 'light drizzle',
-    53: 'drizzle',
-    55: 'dense drizzle',
-    61: 'light rain',
-    63: 'rain',
-    65: 'heavy rain',
-    71: 'light snow',
-    73: 'snow',
-    75: 'heavy snow',
-    77: 'snow grains',
-    80: 'rain showers',
-    81: 'heavy rain showers',
-    82: 'violent rain showers',
-    95: 'thunderstorms',
-    96: 'thunderstorms with hail',
-    99: 'severe thunderstorms with hail',
-  };
-
-  return labels[code ?? -1] ?? 'unavailable conditions';
-}
-
-function buildLocationLabel(location: OpenMeteoGeocodingResponse['results'][number]) {
-  return [location.name, location.admin1, location.country].filter(Boolean).join(', ');
-}
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function buildError(summary: string): ToolResult {
+function buildError(functionName: string, summary: string): ToolResult {
   return {
     toolId: 'weather',
-    functionName: 'get_current_weather',
+    functionName,
     ok: false,
     summary,
     error: summary,
   };
 }
 
-async function geocode(query: string, signal?: AbortSignal) {
-  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
-  url.searchParams.set('name', query);
-  url.searchParams.set('count', '1');
-  url.searchParams.set('language', 'en');
-  url.searchParams.set('format', 'json');
-
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`Geocoding request failed with ${response.status}.`);
-  }
-
-  const payload = (await response.json()) as OpenMeteoGeocodingResponse;
-  return payload.results?.[0] ?? null;
+function buildWeatherSummary(temperature: number, temperatureUnit: string | undefined, weatherCode: number, locationLabel: string) {
+  return `${Math.round(temperature)}${temperatureUnit ?? 'F'}, ${getWeatherLabel(weatherCode)} in ${locationLabel}.`;
 }
 
-async function forecast(latitude: number, longitude: number, signal?: AbortSignal) {
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(latitude));
-  url.searchParams.set('longitude', String(longitude));
-  url.searchParams.set(
-    'current',
-    'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m',
-  );
-  url.searchParams.set('temperature_unit', 'fahrenheit');
-  url.searchParams.set('wind_speed_unit', 'mph');
-  url.searchParams.set('precipitation_unit', 'inch');
-  url.searchParams.set('timezone', 'auto');
+function buildCoordinateLocationLabel(latitude: number, longitude: number) {
+  return `${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}`;
+}
 
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`Forecast request failed with ${response.status}.`);
+function buildWeatherResult(
+  invocationToolId: string,
+  invocationFunctionName: string,
+  weather: Awaited<ReturnType<typeof fetchCurrentWeather>>,
+  locationLabel: string,
+  extraData: Record<string, unknown> = {},
+) {
+  const current = weather.current;
+  if (current?.temperature_2m == null || current.weather_code === undefined) {
+    return buildError(invocationFunctionName, `Current weather was unavailable for "${locationLabel}".`);
   }
 
-  return (await response.json()) as OpenMeteoForecastResponse;
+  return {
+    toolId: invocationToolId,
+    functionName: invocationFunctionName,
+    ok: true,
+    summary: buildWeatherSummary(current.temperature_2m, weather.current_units?.temperature_2m, current.weather_code, locationLabel),
+    data: {
+      location: locationLabel,
+      temperature: current.temperature_2m,
+      temperatureUnit: weather.current_units?.temperature_2m ?? 'F',
+      apparentTemperature: current.apparent_temperature,
+      humidity: current.relative_humidity_2m,
+      humidityUnit: weather.current_units?.relative_humidity_2m ?? '%',
+      precipitation: current.precipitation,
+      precipitationUnit: weather.current_units?.precipitation ?? 'in',
+      windSpeed: current.wind_speed_10m,
+      windSpeedUnit: weather.current_units?.wind_speed_10m ?? 'mph',
+      condition: getWeatherLabel(current.weather_code),
+      ...extraData,
+    },
+  };
 }
 
 export const weatherTool: ToolRegistryEntry = {
@@ -118,7 +64,7 @@ export const weatherTool: ToolRegistryEntry = {
     id: 'weather',
     label: 'Weather',
     alias: '/weather',
-    description: 'Looks up current weather conditions for a city or place query.',
+    description: 'Looks up current weather conditions for a place query or the current browser location.',
     enabledByDefault: true,
     functions: [
       {
@@ -133,55 +79,50 @@ export const weatherTool: ToolRegistryEntry = {
           },
         ],
       },
+      {
+        name: 'get_current_weather_for_current_location',
+        description: 'Get the current weather using the browser geolocation coordinates.',
+        parameters: [],
+      },
     ],
   },
   async execute(invocation, context: ToolExecutionContext) {
-    const query = asString(invocation.args.query);
-    if (!query) {
-      return buildError('Weather lookup requires a non-empty `query` argument.');
-    }
-
     try {
-      const location = await geocode(query, context.signal);
+      if (invocation.functionName === 'get_current_weather_for_current_location') {
+        const position = await getCurrentPosition();
+        const weather = await fetchCurrentWeather(position.latitude, position.longitude, context.signal);
+        const locationLabel = buildCoordinateLocationLabel(position.latitude, position.longitude);
+
+        return buildWeatherResult(invocation.toolId, invocation.functionName, weather, locationLabel, {
+          accuracy: position.accuracy,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          timestamp: position.timestamp,
+        });
+      }
+
+      const query = asString(invocation.args.query);
+      if (!query) {
+        return buildError(invocation.functionName, 'Weather lookup requires a non-empty `query` argument.');
+      }
+
+      const location = await geocodeWeatherQuery(query, context.signal);
       if (!location) {
-        return buildError(`No weather location matched "${query}".`);
+        return buildError(invocation.functionName, `No weather location matched "${query}".`);
       }
 
-      const weather = await forecast(location.latitude, location.longitude, context.signal);
-      const current = weather.current;
-      if (current?.temperature_2m == null || current.weather_code === undefined) {
-        return buildError(`Current weather was unavailable for "${buildLocationLabel(location)}".`);
-      }
-
-      const locationLabel = buildLocationLabel(location);
-      const summary = `${Math.round(current.temperature_2m)}${weather.current_units?.temperature_2m ?? '°F'}, ${getWeatherLabel(current.weather_code)} in ${locationLabel}.`;
-
-      return {
-        toolId: invocation.toolId,
-        functionName: invocation.functionName,
-        ok: true,
-        summary,
-        data: {
-          location: locationLabel,
-          temperature: current.temperature_2m,
-          temperatureUnit: weather.current_units?.temperature_2m ?? '°F',
-          apparentTemperature: current.apparent_temperature,
-          humidity: current.relative_humidity_2m,
-          humidityUnit: weather.current_units?.relative_humidity_2m ?? '%',
-          precipitation: current.precipitation,
-          precipitationUnit: weather.current_units?.precipitation ?? 'in',
-          windSpeed: current.wind_speed_10m,
-          windSpeedUnit: weather.current_units?.wind_speed_10m ?? 'mph',
-          condition: getWeatherLabel(current.weather_code),
-        },
-      };
+      const weather = await fetchCurrentWeather(location.latitude, location.longitude, context.signal);
+      return buildWeatherResult(invocation.toolId, invocation.functionName, weather, buildLocationLabel(location), {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
     } catch (error) {
       if (isAbortError(error)) {
         throw error;
       }
 
       const message = error instanceof Error ? error.message : 'Weather lookup failed.';
-      return buildError(message);
+      return buildError(invocation.functionName, message);
     }
   },
 };
