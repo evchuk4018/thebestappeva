@@ -33,7 +33,7 @@ export function ToolsPanel({ tools, onToggleTool }: ToolsPanelProps) {
               type="button"
               aria-pressed={tool.enabled}
               onClick={() => onToggleTool(tool.id, !tool.enabled)}
-              className={`relative h-7 w-12 rounded-full transition ${
+              className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition ${
                 tool.enabled ? 'bg-[#e2875e]' : 'bg-[#2a2a27]'
               }`}
             >
