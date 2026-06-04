@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "tsx server/index.ts",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "tsx server/index.ts --preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "npm run test:files",
-    "test:files": "node scripts/check-file-lengths.mjs"
+    "test:files": "node scripts/check-file-lengths.mjs",
+    "searxng:up": "docker compose -f docker-compose.searxng.yml up -d",
+    "searxng:down": "docker compose -f docker-compose.searxng.yml down"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

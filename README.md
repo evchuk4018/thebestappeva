@@ -8,12 +8,14 @@ Prerequisites: Node.js 20+
 
 ```bash
 npm install
+npm run searxng:up
 npm run dev
 ```
 
 The dev server runs on `http://localhost:3000`.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
+If you want local web search and page fetching in `/ai`, also keep SearXNG running at `http://127.0.0.1:8888` or override `SEARXNG_BASE_URL`.
 
 ## Validation
 
@@ -26,6 +28,13 @@ npm run build
 ```
 
 `npm run test:files` enforces the repo rule that authored project files stay at or below 300 lines. It checks `src/**` plus owned root config and documentation files, and ignores generated or vendor content such as `node_modules`, `dist`, and `package-lock.json`.
+
+For a production-style local smoke test, build first and then run:
+
+```bash
+npm run build
+npm run preview
+```
 
 ## Structure rules
 
@@ -78,8 +87,9 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
   - `Thinking` enables Ollama thinking and shows the returned reasoning trace in a collapsible block
   - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
-- browser-side starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, and `/online-status`
+- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
+- web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
@@ -94,10 +104,12 @@ Implementation notes:
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
-- Tool execution: browser-only runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
+- Local proxy tools: same-origin `GET /api/web-search` and `GET /api/fetch-url`, served by the repo-owned Node host under `server/`
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key
-- This pass remains frontend-only with no backend proxy routes or provider keys
+- Web search backend: local SearXNG via Docker Compose, defaulting to `http://127.0.0.1:8888`
+- `fetch_url` is HTML-only in this pass and intentionally does not parse PDFs, images, or arbitrary files
 
 ## Recent refactor
 

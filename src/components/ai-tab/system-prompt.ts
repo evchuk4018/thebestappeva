@@ -34,7 +34,7 @@ function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
 
   return [
     'Current mode: Thinking.',
-    'You may call the enabled browser-side tools below when they materially help answer the user.',
+    'You may call the enabled local tools below when they materially help answer the user.',
     'Enabled tools:',
     ...tools.flatMap((tool) => [
       `- ${tool.label} (${tool.alias}): ${tool.description}`,
