@@ -45,6 +45,7 @@ export default function AiTab() {
     sendMessage,
     toggleChatMode,
     setCurrentModel,
+    stopMessage,
     toggleTool,
     tools,
   } = useOllamaChat();
@@ -189,8 +190,8 @@ export default function AiTab() {
               currentModel={currentModel}
               inputValue={inputValue}
               isModelDropdownOpen={modelDropdownOpen}
+              isWorking={isTyping}
               isModelLoading={isModelLoading}
-              isTyping={isTyping}
               models={availableModels}
               onAddModels={openAddModels}
               onInputChange={setInputValue}
@@ -201,6 +202,7 @@ export default function AiTab() {
               }}
               onSelectSuggestion={handleSuggestionClick}
               onSend={() => void handleSend()}
+              onStop={stopMessage}
               onToggleMode={toggleChatMode}
               onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
             />
@@ -217,8 +219,8 @@ export default function AiTab() {
                 currentModel={currentModel}
                 inputValue={inputValue}
                 isModelDropdownOpen={modelDropdownOpen}
+                isWorking={isTyping}
                 isModelLoading={isModelLoading}
-                isTyping={isTyping}
                 models={availableModels}
                 onAddModels={openAddModels}
                 onInputChange={setInputValue}
@@ -228,6 +230,7 @@ export default function AiTab() {
                   setModelDropdownOpen(false);
                 }}
                 onSend={() => void handleSend()}
+                onStop={stopMessage}
                 onToggleMode={toggleChatMode}
                 onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
               />

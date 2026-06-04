@@ -8,8 +8,8 @@ interface EmptyStateProps {
   currentModel: string | null;
   inputValue: string;
   isModelDropdownOpen: boolean;
+  isWorking: boolean;
   isModelLoading: boolean;
-  isTyping: boolean;
   models: OllamaModel[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
@@ -17,6 +17,7 @@ interface EmptyStateProps {
   onSelectModel: (model: string) => void;
   onSelectSuggestion: (label: string) => void;
   onSend: () => void;
+  onStop: () => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;
 }
@@ -47,14 +48,15 @@ export function EmptyState(props: EmptyStateProps) {
         currentModel={props.currentModel}
         inputValue={props.inputValue}
         isModelDropdownOpen={props.isModelDropdownOpen}
+        isWorking={props.isWorking}
         isModelLoading={props.isModelLoading}
-        isTyping={props.isTyping}
         models={props.models}
         onAddModels={props.onAddModels}
         onInputChange={props.onInputChange}
         onKeyDown={props.onKeyDown}
         onSelectModel={props.onSelectModel}
         onSend={props.onSend}
+        onStop={props.onStop}
         onToggleMode={props.onToggleMode}
         onToggleModelDropdown={props.onToggleModelDropdown}
       />

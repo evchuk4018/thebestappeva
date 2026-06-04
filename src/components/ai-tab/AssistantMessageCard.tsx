@@ -12,10 +12,13 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasTrace = Boolean(message.trace?.length);
   const isError = message.status === 'error';
+  const isCancelled = message.status === 'cancelled';
   const cardClassName = isError
     ? 'rounded-2xl border border-[#5a2c2c] bg-[#2a1717] p-4 text-[#ffd9d9]'
-    : 'rounded-2xl border border-transparent bg-transparent p-4';
-  const metaLabel = isError ? 'Local model error' : 'Local model';
+    : isCancelled
+      ? 'rounded-2xl border border-[#6a4a2d] bg-[#2d2218] p-4 text-[#f5dec8]'
+      : 'rounded-2xl border border-transparent bg-transparent p-4';
+  const metaLabel = isError ? 'Local model error' : isCancelled ? 'Stopped reply' : 'Local model';
 
   useEffect(() => {
     if (hasTrace && !message.content.trim()) {
@@ -52,6 +55,7 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
 
         <div className={cardClassName}>
           {isError && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#ffb3b3]">Failed reply</p>}
+          {isCancelled && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#f0bb8f]">Stopped reply</p>}
           <AssistantMessageContent content={message.content} />
         </div>
       </div>

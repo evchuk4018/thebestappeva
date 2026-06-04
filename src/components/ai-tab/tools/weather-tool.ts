@@ -1,4 +1,5 @@
-import { ToolRegistryEntry, ToolResult } from './types';
+import { isAbortError } from '../abort-utils';
+import { ToolExecutionContext, ToolRegistryEntry, ToolResult } from './types';
 
 interface OpenMeteoGeocodingResponse {
   results?: Array<{
@@ -75,14 +76,14 @@ function buildError(summary: string): ToolResult {
   };
 }
 
-async function geocode(query: string) {
+async function geocode(query: string, signal?: AbortSignal) {
   const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
   url.searchParams.set('name', query);
   url.searchParams.set('count', '1');
   url.searchParams.set('language', 'en');
   url.searchParams.set('format', 'json');
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Geocoding request failed with ${response.status}.`);
   }
@@ -91,7 +92,7 @@ async function geocode(query: string) {
   return payload.results?.[0] ?? null;
 }
 
-async function forecast(latitude: number, longitude: number) {
+async function forecast(latitude: number, longitude: number, signal?: AbortSignal) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
@@ -104,7 +105,7 @@ async function forecast(latitude: number, longitude: number) {
   url.searchParams.set('precipitation_unit', 'inch');
   url.searchParams.set('timezone', 'auto');
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Forecast request failed with ${response.status}.`);
   }
@@ -134,19 +135,19 @@ export const weatherTool: ToolRegistryEntry = {
       },
     ],
   },
-  async execute(invocation) {
+  async execute(invocation, context: ToolExecutionContext) {
     const query = asString(invocation.args.query);
     if (!query) {
       return buildError('Weather lookup requires a non-empty `query` argument.');
     }
 
     try {
-      const location = await geocode(query);
+      const location = await geocode(query, context.signal);
       if (!location) {
         return buildError(`No weather location matched "${query}".`);
       }
 
-      const weather = await forecast(location.latitude, location.longitude);
+      const weather = await forecast(location.latitude, location.longitude, context.signal);
       const current = weather.current;
       if (current?.temperature_2m == null || current.weather_code === undefined) {
         return buildError(`Current weather was unavailable for "${buildLocationLabel(location)}".`);
@@ -175,6 +176,10 @@ export const weatherTool: ToolRegistryEntry = {
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+
       const message = error instanceof Error ? error.message : 'Weather lookup failed.';
       return buildError(message);
     }

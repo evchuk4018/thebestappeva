@@ -22,6 +22,10 @@ export function buildTurnFailureMessage(error: OllamaClientError) {
   return `I hit a local runtime error before I could finish this reply.\n\n${error.message}`;
 }
 
+export function buildTurnCancelledMessage() {
+  return 'This reply was stopped before it finished.';
+}
+
 export function normalizeTurnError(error: unknown) {
   if (error instanceof OllamaClientError) {
     return error;

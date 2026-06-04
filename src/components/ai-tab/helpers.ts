@@ -54,6 +54,16 @@ export function createAssistantErrorMessage(
   return createAssistantMessage(content, model, { status: 'error', trace: options.trace });
 }
 
+export function createAssistantCancelledMessage(
+  content: string,
+  model?: string,
+  options: {
+    trace?: AssistantTraceStep[];
+  } = {},
+): AssistantMessage {
+  return createAssistantMessage(content, model, { status: 'cancelled', trace: options.trace });
+}
+
 export function createThinkingTraceStep(content: string, createdAt = new Date().toISOString()): AssistantTraceStep {
   return {
     id: createId('trace'),

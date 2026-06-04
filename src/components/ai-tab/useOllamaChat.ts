@@ -1,13 +1,15 @@
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   appendMessage,
+  createAssistantCancelledMessage,
   createAssistantErrorMessage,
   createAssistantMessage,
   createNewChat,
   createUserMessage,
 } from './helpers';
+import { TurnAbortedError, isAbortError } from './abort-utils';
 import { chatWithModel, listModels } from './ollama-client';
-import { buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
+import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
 import { loadStoredChats, loadStoredEnabledTools, loadStoredSelectedModel, saveStoredChats, saveStoredEnabledTools, saveStoredSelectedModel } from './storage';
 import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
@@ -24,6 +26,7 @@ export function useOllamaChat() {
   const [isTyping, setIsTyping] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const activeTurnControllerRef = useRef<AbortController | null>(null);
 
   const toolRegistryEntries = getToolRegistryEntries();
   const tools = toolRegistryEntries.map(({ definition }) => ({
@@ -95,6 +98,8 @@ export function useOllamaChat() {
     return () => window.clearInterval(intervalId);
   }, [availability, refreshModelsOnEffect]);
 
+  useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
+
   function selectChat(chatId: string | null) {
     setSelectedChatId(chatId);
     if (!chatId) {
@@ -120,15 +125,23 @@ export function useOllamaChat() {
     return entry?.definition.id ?? functionName;
   }
 
-  async function sendFlashReply(chat: Chat, model: string): Promise<ResolvedTurn> {
+  async function sendFlashReply(chat: Chat, model: string, signal?: AbortSignal): Promise<ResolvedTurn> {
     try {
-      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false });
+      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false, signal });
       return {
         chat: appendMessage(chat, createAssistantMessage(reply.content, reply.model)),
         availability: 'ready',
         lastError: null,
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        return {
+          chat: appendMessage(chat, createAssistantCancelledMessage(buildTurnCancelledMessage(), model)),
+          availability: 'ready',
+          lastError: null,
+        };
+      }
+
       const clientError = normalizeTurnError(error);
       return {
         chat: appendMessage(chat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
@@ -138,18 +151,19 @@ export function useOllamaChat() {
     }
   }
 
-  async function sendThinkingReply(chat: Chat, model: string): Promise<ResolvedTurn> {
+  async function sendThinkingReply(chat: Chat, model: string, signal?: AbortSignal): Promise<ResolvedTurn> {
     return resolveThinkingTurn({
       chat,
       model,
       activeToolEntries,
       onProgress: (nextChat) => setChats((currentChats) => replaceChat(currentChats, nextChat)),
       resolveToolId,
+      signal,
     });
   }
 
   async function sendMessage(content: string) {
-    if (!currentModel || isTyping || !content.trim()) {
+    if (!currentModel || activeTurnControllerRef.current || !content.trim()) {
       return;
     }
 
@@ -165,12 +179,28 @@ export function useOllamaChat() {
     setChats((currentChats) => replaceChat(currentChats, baseChat));
     setIsTyping(true);
     setLastError(null);
+    const controller = new AbortController();
+    activeTurnControllerRef.current = controller;
 
-    const resolvedTurn = nextChatMode === 'flash' ? await sendFlashReply(baseChat, currentModel) : await sendThinkingReply(baseChat, currentModel);
-    setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
-    setAvailability(resolvedTurn.availability);
-    setLastError(resolvedTurn.lastError);
-    setIsTyping(false);
+    try {
+      const resolvedTurn =
+        nextChatMode === 'flash'
+          ? await sendFlashReply(baseChat, currentModel, controller.signal)
+          : await sendThinkingReply(baseChat, currentModel, controller.signal);
+      setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
+      setAvailability(resolvedTurn.availability);
+      setLastError(resolvedTurn.lastError);
+    } finally {
+      if (activeTurnControllerRef.current === controller) {
+        activeTurnControllerRef.current = null;
+      }
+
+      setIsTyping(false);
+    }
+  }
+
+  function stopMessage() {
+    activeTurnControllerRef.current?.abort(new TurnAbortedError());
   }
 
   function deleteChat(chatId: string) {
@@ -198,6 +228,7 @@ export function useOllamaChat() {
     selectedChatId,
     sendMessage,
     setCurrentModel,
+    stopMessage,
     toggleChatMode,
     toggleTool,
     tools,

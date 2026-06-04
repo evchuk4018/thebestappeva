@@ -1,4 +1,5 @@
 import { OllamaModel, PullProgress } from './types';
+import { isAbortError, TurnAbortedError } from './abort-utils';
 import { normalizeModelName, sortModels } from './helpers';
 
 const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
@@ -40,6 +41,7 @@ interface OllamaChatResponse {
 interface OllamaChatOptions {
   think?: boolean;
   tools?: OllamaToolDefinition[];
+  signal?: AbortSignal;
 }
 
 interface OllamaPullEvent {
@@ -124,6 +126,10 @@ async function readJson<T>(response: Response) {
 }
 
 function normalizeOllamaError(error: unknown, fallbackMessage: string) {
+  if (isAbortError(error)) {
+    return new TurnAbortedError(error instanceof Error ? error.message : 'This reply was stopped.');
+  }
+
   if (error instanceof OllamaClientError) {
     return error;
   }
@@ -164,6 +170,7 @@ export async function chatWithModel(model: string, messages: OllamaChatMessage[]
     const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: options.signal,
       body: JSON.stringify({
         model,
         stream: false,

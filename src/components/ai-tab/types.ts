@@ -7,7 +7,7 @@ export interface UserMessage {
   createdAt: string;
 }
 
-export type AssistantMessageStatus = 'complete' | 'error';
+export type AssistantMessageStatus = 'complete' | 'error' | 'cancelled';
 
 interface BaseAssistantTraceStep {
   id: string;

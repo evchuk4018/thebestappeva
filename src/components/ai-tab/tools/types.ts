@@ -42,7 +42,11 @@ export interface ToolCallRequest {
   arguments?: Record<string, unknown>;
 }
 
+export interface ToolExecutionContext {
+  signal?: AbortSignal;
+}
+
 export interface ToolRegistryEntry {
   definition: ToolDefinition;
-  execute: (invocation: ToolInvocation) => Promise<ToolResult>;
+  execute: (invocation: ToolInvocation, context: ToolExecutionContext) => Promise<ToolResult>;
 }

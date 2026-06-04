@@ -17,7 +17,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function migrateAssistantStatus(status: unknown) {
-  return status === 'error' ? 'error' : 'complete';
+  if (status === 'error' || status === 'cancelled') {
+    return status;
+  }
+
+  return 'complete';
 }
 
 function migrateToolInvocation(invocation: unknown): ToolInvocation | null {

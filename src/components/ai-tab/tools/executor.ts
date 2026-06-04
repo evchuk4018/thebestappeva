@@ -1,4 +1,5 @@
-import { ToolInvocation, ToolRegistryEntry, ToolResult } from './types';
+import { isAbortError } from '../abort-utils';
+import { ToolExecutionContext, ToolInvocation, ToolRegistryEntry, ToolResult } from './types';
 
 export const MAX_TOOL_CALL_DEPTH = 3;
 
@@ -12,7 +13,7 @@ function buildMissingToolResult(invocation: ToolInvocation): ToolResult {
   };
 }
 
-export async function executeToolInvocation(invocation: ToolInvocation, entries: ToolRegistryEntry[]) {
+export async function executeToolInvocation(invocation: ToolInvocation, entries: ToolRegistryEntry[], context: ToolExecutionContext = {}) {
   const entry = entries.find((candidate) => candidate.definition.id === invocation.toolId);
   if (!entry) {
     return buildMissingToolResult(invocation);
@@ -30,8 +31,12 @@ export async function executeToolInvocation(invocation: ToolInvocation, entries:
   }
 
   try {
-    return await entry.execute(invocation);
+    return await entry.execute(invocation, context);
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
     const message = error instanceof Error ? error.message : 'The tool failed unexpectedly.';
     return {
       toolId: invocation.toolId,

@@ -1,5 +1,5 @@
 import { ChatModeToggle } from './ChatModeToggle';
-import { ArrowRight, Headphones, Mic, Paperclip, Send } from 'lucide-react';
+import { ArrowRight, Headphones, Mic, Paperclip, Send, Square } from 'lucide-react';
 import { ModelPicker } from './ModelPicker';
 import { ChatMode, OllamaAvailability, OllamaModel } from './types';
 
@@ -10,13 +10,14 @@ interface ChatComposerProps {
   currentModel: string | null;
   inputValue: string;
   isModelDropdownOpen: boolean;
+  isWorking: boolean;
   isModelLoading: boolean;
-  isTyping: boolean;
   models: OllamaModel[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onSend: () => void;
+  onStop: () => void;
   onSelectModel: (model: string) => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;
@@ -45,19 +46,20 @@ export function ChatComposer({
   currentModel,
   inputValue,
   isModelDropdownOpen,
+  isWorking,
   isModelLoading,
-  isTyping,
   models,
   onAddModels,
   onInputChange,
   onKeyDown,
   onSend,
+  onStop,
   onSelectModel,
   onToggleMode,
   onToggleModelDropdown,
 }: ChatComposerProps) {
-  const isDisabled = !inputValue.trim() || isTyping || !currentModel;
-  const isInputDisabled = isTyping || !currentModel;
+  const isDisabled = !inputValue.trim() || isWorking || !currentModel;
+  const isInputDisabled = isWorking || !currentModel;
   const placeholder = getPlaceholder(availability, currentModel);
 
   if (compact) {
@@ -93,14 +95,25 @@ export function ChatComposer({
               <button type="button" className="rounded-lg p-1.5 hover:bg-zinc-800 hover:text-zinc-300">
                 <Paperclip size={16} />
               </button>
-              <button
-                type="button"
-                onClick={onSend}
-                disabled={isDisabled}
-                className={`rounded-xl p-1.5 ${isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-650' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'}`}
-              >
-                <Send size={14} />
-              </button>
+              {isWorking ? (
+                <button
+                  type="button"
+                  onClick={onStop}
+                  aria-label="Stop reply"
+                  className="rounded-xl bg-[#7f3b31] p-1.5 text-[#fff2eb] hover:bg-[#934338]"
+                >
+                  <Square size={14} fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onSend}
+                  disabled={isDisabled}
+                  className={`rounded-xl p-1.5 ${isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-650' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'}`}
+                >
+                  <Send size={14} />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -144,16 +157,27 @@ export function ChatComposer({
           <button type="button" className="rounded-xl p-2 text-zinc-500 duration-150 hover:bg-[#282825] hover:text-zinc-300">
             <Headphones size={16} />
           </button>
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={isDisabled}
-            className={`rounded-xl p-2 duration-150 ${
-              isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-600' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'
-            }`}
-          >
-            <ArrowRight size={16} />
-          </button>
+          {isWorking ? (
+            <button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop reply"
+              className="rounded-xl bg-[#7f3b31] p-2 text-[#fff2eb] duration-150 hover:bg-[#934338]"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={isDisabled}
+              className={`rounded-xl p-2 duration-150 ${
+                isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-600' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'
+              }`}
+            >
+              <ArrowRight size={16} />
+            </button>
+          )}
         </div>
       </div>
     </div>

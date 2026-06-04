@@ -1,5 +1,6 @@
 import {
   appendMessage,
+  createAssistantCancelledMessage,
   createAssistantErrorMessage,
   createAssistantMessage,
   createThinkingTraceStep,
@@ -7,8 +8,9 @@ import {
   createToolResultTraceStep,
   upsertMessage,
 } from './helpers';
+import { isAbortError, throwIfAborted } from './abort-utils';
 import { chatWithModel, OllamaChatMessage } from './ollama-client';
-import { buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
+import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
 import { AssistantMessage, Chat, OllamaAvailability } from './types';
 import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
@@ -26,6 +28,7 @@ interface ResolveThinkingTurnOptions {
   activeToolEntries: ToolRegistryEntry[];
   onProgress: (chat: Chat) => void;
   resolveToolId: (functionName: string) => string;
+  signal?: AbortSignal;
 }
 
 export async function resolveThinkingTurn({
@@ -34,6 +37,7 @@ export async function resolveThinkingTurn({
   activeToolEntries,
   onProgress,
   resolveToolId,
+  signal,
 }: ResolveThinkingTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
   let toolCallCount = 0;
@@ -113,35 +117,9 @@ export async function resolveThinkingTurn({
     );
   };
 
-  while (true) {
-    let reply;
-    try {
-      reply = await chatWithModel(model, requestMessages, {
-        think: true,
-        tools: availableTools,
-      });
-    } catch (error) {
-      const clientError = normalizeTurnError(error);
-      if (assistantMessage) {
-        finalizeAssistant(buildTurnFailureMessage(clientError), model, 'error');
-        return {
-          chat: workingChat,
-          availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
-          lastError: clientError.message,
-        };
-      }
-
-      return {
-        chat: appendMessage(workingChat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
-        availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
-        lastError: clientError.message,
-      };
-    }
-
-    appendThinking(reply.thinking, reply.model);
-
-    if (!reply.toolCalls?.length) {
-      finalizeAssistant(reply.content, reply.model);
+  const cancelTurn = (): ResolvedTurn => {
+    if (assistantMessage) {
+      finalizeAssistant(buildTurnCancelledMessage(), assistantMessage.model ?? model, 'cancelled');
       return {
         chat: workingChat,
         availability: 'ready',
@@ -149,59 +127,121 @@ export async function resolveThinkingTurn({
       };
     }
 
-    if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALL_DEPTH) {
-      if (assistantMessage) {
-        finalizeAssistant('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model, 'error');
+    return {
+      chat: appendMessage(workingChat, createAssistantCancelledMessage(buildTurnCancelledMessage(), model)),
+      availability: 'ready',
+      lastError: null,
+    };
+  };
+
+  try {
+    while (true) {
+      throwIfAborted(signal);
+
+      let reply;
+      try {
+        reply = await chatWithModel(model, requestMessages, {
+          think: true,
+          tools: availableTools,
+          signal,
+        });
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+
+        const clientError = normalizeTurnError(error);
+        if (assistantMessage) {
+          finalizeAssistant(buildTurnFailureMessage(clientError), model, 'error');
+          return {
+            chat: workingChat,
+            availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
+            lastError: clientError.message,
+          };
+        }
+
+        return {
+          chat: appendMessage(workingChat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
+          availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
+          lastError: clientError.message,
+        };
+      }
+
+      appendThinking(reply.thinking, reply.model);
+      throwIfAborted(signal);
+
+      if (!reply.toolCalls?.length) {
+        finalizeAssistant(reply.content, reply.model);
         return {
           chat: workingChat,
+          availability: 'ready',
+          lastError: null,
+        };
+      }
+
+      if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALL_DEPTH) {
+        if (assistantMessage) {
+          finalizeAssistant('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model, 'error');
+          return {
+            chat: workingChat,
+            availability: 'ready',
+            lastError: 'Tool-call limit reached for this turn.',
+          };
+        }
+
+        return {
+          chat: appendMessage(
+            workingChat,
+            createAssistantErrorMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
+          ),
           availability: 'ready',
           lastError: 'Tool-call limit reached for this turn.',
         };
       }
 
-      return {
-        chat: appendMessage(
-          workingChat,
-          createAssistantErrorMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
-        ),
-        availability: 'ready',
-        lastError: 'Tool-call limit reached for this turn.',
-      };
-    }
-
-    requestMessages = [
-      ...requestMessages,
-      {
-        role: 'assistant',
-        content: reply.content,
-        thinking: reply.thinking,
-        tool_calls: reply.toolCalls,
-      } satisfies OllamaChatMessage,
-    ];
-
-    for (const toolCall of reply.toolCalls) {
-      const invocation = {
-        toolId: resolveToolId(toolCall.function.name),
-        functionName: toolCall.function.name,
-        args: toolCall.function.arguments ?? {},
-        createdAt: new Date().toISOString(),
-      };
-
-      appendToolCall(invocation, reply.model);
-
-      const result = await executeToolInvocation(invocation, activeToolEntries);
-      appendToolResult(result, reply.model);
-
       requestMessages = [
         ...requestMessages,
         {
-          role: 'tool',
-          tool_name: invocation.functionName,
-          content: formatToolResultContent(result),
+          role: 'assistant',
+          content: reply.content,
+          thinking: reply.thinking,
+          tool_calls: reply.toolCalls,
         } satisfies OllamaChatMessage,
       ];
+
+      for (const toolCall of reply.toolCalls) {
+        throwIfAborted(signal);
+
+        const invocation = {
+          toolId: resolveToolId(toolCall.function.name),
+          functionName: toolCall.function.name,
+          args: toolCall.function.arguments ?? {},
+          createdAt: new Date().toISOString(),
+        };
+
+        appendToolCall(invocation, reply.model);
+
+        const result = await executeToolInvocation(invocation, activeToolEntries, { signal });
+        throwIfAborted(signal);
+        appendToolResult(result, reply.model);
+
+        requestMessages = [
+          ...requestMessages,
+          {
+            role: 'tool',
+            tool_name: invocation.functionName,
+            content: formatToolResultContent(result),
+          } satisfies OllamaChatMessage,
+        ];
+      }
+
+      toolCallCount += reply.toolCalls.length;
+    }
+  } catch (error) {
+    if (isAbortError(error)) {
+      return cancelTurn();
     }
 
-    toolCallCount += reply.toolCalls.length;
+    throw error;
   }
 }
