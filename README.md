@@ -81,6 +81,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - the first browser-side tool is `/weather`, which can load current conditions for a place query on demand
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
+- assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
 
 Implementation notes:

@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AssistantMessageContent } from './AssistantMessageContent';
 import { AssistantTracePanel } from './AssistantTracePanel';
 import { AssistantMessage } from './types';
 
@@ -51,7 +52,7 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
 
         <div className={cardClassName}>
           {isError && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#ffb3b3]">Failed reply</p>}
-          <p className="whitespace-pre-line">{message.content}</p>
+          <AssistantMessageContent content={message.content} />
         </div>
       </div>
     </div>
