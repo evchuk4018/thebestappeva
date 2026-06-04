@@ -1,4 +1,4 @@
-import { ChevronUp, Download, MessageSquare, PanelLeftClose, Plus, Search, Wrench } from 'lucide-react';
+import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Wrench } from 'lucide-react';
 import { Chat } from './types';
 import { SidebarChatsPanel } from './SidebarChatsPanel';
 import { ToolsPanel } from './ToolsPanel';
@@ -21,6 +21,7 @@ interface SidebarProps {
   onDeleteChat: (chatId: string, event: React.MouseEvent) => void;
   onNavigateHome: () => void;
   onNewChat: () => void;
+  onOpenSettings: () => void;
   onSelectChat: (chatId: string) => void;
   onSelectPanel: (panel: SidebarPanel) => void;
   onToggleTool: (toolId: string, enabled: boolean) => void;
@@ -42,6 +43,7 @@ export function Sidebar({
   onDeleteChat,
   onNavigateHome,
   onNewChat,
+  onOpenSettings,
   onSelectChat,
   onSelectPanel,
   onToggleTool,
@@ -136,8 +138,8 @@ export function Sidebar({
           </div>
 
           <div className="flex items-center gap-1.5 text-zinc-500">
-            <button type="button" className="rounded p-1 hover:bg-[#1a1a18] hover:text-[#efeae4]">
-              <Download size={14} />
+            <button type="button" onClick={onOpenSettings} className="rounded p-1 hover:bg-[#1a1a18] hover:text-[#efeae4]">
+              <Settings size={14} />
             </button>
             <button type="button" className="rounded p-1 hover:bg-[#1a1a18] hover:text-[#efeae4]">
               <ChevronUp size={14} />

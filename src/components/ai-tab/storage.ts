@@ -4,6 +4,7 @@ import { ToolInvocation, ToolResult } from './tools/types';
 const chatsStorageKey = 'ai-tab.local-chats.v2';
 const modelStorageKey = 'ai-tab.selected-model';
 const enabledToolsStorageKey = 'ai-tab.enabled-tools';
+const customSystemPromptStorageKey = 'ai-tab.custom-system-prompt.v1';
 
 type LegacyMessage = {
   role?: string;
@@ -213,4 +214,18 @@ export function loadStoredEnabledTools() {
 
 export function saveStoredEnabledTools(enabledTools: Record<string, boolean>) {
   window.localStorage.setItem(enabledToolsStorageKey, JSON.stringify(enabledTools));
+}
+
+export function loadStoredCustomSystemPrompt() {
+  return window.localStorage.getItem(customSystemPromptStorageKey) ?? '';
+}
+
+export function saveStoredCustomSystemPrompt(prompt: string) {
+  const normalizedPrompt = prompt.trim();
+  if (!normalizedPrompt) {
+    window.localStorage.removeItem(customSystemPromptStorageKey);
+    return;
+  }
+
+  window.localStorage.setItem(customSystemPromptStorageKey, normalizedPrompt);
 }

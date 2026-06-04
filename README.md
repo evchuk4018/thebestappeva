@@ -84,6 +84,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
+- the AI sidebar footer now opens a settings modal where custom system instructions persist in `localStorage`, while the built-in Markdown and tool guidance stays visible as read-only runtime context
 
 Implementation notes:
 
@@ -91,6 +92,7 @@ Implementation notes:
 - Model discovery: `GET /api/tags`
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
+- System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: browser-only runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key
 

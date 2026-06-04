@@ -1,20 +1,12 @@
 import { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
+import { buildSystemPromptContent, SystemPromptContext } from '../system-prompt';
 import { AiMessage, AssistantMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
-const FORMATTING_SYSTEM_PROMPT = [
-  'You may use rich Markdown in assistant replies when it improves clarity.',
-  'Supported output includes headings, bold, italics, ordered and unordered lists, links, blockquotes, fenced code blocks, tables, task lists, and horizontal rules.',
-  'Use inline math with $...$ when mathematical notation is helpful.',
-  'For display math, put $$ on separate lines before and after the equation block.',
-  'Do not use raw HTML unless the user explicitly asks for HTML.',
-  'Do not wrap the entire reply in a single code fence.',
-].join('\n');
-
-function buildFormattingSystemMessage(): OllamaChatMessage {
+function buildSystemMessage(promptContext: SystemPromptContext): OllamaChatMessage {
   return {
     role: 'system',
-    content: FORMATTING_SYSTEM_PROMPT,
+    content: buildSystemPromptContent(promptContext),
   };
 }
 
@@ -103,12 +95,12 @@ export function formatToolResultContent(result: {
   );
 }
 
-export function buildModelMessages(messages: AiMessage[]) {
-  return [buildFormattingSystemMessage(), ...messages.flatMap(toModelMessages)];
+export function buildModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
+  return [buildSystemMessage(promptContext), ...messages.flatMap(toModelMessages)];
 }
 
-export function buildPlainModelMessages(messages: AiMessage[]) {
-  return [buildFormattingSystemMessage(), ...(messages.map(toPlainModelMessage).filter(Boolean) as OllamaChatMessage[])];
+export function buildPlainModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
+  return [buildSystemMessage(promptContext), ...(messages.map(toPlainModelMessage).filter(Boolean) as OllamaChatMessage[])];
 }
 
 export function buildOllamaTools(entries: ToolRegistryEntry[]): OllamaToolDefinition[] {

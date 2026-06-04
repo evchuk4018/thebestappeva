@@ -10,7 +10,17 @@ import {
 import { TurnAbortedError, isAbortError } from './abort-utils';
 import { chatWithModel, listModels } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
-import { loadStoredChats, loadStoredEnabledTools, loadStoredSelectedModel, saveStoredChats, saveStoredEnabledTools, saveStoredSelectedModel } from './storage';
+import {
+  loadStoredChats,
+  loadStoredCustomSystemPrompt,
+  loadStoredEnabledTools,
+  loadStoredSelectedModel,
+  saveStoredChats,
+  saveStoredCustomSystemPrompt,
+  saveStoredEnabledTools,
+  saveStoredSelectedModel,
+} from './storage';
+import { SystemPromptContext } from './system-prompt';
 import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
 import { getToolRegistryEntries } from './tools/registry';
@@ -21,6 +31,7 @@ export function useOllamaChat() {
   const [availability, setAvailability] = useState<OllamaAvailability>('connecting');
   const [chats, setChats] = useState<Chat[]>(loadStoredChats);
   const [currentModel, setCurrentModel] = useState<string | null>(loadStoredSelectedModel);
+  const [customSystemPrompt, setCustomSystemPrompt] = useState(loadStoredCustomSystemPrompt);
   const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(loadStoredEnabledTools);
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -36,6 +47,11 @@ export function useOllamaChat() {
   const activeToolEntries = toolRegistryEntries.filter(({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault);
   const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const chatMode = selectedChat?.mode ?? draftMode;
+  const systemPromptContext: SystemPromptContext = {
+    customPrompt: customSystemPrompt,
+    mode: chatMode,
+    tools: activeToolEntries.map(({ definition }) => definition),
+  };
 
   async function refreshModels(preferredModel?: string | null) {
     try {
@@ -84,6 +100,10 @@ export function useOllamaChat() {
   }, [enabledTools]);
 
   useEffect(() => {
+    saveStoredCustomSystemPrompt(customSystemPrompt);
+  }, [customSystemPrompt]);
+
+  useEffect(() => {
     const onFocus = () => refreshModelsOnEffect();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -125,9 +145,9 @@ export function useOllamaChat() {
     return entry?.definition.id ?? functionName;
   }
 
-  async function sendFlashReply(chat: Chat, model: string, signal?: AbortSignal): Promise<ResolvedTurn> {
+  async function sendFlashReply(chat: Chat, model: string, promptContext: SystemPromptContext, signal?: AbortSignal): Promise<ResolvedTurn> {
     try {
-      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages), { think: false, signal });
+      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages, promptContext), { think: false, signal });
       return {
         chat: appendMessage(chat, createAssistantMessage(reply.content, reply.model)),
         availability: 'ready',
@@ -151,12 +171,13 @@ export function useOllamaChat() {
     }
   }
 
-  async function sendThinkingReply(chat: Chat, model: string, signal?: AbortSignal): Promise<ResolvedTurn> {
+  async function sendThinkingReply(chat: Chat, model: string, promptContext: SystemPromptContext, signal?: AbortSignal): Promise<ResolvedTurn> {
     return resolveThinkingTurn({
       chat,
       model,
       activeToolEntries,
       onProgress: (nextChat) => setChats((currentChats) => replaceChat(currentChats, nextChat)),
+      promptContext,
       resolveToolId,
       signal,
     });
@@ -183,10 +204,15 @@ export function useOllamaChat() {
     activeTurnControllerRef.current = controller;
 
     try {
+      const promptContext = {
+        customPrompt: customSystemPrompt,
+        mode: nextChatMode,
+        tools: nextChatMode === 'thinking' ? activeToolEntries.map(({ definition }) => definition) : [],
+      } satisfies SystemPromptContext;
       const resolvedTurn =
         nextChatMode === 'flash'
-          ? await sendFlashReply(baseChat, currentModel, controller.signal)
-          : await sendThinkingReply(baseChat, currentModel, controller.signal);
+          ? await sendFlashReply(baseChat, currentModel, promptContext, controller.signal)
+          : await sendThinkingReply(baseChat, currentModel, promptContext, controller.signal);
       setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
@@ -220,13 +246,16 @@ export function useOllamaChat() {
     chatMode,
     chats,
     currentModel,
+    customSystemPrompt,
     deleteChat,
     isTyping,
     lastError,
     refreshModels,
+    setCustomSystemPrompt,
     selectChat,
     selectedChatId,
     sendMessage,
+    systemPromptContext,
     setCurrentModel,
     stopMessage,
     toggleChatMode,

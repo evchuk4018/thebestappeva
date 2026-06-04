@@ -4,6 +4,7 @@ import { PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ActiveChatView } from './ai-tab/ActiveChatView';
 import { AddModelsModal } from './ai-tab/AddModelsModal';
+import { AiSettingsModal } from './ai-tab/AiSettingsModal';
 import { AiStatusBanner } from './ai-tab/AiStatusBanner';
 import { ChatComposer } from './ai-tab/ChatComposer';
 import { EmptyState } from './ai-tab/EmptyState';
@@ -12,6 +13,7 @@ import { MobileHeader } from './ai-tab/MobileHeader';
 import { pullModel } from './ai-tab/ollama-client';
 import { RuntimePill } from './ai-tab/RuntimePill';
 import { Sidebar } from './ai-tab/Sidebar';
+import { buildSystemPromptSections } from './ai-tab/system-prompt';
 import { PullProgress } from './ai-tab/types';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
@@ -28,6 +30,7 @@ export default function AiTab() {
   const [isPullingModel, setIsPullingModel] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const {
@@ -36,6 +39,7 @@ export default function AiTab() {
     chatMode,
     chats,
     currentModel,
+    customSystemPrompt,
     deleteChat,
     isTyping,
     lastError,
@@ -43,6 +47,8 @@ export default function AiTab() {
     selectChat,
     selectedChatId,
     sendMessage,
+    setCustomSystemPrompt,
+    systemPromptContext,
     toggleChatMode,
     setCurrentModel,
     stopMessage,
@@ -60,6 +66,7 @@ export default function AiTab() {
 
   const activeChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const isModelLoading = availability === 'connecting';
+  const systemPromptSections = buildSystemPromptSections(systemPromptContext);
   const openAddModels = () => {
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
@@ -155,6 +162,7 @@ export default function AiTab() {
         onDeleteChat={handleDeleteChat}
         onNavigateHome={() => navigate('/')}
         onNewChat={handleNewChat}
+        onOpenSettings={() => setSettingsOpen(true)}
         onSelectChat={(chatId) => {
           setActivePanel('chats');
           selectChat(chatId);
@@ -246,6 +254,18 @@ export default function AiTab() {
         pullProgress={pullProgress}
         onClose={() => setAddModelsOpen(false)}
         onPullModel={handlePullModel}
+      />
+
+      <AiSettingsModal
+        chatMode={chatMode}
+        customPrompt={customSystemPrompt}
+        isOpen={settingsOpen}
+        sections={systemPromptSections}
+        onClose={() => setSettingsOpen(false)}
+        onSave={(value) => {
+          setCustomSystemPrompt(value);
+          setSettingsOpen(false);
+        }}
       />
     </div>
   );

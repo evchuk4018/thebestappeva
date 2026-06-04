@@ -11,6 +11,7 @@ import {
 import { isAbortError, throwIfAborted } from './abort-utils';
 import { chatWithModel, OllamaChatMessage } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
+import { SystemPromptContext } from './system-prompt';
 import { AssistantMessage, Chat, OllamaAvailability } from './types';
 import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
@@ -27,6 +28,7 @@ interface ResolveThinkingTurnOptions {
   model: string;
   activeToolEntries: ToolRegistryEntry[];
   onProgress: (chat: Chat) => void;
+  promptContext: SystemPromptContext;
   resolveToolId: (functionName: string) => string;
   signal?: AbortSignal;
 }
@@ -36,12 +38,13 @@ export async function resolveThinkingTurn({
   model,
   activeToolEntries,
   onProgress,
+  promptContext,
   resolveToolId,
   signal,
 }: ResolveThinkingTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
   let toolCallCount = 0;
-  let requestMessages = buildModelMessages(workingChat.messages);
+  let requestMessages = buildModelMessages(workingChat.messages, promptContext);
   const availableTools = buildOllamaTools(activeToolEntries);
   let assistantMessage: AssistantMessage | null = null;
 
