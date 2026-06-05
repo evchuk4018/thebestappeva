@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-The dev server runs on `http://localhost:3000`.
+The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.

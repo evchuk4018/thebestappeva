@@ -1,4 +1,5 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
+import type { Server } from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,48 @@ import { handleWebSearch } from './web-search';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, '..');
+const devPortAttempts = 20;
+
+function isAddressInUseError(error: unknown) {
+  return error instanceof Error && 'code' in error && error.code === 'EADDRINUSE';
+}
+
+function listen(app: Express, port: number) {
+  return new Promise<Server>((resolve, reject) => {
+    const server = app.listen(port, serverConfig.host);
+    const handleListening = () => {
+      server.off('error', handleError);
+      resolve(server);
+    };
+    const handleError = (error: Error) => {
+      server.off('listening', handleListening);
+      reject(error);
+    };
+
+    server.once('listening', handleListening);
+    server.once('error', handleError);
+  });
+}
+
+async function listenWithDevFallback(app: Express, mode: 'dev' | 'preview') {
+  const maxAttempts = mode === 'dev' ? devPortAttempts : 1;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const port = serverConfig.port + attempt;
+
+    try {
+      return { server: await listen(app, port), port };
+    } catch (error) {
+      if (!isAddressInUseError(error) || attempt === maxAttempts - 1) {
+        throw error;
+      }
+
+      console.warn(`Port ${port} is in use. Trying ${port + 1}...`);
+    }
+  }
+
+  throw new Error('Unable to find an available dev server port.');
+}
 
 function registerApiRoutes(app: Express) {
   app.get('/api/web-search', (req, res) => void handleWebSearch(req, res));
@@ -74,7 +117,7 @@ export async function createApp(mode: 'dev' | 'preview') {
 
 export async function startApp(mode: 'dev' | 'preview') {
   const app = await createApp(mode);
-  return app.listen(serverConfig.port, serverConfig.host, () => {
-    console.log(`Local app server running at http://127.0.0.1:${serverConfig.port} (${mode})`);
-  });
+  const { server, port } = await listenWithDevFallback(app, mode);
+  console.log(`Local app server running at http://127.0.0.1:${port} (${mode})`);
+  return server;
 }
