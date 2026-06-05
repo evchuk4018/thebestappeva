@@ -5,6 +5,15 @@ export interface UserMessage {
   kind: 'user';
   content: string;
   createdAt: string;
+  activeVersionId?: string;
+  versions?: UserMessageVersion[];
+}
+
+export interface UserMessageVersion {
+  id: string;
+  content: string;
+  createdAt: string;
+  messagesAfter: AiMessage[];
 }
 
 export type AssistantMessageStatus = 'complete' | 'error' | 'cancelled';

@@ -10,6 +10,7 @@ import {
 import { TurnAbortedError, isAbortError } from './abort-utils';
 import { chatWithModel, listModels } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
+import { BranchDirection, editUserMessageBranch, switchUserMessageBranch } from './message-branches';
 import {
   loadStoredChats,
   loadStoredCustomSystemPrompt,
@@ -183,18 +184,9 @@ export function useOllamaChat() {
     });
   }
 
-  async function sendMessage(content: string) {
-    if (!currentModel || activeTurnControllerRef.current || !content.trim()) {
+  async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode) {
+    if (!currentModel || activeTurnControllerRef.current) {
       return;
-    }
-
-    const userMessage = createUserMessage(content);
-    const nextChatMode = chatMode;
-    const baseChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, nextChatMode);
-
-    if (!selectedChat) {
-      setSelectedChatId(baseChat.id);
-      setDraftMode('thinking');
     }
 
     setChats((currentChats) => replaceChat(currentChats, baseChat));
@@ -225,6 +217,43 @@ export function useOllamaChat() {
     }
   }
 
+  async function sendMessage(content: string) {
+    if (!currentModel || activeTurnControllerRef.current || !content.trim()) {
+      return;
+    }
+
+    const userMessage = createUserMessage(content);
+    const nextChatMode = chatMode;
+    const baseChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, nextChatMode);
+
+    if (!selectedChat) {
+      setSelectedChatId(baseChat.id);
+      setDraftMode('thinking');
+    }
+
+    await runModelTurn(baseChat, nextChatMode);
+  }
+
+  async function editAndResendMessage(messageId: string, nextContent: string) {
+    if (!selectedChat || !currentModel || activeTurnControllerRef.current) return;
+
+    const baseChat = editUserMessageBranch(selectedChat, messageId, nextContent);
+    if (!baseChat) return;
+
+    await runModelTurn(baseChat, selectedChat.mode);
+  }
+
+  function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
+    if (!selectedChatId || activeTurnControllerRef.current) {
+      return;
+    }
+
+    setChats((currentChats) => {
+      const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
+      return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
+    });
+  }
+
   function stopMessage() {
     activeTurnControllerRef.current?.abort(new TurnAbortedError());
   }
@@ -248,6 +277,7 @@ export function useOllamaChat() {
     currentModel,
     customSystemPrompt,
     deleteChat,
+    editAndResendMessage,
     isTyping,
     lastError,
     refreshModels,
@@ -260,6 +290,7 @@ export function useOllamaChat() {
     stopMessage,
     toggleChatMode,
     toggleTool,
+    switchUserMessageVersion,
     tools,
   };
 }

@@ -7,6 +7,7 @@ import { AddModelsModal } from './ai-tab/AddModelsModal';
 import { AiSettingsModal } from './ai-tab/AiSettingsModal';
 import { AiStatusBanner } from './ai-tab/AiStatusBanner';
 import { ChatComposer } from './ai-tab/ChatComposer';
+import { copyTextToClipboard } from './ai-tab/clipboard';
 import { EmptyState } from './ai-tab/EmptyState';
 import { getSuggestionPrompt } from './ai-tab/helpers';
 import { MobileHeader } from './ai-tab/MobileHeader';
@@ -41,6 +42,7 @@ export default function AiTab() {
     currentModel,
     customSystemPrompt,
     deleteChat,
+    editAndResendMessage,
     isTyping,
     lastError,
     refreshModels,
@@ -49,6 +51,7 @@ export default function AiTab() {
     sendMessage,
     setCustomSystemPrompt,
     systemPromptContext,
+    switchUserMessageVersion,
     toggleChatMode,
     setCurrentModel,
     stopMessage,
@@ -79,6 +82,20 @@ export default function AiTab() {
   const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     deleteChat(chatId);
+  };
+
+  const handleCopyUserMessage = async (messageId: string) => {
+    const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
+    if (!message || message.kind !== 'user') {
+      return;
+    }
+
+    await copyTextToClipboard(message.content);
+  };
+
+  const handleEditUserMessage = async (messageId: string, nextContent: string) => {
+    setInputValue('');
+    await editAndResendMessage(messageId, nextContent);
   };
 
   const handleNewChat = () => {
@@ -190,7 +207,14 @@ export default function AiTab() {
           <AiStatusBanner availability={availability} lastError={lastError} onOpenAddModels={openAddModels} />
 
           {activeChat ? (
-            <ActiveChatView activeChat={activeChat} currentModel={currentModel} isTyping={isTyping} />
+            <ActiveChatView
+              activeChat={activeChat}
+              currentModel={currentModel}
+              isTyping={isTyping}
+              onCopyUserMessage={handleCopyUserMessage}
+              onEditUserMessage={handleEditUserMessage}
+              onSwitchUserMessageVersion={switchUserMessageVersion}
+            />
           ) : (
             <EmptyState
               availability={availability}

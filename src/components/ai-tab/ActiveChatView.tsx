@@ -1,13 +1,24 @@
 import { AssistantMessageCard } from './AssistantMessageCard';
 import { Chat } from './types';
+import { UserMessageCard } from './UserMessageCard';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
   currentModel: string | null;
   isTyping: boolean;
+  onCopyUserMessage: (messageId: string) => Promise<void> | void;
+  onEditUserMessage: (messageId: string, nextContent: string) => Promise<void> | void;
+  onSwitchUserMessageVersion: (messageId: string, direction: 'previous' | 'next') => void;
 }
 
-export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveChatViewProps) {
+export function ActiveChatView({
+  activeChat,
+  currentModel,
+  isTyping,
+  onCopyUserMessage,
+  onEditUserMessage,
+  onSwitchUserMessageVersion,
+}: ActiveChatViewProps) {
   return (
     <div className="flex w-full max-w-xl flex-col gap-6 py-6 pb-24 md:max-w-2xl">
       <div className="flex items-center justify-between border-b border-[#2d2d2a]/50 pb-4">
@@ -23,23 +34,19 @@ export function ActiveChatView({ activeChat, currentModel, isTyping }: ActiveCha
       </div>
 
       {activeChat.messages.map((message) => {
-        const isUser = message.kind === 'user';
-        if (!isUser) {
+        if (message.kind !== 'user') {
           return <AssistantMessageCard key={message.id} message={message} />;
         }
 
         return (
-          <div key={message.id} className={`flex max-w-full flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-            <div className="mb-1.5 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
-              <span>john skibidi</span>
-              <span className="h-1 w-1 rounded-full bg-zinc-600" />
-              <span>User</span>
-            </div>
-
-            <div className="max-w-[85%] rounded-2xl border border-[#2f2f2b]/80 bg-[#21211f]/60 p-4 text-left text-sm leading-relaxed text-zinc-100 shadow-sm">
-              <p className="whitespace-pre-line">{message.content}</p>
-            </div>
-          </div>
+          <UserMessageCard
+            key={message.id}
+            disabled={isTyping}
+            message={message}
+            onCopy={onCopyUserMessage}
+            onEdit={onEditUserMessage}
+            onSwitchVersion={onSwitchUserMessageVersion}
+          />
         );
       })}
 

@@ -1,4 +1,4 @@
-import { AiMessage, AssistantTraceStep, Chat, ChatMode } from './types';
+import { AiMessage, AssistantTraceStep, Chat, ChatMode, UserMessageVersion } from './types';
 import { ToolInvocation, ToolResult } from './tools/types';
 
 const chatsStorageKey = 'ai-tab.local-chats.v2';
@@ -110,6 +110,26 @@ function migrateTraceStep(step: unknown): AssistantTraceStep | null {
   return null;
 }
 
+function migrateUserMessageVersion(version: unknown): UserMessageVersion | null {
+  if (
+    !isRecord(version) ||
+    typeof version.id !== 'string' ||
+    typeof version.content !== 'string' ||
+    typeof version.createdAt !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    id: version.id,
+    content: version.content,
+    createdAt: version.createdAt,
+    messagesAfter: Array.isArray(version.messagesAfter)
+      ? (version.messagesAfter.map(migrateMessage).filter(Boolean) as AiMessage[])
+      : [],
+  };
+}
+
 function migrateMessage(message: unknown): AiMessage | null {
   if (!isRecord(message)) {
     return null;
@@ -129,7 +149,15 @@ function migrateMessage(message: unknown): AiMessage | null {
   }
 
   if (kind === 'user' && typeof message.id === 'string' && typeof message.content === 'string' && typeof message.createdAt === 'string') {
-    return message as unknown as AiMessage;
+    const versions = Array.isArray(message.versions) ? message.versions.map(migrateUserMessageVersion).filter(Boolean) as UserMessageVersion[] : [];
+    return {
+      id: message.id,
+      kind: 'user',
+      content: message.content,
+      createdAt: message.createdAt,
+      activeVersionId: typeof message.activeVersionId === 'string' ? message.activeVersionId : undefined,
+      versions: versions.length ? versions : undefined,
+    };
   }
 
   const legacy = message as LegacyMessage;
