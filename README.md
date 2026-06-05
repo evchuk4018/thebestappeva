@@ -53,12 +53,13 @@ The app now includes a `/docs` module with:
 
 - `/docs`: template gallery, recent files, local search, `.docx` import, trash, duplicate, rename, and star actions.
 - `/docs/new`: blank-document creation redirect.
-- `/docs/:docId`: desktop-first document editor with local IndexedDB persistence, autosave, version history, document tabs, outline, citations, voice typing, `.docx` export, and print/PDF flow.
+- `/docs/:docId`: desktop-first document editor with local IndexedDB persistence, autosave, version history, document tabs, outline, citations, voice typing, `.docx` export, print/PDF flow, and selected-text Ollama rewrites opened with `/`.
 
 Implementation notes:
 
 - Editor stack: `@tiptap/react`
 - Local persistence: `Dexie` / IndexedDB
+- AI rewrites: local Ollama flash-style requests with approve/reject preview flow
 - `.docx` import: `mammoth`
 - `.docx` export: `docx`
 
@@ -84,6 +85,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
 - chats, per-chat mode, selected model, and enabled tools persist in `localStorage`
+- the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels
 - each chat has a mode toggle beside the model picker:
   - `Thinking` enables Ollama thinking and shows the returned reasoning trace in a collapsible block

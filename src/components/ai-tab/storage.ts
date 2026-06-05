@@ -1,8 +1,8 @@
 import { AiMessage, AssistantTraceStep, Chat, ChatMode, UserMessageVersion } from './types';
 import { ToolInvocation, ToolResult } from './tools/types';
+import { loadStoredSelectedModel as loadSharedSelectedModel, saveStoredSelectedModel as saveSharedSelectedModel } from '../../lib/ollama/model-storage';
 
 const chatsStorageKey = 'ai-tab.local-chats.v2';
-const modelStorageKey = 'ai-tab.selected-model';
 const enabledToolsStorageKey = 'ai-tab.enabled-tools';
 const customSystemPromptStorageKey = 'ai-tab.custom-system-prompt.v1';
 
@@ -214,16 +214,11 @@ export function saveStoredChats(chats: Chat[]) {
 }
 
 export function loadStoredSelectedModel() {
-  return window.localStorage.getItem(modelStorageKey);
+  return loadSharedSelectedModel();
 }
 
 export function saveStoredSelectedModel(model: string | null) {
-  if (!model) {
-    window.localStorage.removeItem(modelStorageKey);
-    return;
-  }
-
-  window.localStorage.setItem(modelStorageKey, model);
+  saveSharedSelectedModel(model);
 }
 
 export function loadStoredEnabledTools() {

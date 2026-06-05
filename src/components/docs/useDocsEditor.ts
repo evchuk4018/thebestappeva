@@ -12,11 +12,18 @@ import { createId } from './docs-utils';
 type SidePanel = 'outline' | 'history' | 'citations' | 'none';
 type SaveState = 'idle' | 'saving' | 'saved';
 
-export function useDocsEditor() {
+interface UseDocsEditorOptions {
+  beforeDocumentReset?: () => void;
+  pausePersistence?: boolean;
+}
+
+export function useDocsEditor(options: UseDocsEditorOptions = {}) {
   const navigate = useNavigate();
   const { docId = '' } = useParams();
+  const beforeDocumentResetRef = useRef<(() => void) | undefined>(options.beforeDocumentReset);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const [bundle, setBundle] = useState<DocBundle | null>(null);
+  const [pausePersistence, setPausePersistence] = useState(Boolean(options.pausePersistence));
   const [sidePanel, setSidePanel] = useState<SidePanel>('outline');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isListening, setIsListening] = useState(false);
@@ -63,6 +70,14 @@ export function useDocsEditor() {
   });
 
   useEffect(() => {
+    beforeDocumentResetRef.current = options.beforeDocumentReset;
+  }, [options.beforeDocumentReset]);
+
+  useEffect(() => {
+    setPausePersistence(Boolean(options.pausePersistence));
+  }, [options.pausePersistence]);
+
+  useEffect(() => {
     let canceled = false;
 
     async function load() {
@@ -90,15 +105,17 @@ export function useDocsEditor() {
 
   useEffect(() => {
     if (!editor || !bundle || revisionKey === 0) return;
+    if (pausePersistence) return;
     const timeout = window.setTimeout(() => { void performSave('auto'); }, 10000);
     return () => window.clearTimeout(timeout);
-  }, [bundle, editor, performSave, revisionKey]);
+  }, [bundle, editor, pausePersistence, performSave, revisionKey]);
 
   useEffect(() => {
+    if (pausePersistence) return;
     const flush = () => { void performSave('auto'); };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);
-  }, [performSave]);
+  }, [pausePersistence, performSave]);
 
   function updateDoc(updater: (doc: DocRecord) => DocRecord) {
     setBundle((current) => current ? { ...current, doc: updater(current.doc) } : current);
@@ -117,6 +134,7 @@ export function useDocsEditor() {
 
   function switchTab(tabId: string) {
     if (!bundle || !editor || !activeTab) return;
+    beforeDocumentResetRef.current?.();
     const persisted = buildEditorSnapshot(editor, activeTab);
     const nextTabs = bundle.tabs.map((tab) => tab.id === persisted.id ? persisted : tab);
     setBundle({ ...bundle, doc: { ...bundle.doc, activeTabId: tabId }, tabs: nextTabs });
@@ -124,6 +142,7 @@ export function useDocsEditor() {
 
   function addTab() {
     if (!bundle) return;
+    beforeDocumentResetRef.current?.();
     const nextTab: DocTabRecord = {
       id: createId('tab'),
       docId: bundle.doc.id,
@@ -141,6 +160,7 @@ export function useDocsEditor() {
 
   async function restoreVersion(versionId: string) {
     if (!bundle || !editor) return;
+    beforeDocumentResetRef.current?.();
     const version = bundle.versions.find((entry) => entry.id === versionId);
     if (!version) return;
     const targetTab = bundle.tabs.find((tab) => tab.id === version.tabId) ?? bundle.tabs[0];
@@ -217,6 +237,7 @@ export function useDocsEditor() {
     insertChip,
     performSave,
     restoreVersion,
+    setPausePersistence,
     switchTab,
     toggleVoiceTyping,
     updateCitations,
