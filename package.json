@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server/index.ts",
+    "dev": "tsx scripts/dev.ts",
     "build": "vite build",
     "preview": "tsx server/index.ts --preview",
     "clean": "rm -rf dist server.js",

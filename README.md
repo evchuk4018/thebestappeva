@@ -8,14 +8,14 @@ Prerequisites: Node.js 20+
 
 ```bash
 npm install
-npm run searxng:up
 npm run dev
 ```
 
 The dev server runs on `http://localhost:3000`.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
-If you want local web search and page fetching in `/ai`, also keep SearXNG running at `http://127.0.0.1:8888` or override `SEARXNG_BASE_URL`.
+`npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.
+If you want local web search and page fetching in `/ai`, keep Docker available or start SearXNG manually at `http://127.0.0.1:8888`, or override `SEARXNG_BASE_URL`.
 
 ## Validation
 
@@ -35,6 +35,8 @@ For a production-style local smoke test, build first and then run:
 npm run build
 npm run preview
 ```
+
+`npm run preview` does not auto-start Docker services in this pass.
 
 ## Structure rules
 

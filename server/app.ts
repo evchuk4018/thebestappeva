@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+import { createAppViteConfig } from '../vite.shared';
 import { serverConfig } from './config';
 import { handleUrlFetch } from './url-fetch';
 import { handleWebSearch } from './web-search';
@@ -23,9 +24,16 @@ function registerErrorHandler(app: Express) {
 }
 
 async function attachDevApp(app: Express) {
+  const baseConfig = createAppViteConfig(projectRoot);
   const vite = await createViteServer({
+    ...baseConfig,
     appType: 'custom',
-    server: { middlewareMode: true },
+    configFile: false,
+    root: projectRoot,
+    server: {
+      ...baseConfig.server,
+      middlewareMode: true,
+    },
   });
 
   app.use(vite.middlewares);
