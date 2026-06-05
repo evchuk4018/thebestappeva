@@ -4,12 +4,29 @@ import { OllamaAvailability } from './types';
 interface AiStatusBannerProps {
   availability: OllamaAvailability;
   lastError: string | null;
+  persistenceError: string | null;
   onOpenAddModels: () => void;
 }
 
-export function AiStatusBanner({ availability, lastError, onOpenAddModels }: AiStatusBannerProps) {
-  if (availability === 'ready' && !lastError) {
+export function AiStatusBanner({ availability, lastError, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
+  if (availability === 'ready' && !lastError && !persistenceError) {
     return null;
+  }
+
+  if (availability === 'ready' && persistenceError && !lastError) {
+    return (
+      <div className="mb-4 w-full max-w-xl rounded-2xl border border-[#3a342b] bg-[#23201c] px-4 py-3 text-left shadow-lg md:max-w-2xl">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-full bg-[#e2875e]/15 p-2 text-[#e2875e]">
+            <AlertTriangle size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[#efeae4]">Local AI workspace issue</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">{persistenceError}</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const config = {

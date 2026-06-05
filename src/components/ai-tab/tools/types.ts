@@ -1,3 +1,7 @@
+import type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
+
+export type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
+
 export interface ToolFunctionParameter {
   name: string;
   type: 'string' | 'number' | 'boolean';
@@ -18,22 +22,6 @@ export interface ToolDefinition {
   description: string;
   functions: ToolFunctionDefinition[];
   enabledByDefault: boolean;
-}
-
-export interface ToolInvocation {
-  toolId: string;
-  functionName: string;
-  args: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface ToolResult {
-  toolId: string;
-  functionName: string;
-  ok: boolean;
-  summary: string;
-  data?: Record<string, unknown>;
-  error?: string;
 }
 
 export interface ToolCallRequest {

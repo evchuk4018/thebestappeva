@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { createAppViteConfig } from '../vite.shared';
+import { handleGetAiPreferences, handleGetAiWorkspace, handlePutAiWorkspace } from './ai-workspace';
 import { serverConfig } from './config';
+import { getDatabase } from './db/database';
 import { handleUrlFetch } from './url-fetch';
 import { handleWebSearch } from './web-search';
 
@@ -55,6 +57,10 @@ async function listenWithDevFallback(app: Express, mode: 'dev' | 'preview') {
 }
 
 function registerApiRoutes(app: Express) {
+  app.use(express.json({ limit: '2mb' }));
+  app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
+  app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
+  app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
   app.get('/api/web-search', (req, res) => void handleWebSearch(req, res));
   app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
 }
@@ -62,7 +68,8 @@ function registerApiRoutes(app: Express) {
 function registerErrorHandler(app: Express) {
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const message = error instanceof Error ? error.message : 'The local server failed unexpectedly.';
-    res.status(500).json({ ok: false, error: message });
+    const statusCode = error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
+    res.status(statusCode).json({ ok: false, error: message });
   });
 }
 
@@ -101,6 +108,7 @@ function attachPreviewApp(app: Express) {
 }
 
 export async function createApp(mode: 'dev' | 'preview') {
+  getDatabase();
   const app = express();
   app.disable('x-powered-by');
   registerApiRoutes(app);

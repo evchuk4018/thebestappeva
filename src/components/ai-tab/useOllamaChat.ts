@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   appendMessage,
   createAssistantCancelledMessage,
@@ -8,37 +8,43 @@ import {
   createUserMessage,
 } from './helpers';
 import { TurnAbortedError, isAbortError } from './abort-utils';
-import { chatWithModel, listModels } from './ollama-client';
+import { chatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
-import {
-  loadStoredChats,
-  loadStoredCustomSystemPrompt,
-  loadStoredEnabledTools,
-  loadStoredSelectedModel,
-  saveStoredChats,
-  saveStoredCustomSystemPrompt,
-  saveStoredEnabledTools,
-  saveStoredSelectedModel,
-} from './storage';
 import { SystemPromptContext } from './system-prompt';
-import { Chat, ChatMode, OllamaAvailability, OllamaModel } from './types';
+import { Chat, ChatMode } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
 import { getToolRegistryEntries } from './tools/registry';
+import { useOllamaModelState } from './useOllamaModelState';
+import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
 
 export function useOllamaChat() {
-  const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
-  const [availability, setAvailability] = useState<OllamaAvailability>('connecting');
-  const [chats, setChats] = useState<Chat[]>(loadStoredChats);
-  const [currentModel, setCurrentModel] = useState<string | null>(loadStoredSelectedModel);
-  const [customSystemPrompt, setCustomSystemPrompt] = useState(loadStoredCustomSystemPrompt);
-  const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(loadStoredEnabledTools);
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
-  const [lastError, setLastError] = useState<string | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const activeTurnControllerRef = useRef<AbortController | null>(null);
+  const {
+    chats,
+    currentModel,
+    customSystemPrompt,
+    enabledTools,
+    hydrationStatus,
+    persistenceError,
+    setChats,
+    setCurrentModel,
+    setCustomSystemPrompt,
+    setEnabledTools,
+    flushWorkspace,
+  } = useAiWorkspacePersistence();
+  const {
+    availableModels,
+    availability,
+    lastError,
+    refreshModels,
+    setAvailability,
+    setLastError,
+  } = useOllamaModelState({ currentModel, hydrationStatus, setCurrentModel });
 
   const toolRegistryEntries = getToolRegistryEntries();
   const tools = toolRegistryEntries.map(({ definition }) => ({
@@ -54,61 +60,12 @@ export function useOllamaChat() {
     tools: activeToolEntries.map(({ definition }) => definition),
   };
 
-  async function refreshModels(preferredModel?: string | null) {
-    try {
-      const discoveredModels = await listModels();
-      setAvailableModels(discoveredModels);
-
-      if (discoveredModels.length === 0) {
-        setAvailability('no-models');
-        setCurrentModel(null);
-        setLastError(null);
-        return discoveredModels;
-      }
-
-      const preferred = preferredModel ?? currentModel;
-      const nextModel = discoveredModels.some((model) => model.name === preferred) ? preferred : discoveredModels[0].name;
-
-      setAvailability('ready');
-      setCurrentModel(nextModel);
-      setLastError(null);
-      return discoveredModels;
-    } catch (error) {
-      setAvailability('unavailable');
-      setLastError(error instanceof Error ? error.message : 'Unable to reach local Ollama.');
-      return [] as OllamaModel[];
-    }
-  }
-
-  const refreshModelsOnEffect = useEffectEvent((preferredModel?: string | null) => {
-    void refreshModels(preferredModel);
-  });
-
-  useEffect(() => {
-    void refreshModels();
-  }, []);
-
-  useEffect(() => saveStoredChats(chats), [chats]);
-  useEffect(() => saveStoredSelectedModel(currentModel), [currentModel]);
-  useEffect(() => saveStoredEnabledTools(enabledTools), [enabledTools]);
-  useEffect(() => saveStoredCustomSystemPrompt(customSystemPrompt), [customSystemPrompt]);
-
-  useEffect(() => {
-    const onFocus = () => refreshModelsOnEffect();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refreshModelsOnEffect]);
-
-  useEffect(() => {
-    if (availability === 'ready') {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => refreshModelsOnEffect(), 10000);
-    return () => window.clearInterval(intervalId);
-  }, [availability, refreshModelsOnEffect]);
-
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
+  useEffect(() => {
+    if (!isTyping) {
+      void flushWorkspace();
+    }
+  }, [flushWorkspace, isTyping]);
 
   function selectChat(chatId: string | null) {
     setSelectedChatId(chatId);
@@ -280,8 +237,10 @@ export function useOllamaChat() {
     customSystemPrompt,
     deleteChat,
     editAndResendMessage,
+    hydrationStatus,
     isTyping,
     lastError,
+    persistenceError,
     regenerateAssistantMessage,
     refreshModels,
     setCustomSystemPrompt,

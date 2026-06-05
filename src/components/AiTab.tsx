@@ -4,9 +4,10 @@ import { PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ActiveChatView } from './ai-tab/ActiveChatView';
 import { AddModelsModal } from './ai-tab/AddModelsModal';
+import { AiActiveComposer } from './ai-tab/AiActiveComposer';
 import { AiSettingsModal } from './ai-tab/AiSettingsModal';
 import { AiStatusBanner } from './ai-tab/AiStatusBanner';
-import { ChatComposer } from './ai-tab/ChatComposer';
+import { AiWorkspaceLoadingState } from './ai-tab/AiWorkspaceLoadingState';
 import { copyTextToClipboard } from './ai-tab/clipboard';
 import { EmptyState } from './ai-tab/EmptyState';
 import { getSuggestionPrompt } from './ai-tab/helpers';
@@ -43,8 +44,10 @@ export default function AiTab() {
     customSystemPrompt,
     deleteChat,
     editAndResendMessage,
+    hydrationStatus,
     isTyping,
     lastError,
+    persistenceError,
     regenerateAssistantMessage,
     refreshModels,
     selectChat,
@@ -75,16 +78,12 @@ export default function AiTab() {
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
   };
-
-  const handleSuggestionClick = (label: string) => {
-    setInputValue(getSuggestionPrompt(label));
-  };
+  const handleSuggestionClick = (label: string) => setInputValue(getSuggestionPrompt(label));
 
   const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     deleteChat(chatId);
   };
-
   const handleCopyMessage = async (messageId: string, kind: 'assistant' | 'user') => {
     const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
     if (!message || message.kind !== kind) {
@@ -93,12 +92,10 @@ export default function AiTab() {
 
     await copyTextToClipboard(message.content);
   };
-
   const handleEditUserMessage = async (messageId: string, nextContent: string) => {
     setInputValue('');
     await editAndResendMessage(messageId, nextContent);
   };
-
   const handleNewChat = () => {
     setActivePanel('chats');
     selectChat(null);
@@ -106,7 +103,6 @@ export default function AiTab() {
       setSidebarOpen(false);
     }
   };
-
   const handleSend = async () => {
     const nextMessage = inputValue.trim();
     if (!nextMessage || isTyping || !currentModel) {
@@ -116,7 +112,6 @@ export default function AiTab() {
     setInputValue('');
     await sendMessage(nextMessage);
   };
-
   const handlePullModel = async (modelName: string) => {
     setIsPullingModel(true);
     setPullProgress({
@@ -205,9 +200,16 @@ export default function AiTab() {
         </div>
 
         <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
-          <AiStatusBanner availability={availability} lastError={lastError} onOpenAddModels={openAddModels} />
+          <AiStatusBanner
+            availability={availability}
+            lastError={lastError}
+            persistenceError={persistenceError}
+            onOpenAddModels={openAddModels}
+          />
 
-          {activeChat ? (
+          {hydrationStatus === 'loading' ? (
+            <AiWorkspaceLoadingState />
+          ) : activeChat ? (
             <ActiveChatView
               activeChat={activeChat}
               currentModel={currentModel}
@@ -245,32 +247,27 @@ export default function AiTab() {
         </div>
 
         {activeChat && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 flex justify-center border-t border-[#242422]/60 bg-[#1b1b19] px-4 py-4 md:px-8">
-            <div className="w-full max-w-xl md:max-w-2xl">
-              <ChatComposer
-                availability={availability}
-                chatMode={chatMode}
-                compact
-                currentModel={currentModel}
-                inputValue={inputValue}
-                isModelDropdownOpen={modelDropdownOpen}
-                isWorking={isTyping}
-                isModelLoading={isModelLoading}
-                models={availableModels}
-                onAddModels={openAddModels}
-                onInputChange={setInputValue}
-                onKeyDown={handleKeyDown}
-                onSelectModel={(model) => {
-                  setCurrentModel(model);
-                  setModelDropdownOpen(false);
-                }}
-                onSend={() => void handleSend()}
-                onStop={stopMessage}
-                onToggleMode={toggleChatMode}
-                onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
-              />
-            </div>
-          </div>
+          <AiActiveComposer
+            availability={availability}
+            chatMode={chatMode}
+            currentModel={currentModel}
+            inputValue={inputValue}
+            isModelDropdownOpen={modelDropdownOpen}
+            isModelLoading={isModelLoading}
+            isTyping={isTyping}
+            models={availableModels}
+            onAddModels={openAddModels}
+            onInputChange={setInputValue}
+            onKeyDown={handleKeyDown}
+            onSelectModel={(model) => {
+              setCurrentModel(model);
+              setModelDropdownOpen(false);
+            }}
+            onSend={() => void handleSend()}
+            onStop={stopMessage}
+            onToggleMode={toggleChatMode}
+            onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
+          />
         )}
       </div>
 

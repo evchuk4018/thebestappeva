@@ -79,7 +79,7 @@ async function resolveRewriteModel() {
     throw new Error('No local Ollama models are installed.');
   }
 
-  const preferred = loadStoredSelectedModel();
+  const preferred = await loadStoredSelectedModel();
   return models.find((model) => model.name === preferred)?.name ?? models[0].name;
 }
 

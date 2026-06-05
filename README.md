@@ -12,6 +12,7 @@ npm run dev
 ```
 
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
+The local Node host also creates a SQLite database for server-owned app persistence at `.local-data/thebestappeva.sqlite`. Override that path with `LOCAL_DB_PATH` when needed.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.
@@ -84,7 +85,7 @@ Implementation notes:
 The app now includes a `/ai` module backed by the local Ollama runtime:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
-- chats, per-chat mode, selected model, and enabled tools persist in `localStorage`
+- chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels
 - each chat has a mode toggle beside the model picker:
@@ -101,11 +102,13 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
-- the AI sidebar footer now opens a settings modal where custom system instructions persist in `localStorage`, while the built-in Markdown and tool guidance stays visible as read-only runtime context
+- the AI sidebar footer now opens a settings modal where custom system instructions persist in the local SQLite workspace, while the built-in Markdown and tool guidance stays visible as read-only runtime context
 
 Implementation notes:
 
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
+- Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`
+- Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Model discovery: `GET /api/tags`
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`

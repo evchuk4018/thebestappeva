@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'node:path';
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ function readStringEnv(name: string, fallback: string) {
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),
   port: readNumberEnv('PORT', 3000),
+  localDbPath: path.resolve(process.cwd(), readStringEnv('LOCAL_DB_PATH', '.local-data/thebestappeva.sqlite')),
   searxngBaseUrl: readStringEnv('SEARXNG_BASE_URL', 'http://127.0.0.1:8888').replace(/\/+$/, ''),
   webSearchTimeoutMs: readNumberEnv('WEB_SEARCH_TIMEOUT_MS', 10000),
   urlFetchTimeoutMs: readNumberEnv('URL_FETCH_TIMEOUT_MS', 12000),
