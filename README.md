@@ -97,6 +97,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - user prompts can be copied, edited, resent from their original point in the thread, and switched between persisted edit branches with compact version controls
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
+- assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
 - the AI sidebar footer now opens a settings modal where custom system instructions persist in `localStorage`, while the built-in Markdown and tool guidance stays visible as read-only runtime context
 

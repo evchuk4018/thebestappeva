@@ -6,6 +6,8 @@ interface ActiveChatViewProps {
   activeChat: Chat;
   currentModel: string | null;
   isTyping: boolean;
+  onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
+  onRegenerateAssistantMessage: (messageId: string) => Promise<void> | void;
   onCopyUserMessage: (messageId: string) => Promise<void> | void;
   onEditUserMessage: (messageId: string, nextContent: string) => Promise<void> | void;
   onSwitchUserMessageVersion: (messageId: string, direction: 'previous' | 'next') => void;
@@ -15,6 +17,8 @@ export function ActiveChatView({
   activeChat,
   currentModel,
   isTyping,
+  onCopyAssistantMessage,
+  onRegenerateAssistantMessage,
   onCopyUserMessage,
   onEditUserMessage,
   onSwitchUserMessageVersion,
@@ -35,7 +39,15 @@ export function ActiveChatView({
 
       {activeChat.messages.map((message) => {
         if (message.kind !== 'user') {
-          return <AssistantMessageCard key={message.id} message={message} />;
+          return (
+            <AssistantMessageCard
+              key={message.id}
+              disabled={isTyping}
+              message={message}
+              onCopy={onCopyAssistantMessage}
+              onRegenerate={onRegenerateAssistantMessage}
+            />
+          );
         }
 
         return (

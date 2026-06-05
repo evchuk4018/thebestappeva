@@ -10,7 +10,7 @@ import {
 import { TurnAbortedError, isAbortError } from './abort-utils';
 import { chatWithModel, listModels } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
-import { BranchDirection, editUserMessageBranch, switchUserMessageBranch } from './message-branches';
+import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
 import {
   loadStoredChats,
   loadStoredCustomSystemPrompt,
@@ -88,21 +88,10 @@ export function useOllamaChat() {
     void refreshModels();
   }, []);
 
-  useEffect(() => {
-    saveStoredChats(chats);
-  }, [chats]);
-
-  useEffect(() => {
-    saveStoredSelectedModel(currentModel);
-  }, [currentModel]);
-
-  useEffect(() => {
-    saveStoredEnabledTools(enabledTools);
-  }, [enabledTools]);
-
-  useEffect(() => {
-    saveStoredCustomSystemPrompt(customSystemPrompt);
-  }, [customSystemPrompt]);
+  useEffect(() => saveStoredChats(chats), [chats]);
+  useEffect(() => saveStoredSelectedModel(currentModel), [currentModel]);
+  useEffect(() => saveStoredEnabledTools(enabledTools), [enabledTools]);
+  useEffect(() => saveStoredCustomSystemPrompt(customSystemPrompt), [customSystemPrompt]);
 
   useEffect(() => {
     const onFocus = () => refreshModelsOnEffect();
@@ -243,6 +232,19 @@ export function useOllamaChat() {
     await runModelTurn(baseChat, selectedChat.mode);
   }
 
+  async function regenerateAssistantMessage(messageId: string) {
+    if (!selectedChat || !currentModel || activeTurnControllerRef.current) {
+      return;
+    }
+
+    const baseChat = regenerateAssistantBranch(selectedChat, messageId);
+    if (!baseChat) {
+      return;
+    }
+
+    await runModelTurn(baseChat, selectedChat.mode);
+  }
+
   function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
     if (!selectedChatId || activeTurnControllerRef.current) {
       return;
@@ -280,6 +282,7 @@ export function useOllamaChat() {
     editAndResendMessage,
     isTyping,
     lastError,
+    regenerateAssistantMessage,
     refreshModels,
     setCustomSystemPrompt,
     selectChat,

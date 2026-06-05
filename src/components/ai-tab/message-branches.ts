@@ -89,6 +89,36 @@ export function editUserMessageBranch(chat: Chat, messageId: string, nextContent
   };
 }
 
+export function regenerateUserMessageBranch(chat: Chat, messageId: string) {
+  const messageIndex = chat.messages.findIndex((message) => message.id === messageId && message.kind === 'user');
+  if (messageIndex === -1) {
+    return null;
+  }
+
+  const message = chat.messages[messageIndex] as UserMessage;
+  const messagesAfter = chat.messages.slice(messageIndex + 1);
+  const updatedMessage = {
+    ...message,
+    versions: saveVisibleBranch(message, messagesAfter),
+  };
+
+  return {
+    ...chat,
+    messages: [...chat.messages.slice(0, messageIndex), updatedMessage],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function regenerateAssistantBranch(chat: Chat, messageId: string) {
+  const messageIndex = chat.messages.findIndex((message) => message.id === messageId && message.kind === 'assistant');
+  if (messageIndex === -1) {
+    return null;
+  }
+
+  const sourceUserMessage = [...chat.messages.slice(0, messageIndex)].reverse().find((message) => message.kind === 'user');
+  return sourceUserMessage?.kind === 'user' ? regenerateUserMessageBranch(chat, sourceUserMessage.id) : null;
+}
+
 export function switchUserMessageBranch(chat: Chat, messageId: string, direction: BranchDirection) {
   const messageIndex = chat.messages.findIndex((message) => message.id === messageId && message.kind === 'user');
   if (messageIndex === -1) {

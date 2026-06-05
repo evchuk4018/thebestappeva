@@ -1,14 +1,18 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AssistantMessageActions } from './AssistantMessageActions';
 import { AssistantMessageContent } from './AssistantMessageContent';
 import { AssistantTracePanel } from './AssistantTracePanel';
 import { AssistantMessage } from './types';
 
 interface AssistantMessageCardProps {
+  disabled: boolean;
   message: AssistantMessage;
+  onCopy: (messageId: string) => Promise<void> | void;
+  onRegenerate: (messageId: string) => Promise<void> | void;
 }
 
-export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
+export function AssistantMessageCard({ disabled, message, onCopy, onRegenerate }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasTrace = Boolean(message.trace?.length);
   const isError = message.status === 'error';
@@ -58,6 +62,8 @@ export function AssistantMessageCard({ message }: AssistantMessageCardProps) {
           {isCancelled && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#f0bb8f]">Stopped reply</p>}
           <AssistantMessageContent content={message.content} />
         </div>
+
+        <AssistantMessageActions disabled={disabled} messageId={message.id} onCopy={onCopy} onRegenerate={onRegenerate} />
       </div>
     </div>
   );

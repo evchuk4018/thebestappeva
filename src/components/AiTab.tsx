@@ -45,6 +45,7 @@ export default function AiTab() {
     editAndResendMessage,
     isTyping,
     lastError,
+    regenerateAssistantMessage,
     refreshModels,
     selectChat,
     selectedChatId,
@@ -84,9 +85,9 @@ export default function AiTab() {
     deleteChat(chatId);
   };
 
-  const handleCopyUserMessage = async (messageId: string) => {
+  const handleCopyMessage = async (messageId: string, kind: 'assistant' | 'user') => {
     const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
-    if (!message || message.kind !== 'user') {
+    if (!message || message.kind !== kind) {
       return;
     }
 
@@ -211,7 +212,9 @@ export default function AiTab() {
               activeChat={activeChat}
               currentModel={currentModel}
               isTyping={isTyping}
-              onCopyUserMessage={handleCopyUserMessage}
+              onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
+              onRegenerateAssistantMessage={regenerateAssistantMessage}
+              onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
               onEditUserMessage={handleEditUserMessage}
               onSwitchUserMessageVersion={switchUserMessageVersion}
             />
