@@ -17,6 +17,7 @@ The local Node host also creates a SQLite database for server-owned app persiste
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.
 If you want local web search and page fetching in `/ai`, keep Docker available or start SearXNG manually at `http://127.0.0.1:8888`, or override `SEARXNG_BASE_URL`.
+If you want a single AI-ready startup command, run `npm run ai:dev`. It ensures Ollama is reachable at `http://127.0.0.1:11434`, installs `qwen3.5:9b` if needed, requires Docker-backed SearXNG readiness, and then starts the app server. This command fails fast with instructions when Ollama or Docker is unavailable.
 If you want local PDF, DOCX, and XLSX uploads in `/ai`, install Python 3 plus Docling locally:
 
 ```bash
@@ -115,6 +116,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 Implementation notes:
 
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
+- AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`
 - Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`

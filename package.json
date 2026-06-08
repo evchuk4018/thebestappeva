@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx scripts/dev.ts",
+    "ai:dev": "tsx scripts/ai-dev.ts",
     "build": "vite build",
     "preview": "tsx server/index.ts --preview",
     "clean": "rm -rf dist server.js",
