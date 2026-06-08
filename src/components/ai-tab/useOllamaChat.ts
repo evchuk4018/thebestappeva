@@ -12,12 +12,14 @@ import { chatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
 import { SystemPromptContext } from './system-prompt';
-import { Chat, ChatMode } from './types';
+import { AiAttachmentReference, Chat, ChatMode } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
+
+const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
 
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
@@ -94,7 +96,7 @@ export function useOllamaChat() {
 
   async function sendFlashReply(chat: Chat, model: string, promptContext: SystemPromptContext, signal?: AbortSignal): Promise<ResolvedTurn> {
     try {
-      const reply = await chatWithModel(model, buildPlainModelMessages(chat.messages, promptContext), { think: false, signal });
+      const reply = await chatWithModel(model, await buildPlainModelMessages(chat.messages, promptContext), { think: false, signal });
       return {
         chat: appendMessage(chat, createAssistantMessage(reply.content, reply.model)),
         availability: 'ready',
@@ -163,12 +165,13 @@ export function useOllamaChat() {
     }
   }
 
-  async function sendMessage(content: string) {
-    if (!currentModel || activeTurnControllerRef.current || !content.trim()) {
+  async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
+    const normalizedContent = content.trim() || (attachments.length ? DEFAULT_ATTACHMENT_PROMPT : '');
+    if (!currentModel || activeTurnControllerRef.current || !normalizedContent) {
       return;
     }
 
-    const userMessage = createUserMessage(content);
+    const userMessage = createUserMessage(normalizedContent, attachments);
     const nextChatMode = chatMode;
     const baseChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, nextChatMode);
 

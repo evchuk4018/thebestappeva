@@ -17,6 +17,13 @@ The local Node host also creates a SQLite database for server-owned app persiste
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.
 If you want local web search and page fetching in `/ai`, keep Docker available or start SearXNG manually at `http://127.0.0.1:8888`, or override `SEARXNG_BASE_URL`.
+If you want local PDF, DOCX, and XLSX uploads in `/ai`, install Python 3 plus Docling locally:
+
+```bash
+python -m pip install -r python/requirements-docling.txt
+```
+
+On Windows, the app defaults to the `py -3` launcher for the parser sidecar. Override `AI_PARSER_PYTHON_COMMAND` or `AI_PARSER_PYTHON_ARGS` in `.env` if your local Python command differs.
 
 ## Validation
 
@@ -98,6 +105,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - user prompts can be copied, edited, resent from their original point in the thread, and switched between persisted edit branches with compact version controls
+- the composer paperclip now accepts local `.pdf`, `.docx`, and `.xlsx` uploads, parses them through a local Docling sidecar, and attaches the extracted content to the next AI turn
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
@@ -108,17 +116,20 @@ Implementation notes:
 
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`
+- Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
+- Local attachment storage: `.local-data/ai-attachments`
 - Model discovery: `GET /api/tags`
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
+- Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
 - Local proxy tools: same-origin `GET /api/web-search` and `GET /api/fetch-url`, served by the repo-owned Node host under `server/`
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key
 - Web search backend: local SearXNG via Docker Compose, defaulting to `http://127.0.0.1:8888`
-- `fetch_url` is HTML-only in this pass and intentionally does not parse PDFs, images, or arbitrary files
+- `fetch_url` is still HTML-only; document uploads now use the dedicated attachment parser path instead of the web page fetcher
 
 ## Recent refactor
 

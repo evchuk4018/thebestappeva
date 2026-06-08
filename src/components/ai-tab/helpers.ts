@@ -1,5 +1,6 @@
 import {
   AiMessage,
+  AiAttachmentReference,
   AssistantMessage,
   AssistantMessageStatus,
   AssistantTraceStep,
@@ -16,11 +17,12 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function createUserMessage(content: string): UserMessage {
+export function createUserMessage(content: string, attachments?: AiAttachmentReference[]): UserMessage {
   return {
     id: createId('msg'),
     kind: 'user',
     content: content.trim(),
+    attachments: attachments?.length ? attachments : undefined,
     createdAt: new Date().toISOString(),
   };
 }

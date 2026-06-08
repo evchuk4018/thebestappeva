@@ -1,3 +1,6 @@
+import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachments-contract';
+export type { AiAttachmentReference } from './ai-attachments-contract';
+
 export interface ToolInvocation {
   toolId: string;
   functionName: string;
@@ -25,6 +28,7 @@ export interface UserMessage {
   id: string;
   kind: 'user';
   content: string;
+  attachments?: AiAttachmentReference[];
   createdAt: string;
   activeVersionId?: string;
   versions?: UserMessageVersion[];
@@ -200,6 +204,9 @@ function parseMessage(value: unknown, field: string): AiMessage {
       id: expectString(record.id, `${field}.id`),
       kind: 'user',
       content: expectString(record.content, `${field}.content`),
+      attachments: Array.isArray(record.attachments)
+        ? record.attachments.map((attachment, index) => parseAiAttachmentReference(attachment, `${field}.attachments[${index}]`))
+        : undefined,
       createdAt: expectString(record.createdAt, `${field}.createdAt`),
       activeVersionId: expectOptionalString(record.activeVersionId, `${field}.activeVersionId`),
       versions: Array.isArray(record.versions)

@@ -1,6 +1,7 @@
 import { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
+import { loadAiAttachmentContext } from '../../../lib/ai-attachments-storage';
 import { buildSystemPromptContent, SystemPromptContext } from '../system-prompt';
-import { AiMessage, AssistantMessage } from '../types';
+import { AiAttachmentReference, AiMessage, AssistantMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
 function buildSystemMessage(promptContext: SystemPromptContext): OllamaChatMessage {
@@ -59,7 +60,7 @@ function buildAssistantTraceMessages(message: AssistantMessage) {
 
 function toModelMessages(message: AiMessage) {
   if (message.kind === 'user') {
-    return [{ role: 'user', content: message.content }] satisfies OllamaChatMessage[];
+    throw new Error('User messages must be normalized asynchronously before prompt assembly.');
   }
 
   return buildAssistantTraceMessages(message);
@@ -67,7 +68,7 @@ function toModelMessages(message: AiMessage) {
 
 function toPlainModelMessage(message: AiMessage): OllamaChatMessage | null {
   if (message.kind === 'user') {
-    return { role: 'user', content: message.content };
+    throw new Error('User messages must be normalized asynchronously before prompt assembly.');
   }
 
   if (message.kind === 'assistant') {
@@ -95,12 +96,64 @@ export function formatToolResultContent(result: {
   );
 }
 
-export function buildModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
-  return [buildSystemMessage(promptContext), ...messages.flatMap(toModelMessages)];
+function formatAttachmentSummary(attachment: AiAttachmentReference) {
+  return [
+    `File: ${attachment.fileName}`,
+    `Title: ${attachment.title}`,
+    `Type: ${attachment.mediaType}`,
+    `Characters: ${attachment.textChars}`,
+    `Chunks: ${attachment.chunkCount}`,
+  ].join('\n');
 }
 
-export function buildPlainModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
-  return [buildSystemMessage(promptContext), ...(messages.map(toPlainModelMessage).filter(Boolean) as OllamaChatMessage[])];
+async function buildUserMessageContent(content: string, attachments: AiAttachmentReference[] | undefined) {
+  const baseContent = content.trim() || 'Use the attached documents as context for this request.';
+  if (!attachments?.length) {
+    return baseContent;
+  }
+
+  const contexts = await Promise.all(
+    attachments.map(async (attachment) => {
+      const payload = await loadAiAttachmentContext(attachment.id, baseContent);
+      return [`Attachment summary:`, formatAttachmentSummary(attachment), '', payload.context].join('\n');
+    }),
+  );
+
+  return [baseContent, 'Attached document context:', ...contexts].join('\n\n').trim();
+}
+
+async function toUserModelMessages(message: AiMessage) {
+  if (message.kind !== 'user') {
+    return toModelMessages(message);
+  }
+
+  return [
+    {
+      role: 'user' as const,
+      content: await buildUserMessageContent(message.content, message.attachments),
+    },
+  ] satisfies OllamaChatMessage[];
+}
+
+async function toPlainUserModelMessage(message: AiMessage) {
+  if (message.kind !== 'user') {
+    return toPlainModelMessage(message);
+  }
+
+  return {
+    role: 'user' as const,
+    content: await buildUserMessageContent(message.content, message.attachments),
+  };
+}
+
+export async function buildModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
+  const normalized = await Promise.all(messages.map((message) => toUserModelMessages(message)));
+  return [buildSystemMessage(promptContext), ...normalized.flat()];
+}
+
+export async function buildPlainModelMessages(messages: AiMessage[], promptContext: SystemPromptContext) {
+  const normalized = await Promise.all(messages.map((message) => toPlainUserModelMessage(message)));
+  return [buildSystemMessage(promptContext), ...(normalized.filter(Boolean) as OllamaChatMessage[])];
 }
 
 export function buildOllamaTools(entries: ToolRegistryEntry[]): OllamaToolDefinition[] {

@@ -1,16 +1,33 @@
 import { AlertTriangle, PackagePlus, Wifi, WifiOff } from 'lucide-react';
-import { OllamaAvailability } from './types';
+import { AiAttachmentHealth, OllamaAvailability } from './types';
 
 interface AiStatusBannerProps {
   availability: OllamaAvailability;
   lastError: string | null;
+  parserHealth: AiAttachmentHealth | null;
   persistenceError: string | null;
   onOpenAddModels: () => void;
 }
 
-export function AiStatusBanner({ availability, lastError, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
-  if (availability === 'ready' && !lastError && !persistenceError) {
+export function AiStatusBanner({ availability, lastError, parserHealth, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
+  if (availability === 'ready' && parserHealth?.available !== false && !lastError && !persistenceError) {
     return null;
+  }
+
+  if (parserHealth?.available === false && availability === 'ready' && !lastError) {
+    return (
+      <div className="mb-4 w-full max-w-xl rounded-2xl border border-[#4b3326] bg-[#241d18] px-4 py-3 text-left shadow-lg md:max-w-2xl">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-full bg-[#e2875e]/15 p-2 text-[#e2875e]">
+            <AlertTriangle size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[#efeae4]">Local document parser unavailable</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">{parserHealth.details ?? parserHealth.message}</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (availability === 'ready' && persistenceError && !lastError) {

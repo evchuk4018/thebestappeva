@@ -14,10 +14,26 @@ function readStringEnv(name: string, fallback: string) {
   return value || fallback;
 }
 
+const defaultParserCommand = process.platform === 'win32' ? 'py' : 'python3';
+const defaultParserArgs = process.platform === 'win32' ? ['-3'] : [];
+
+function readStringListEnv(name: string) {
+  const value = process.env[name]?.trim();
+  return value ? value.split(/\s+/).filter(Boolean) : [];
+}
+
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),
   port: readNumberEnv('PORT', 3000),
   localDbPath: path.resolve(process.cwd(), readStringEnv('LOCAL_DB_PATH', '.local-data/thebestappeva.sqlite')),
+  aiAttachmentStoragePath: path.resolve(process.cwd(), readStringEnv('AI_ATTACHMENT_STORAGE_PATH', '.local-data/ai-attachments')),
+  aiAttachmentMaxUploadBytes: readNumberEnv('AI_ATTACHMENT_MAX_UPLOAD_BYTES', 20 * 1024 * 1024),
+  aiAttachmentInlineChars: readNumberEnv('AI_ATTACHMENT_INLINE_CHARS', 12000),
+  aiAttachmentMaxContextChars: readNumberEnv('AI_ATTACHMENT_MAX_CONTEXT_CHARS', 18000),
+  aiAttachmentTopChunks: readNumberEnv('AI_ATTACHMENT_TOP_CHUNKS', 6),
+  aiParserTimeoutMs: readNumberEnv('AI_PARSER_TIMEOUT_MS', 120000),
+  aiParserPythonCommand: readStringEnv('AI_PARSER_PYTHON_COMMAND', defaultParserCommand),
+  aiParserPythonArgs: readStringListEnv('AI_PARSER_PYTHON_ARGS').length ? readStringListEnv('AI_PARSER_PYTHON_ARGS') : defaultParserArgs,
   searxngBaseUrl: readStringEnv('SEARXNG_BASE_URL', 'http://127.0.0.1:8888').replace(/\/+$/, ''),
   webSearchTimeoutMs: readNumberEnv('WEB_SEARCH_TIMEOUT_MS', 10000),
   urlFetchTimeoutMs: readNumberEnv('URL_FETCH_TIMEOUT_MS', 12000),

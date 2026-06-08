@@ -17,6 +17,7 @@ import { RuntimePill } from './ai-tab/RuntimePill';
 import { Sidebar } from './ai-tab/Sidebar';
 import { buildSystemPromptSections } from './ai-tab/system-prompt';
 import { PullProgress } from './ai-tab/types';
+import { useAiAttachments } from './ai-tab/useAiAttachments';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
 
@@ -34,6 +35,15 @@ export default function AiTab() {
   const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const {
+    addFiles,
+    clearReadyAttachments,
+    isUploadingAttachments,
+    parserHealth,
+    pendingAttachments,
+    readyAttachmentRefs,
+    removePendingAttachment,
+  } = useAiAttachments();
 
   const {
     availableModels,
@@ -78,6 +88,10 @@ export default function AiTab() {
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
   };
+  const handleSelectModel = (model: string) => {
+    setCurrentModel(model);
+    setModelDropdownOpen(false);
+  };
   const handleSuggestionClick = (label: string) => setInputValue(getSuggestionPrompt(label));
 
   const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
@@ -105,12 +119,13 @@ export default function AiTab() {
   };
   const handleSend = async () => {
     const nextMessage = inputValue.trim();
-    if (!nextMessage || isTyping || !currentModel) {
+    if ((!nextMessage && !readyAttachmentRefs.length) || isTyping || !currentModel) {
       return;
     }
 
     setInputValue('');
-    await sendMessage(nextMessage);
+    await sendMessage(nextMessage, readyAttachmentRefs);
+    clearReadyAttachments();
   };
   const handlePullModel = async (modelName: string) => {
     setIsPullingModel(true);
@@ -146,6 +161,27 @@ export default function AiTab() {
       event.preventDefault();
       void handleSend();
     }
+  };
+  const composerProps = {
+    availability,
+    chatMode,
+    currentModel,
+    inputValue,
+    isModelDropdownOpen: modelDropdownOpen,
+    isModelLoading,
+    isUploadingAttachments,
+    models: availableModels,
+    pendingAttachments,
+    onAddModels: openAddModels,
+    onInputChange: setInputValue,
+    onKeyDown: handleKeyDown,
+    onRemoveAttachment: removePendingAttachment,
+    onSelectFiles: addFiles,
+    onSelectModel: handleSelectModel,
+    onSend: () => void handleSend(),
+    onStop: stopMessage,
+    onToggleMode: toggleChatMode,
+    onToggleModelDropdown: () => setModelDropdownOpen((open) => !open),
   };
 
   return (
@@ -203,6 +239,7 @@ export default function AiTab() {
           <AiStatusBanner
             availability={availability}
             lastError={lastError}
+            parserHealth={parserHealth}
             persistenceError={persistenceError}
             onOpenAddModels={openAddModels}
           />
@@ -222,51 +259,17 @@ export default function AiTab() {
             />
           ) : (
             <EmptyState
-              availability={availability}
-              chatMode={chatMode}
-              currentModel={currentModel}
-              inputValue={inputValue}
-              isModelDropdownOpen={modelDropdownOpen}
+              {...composerProps}
               isWorking={isTyping}
-              isModelLoading={isModelLoading}
-              models={availableModels}
-              onAddModels={openAddModels}
-              onInputChange={setInputValue}
-              onKeyDown={handleKeyDown}
-              onSelectModel={(model) => {
-                setCurrentModel(model);
-                setModelDropdownOpen(false);
-              }}
               onSelectSuggestion={handleSuggestionClick}
-              onSend={() => void handleSend()}
-              onStop={stopMessage}
-              onToggleMode={toggleChatMode}
-              onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
             />
           )}
         </div>
 
         {activeChat && (
           <AiActiveComposer
-            availability={availability}
-            chatMode={chatMode}
-            currentModel={currentModel}
-            inputValue={inputValue}
-            isModelDropdownOpen={modelDropdownOpen}
-            isModelLoading={isModelLoading}
+            {...composerProps}
             isTyping={isTyping}
-            models={availableModels}
-            onAddModels={openAddModels}
-            onInputChange={setInputValue}
-            onKeyDown={handleKeyDown}
-            onSelectModel={(model) => {
-              setCurrentModel(model);
-              setModelDropdownOpen(false);
-            }}
-            onSend={() => void handleSend()}
-            onStop={stopMessage}
-            onToggleMode={toggleChatMode}
-            onToggleModelDropdown={() => setModelDropdownOpen((open) => !open)}
           />
         )}
       </div>

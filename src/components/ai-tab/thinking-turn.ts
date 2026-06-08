@@ -44,7 +44,7 @@ export async function resolveThinkingTurn({
 }: ResolveThinkingTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
   let toolCallCount = 0;
-  let requestMessages = buildModelMessages(workingChat.messages, promptContext);
+  let requestMessages: OllamaChatMessage[] = [];
   const availableTools = buildOllamaTools(activeToolEntries);
   let assistantMessage: AssistantMessage | null = null;
 
@@ -138,6 +138,8 @@ export async function resolveThinkingTurn({
   };
 
   try {
+    requestMessages = await buildModelMessages(workingChat.messages, promptContext);
+
     while (true) {
       throwIfAborted(signal);
 

@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react';
 import { ChatMode, OllamaAvailability, OllamaModel } from './types';
 import { ChatComposer } from './ChatComposer';
+import { PendingAttachment } from './useAiAttachments';
 
 interface AiActiveComposerProps {
   availability: OllamaAvailability;
@@ -10,12 +11,16 @@ interface AiActiveComposerProps {
   isModelDropdownOpen: boolean;
   isModelLoading: boolean;
   isTyping: boolean;
+  isUploadingAttachments: boolean;
   models: OllamaModel[];
+  pendingAttachments: PendingAttachment[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onRemoveAttachment: (localId: string) => Promise<void> | void;
   onSelectModel: (model: string) => void;
   onSend: () => void;
+  onSelectFiles: (files: FileList) => Promise<void> | void;
   onStop: () => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;
@@ -34,12 +39,16 @@ export function AiActiveComposer(props: AiActiveComposerProps) {
           isModelDropdownOpen={props.isModelDropdownOpen}
           isWorking={props.isTyping}
           isModelLoading={props.isModelLoading}
+          isUploadingAttachments={props.isUploadingAttachments}
           models={props.models}
+          pendingAttachments={props.pendingAttachments}
           onAddModels={props.onAddModels}
           onInputChange={props.onInputChange}
           onKeyDown={props.onKeyDown}
+          onRemoveAttachment={props.onRemoveAttachment}
           onSelectModel={props.onSelectModel}
           onSend={props.onSend}
+          onSelectFiles={props.onSelectFiles}
           onStop={props.onStop}
           onToggleMode={props.onToggleMode}
           onToggleModelDropdown={props.onToggleModelDropdown}

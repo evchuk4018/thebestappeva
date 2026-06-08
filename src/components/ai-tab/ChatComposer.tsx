@@ -1,7 +1,10 @@
 import { ChatModeToggle } from './ChatModeToggle';
 import { ArrowRight, Headphones, Mic, Paperclip, Send, Square } from 'lucide-react';
+import { useRef } from 'react';
 import { ModelPicker } from './ModelPicker';
 import { ChatMode, OllamaAvailability, OllamaModel } from './types';
+import { PendingAttachmentTray } from './PendingAttachmentTray';
+import { PendingAttachment } from './useAiAttachments';
 
 interface ChatComposerProps {
   availability: OllamaAvailability;
@@ -12,11 +15,15 @@ interface ChatComposerProps {
   isModelDropdownOpen: boolean;
   isWorking: boolean;
   isModelLoading: boolean;
+  isUploadingAttachments: boolean;
   models: OllamaModel[];
+  pendingAttachments: PendingAttachment[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onRemoveAttachment: (localId: string) => Promise<void> | void;
   onSend: () => void;
+  onSelectFiles: (files: FileList) => Promise<void> | void;
   onStop: () => void;
   onSelectModel: (model: string) => void;
   onToggleMode: () => void;
@@ -48,23 +55,44 @@ export function ChatComposer({
   isModelDropdownOpen,
   isWorking,
   isModelLoading,
+  isUploadingAttachments,
   models,
+  pendingAttachments,
   onAddModels,
   onInputChange,
   onKeyDown,
+  onRemoveAttachment,
   onSend,
+  onSelectFiles,
   onStop,
   onSelectModel,
   onToggleMode,
   onToggleModelDropdown,
 }: ChatComposerProps) {
-  const isDisabled = !inputValue.trim() || isWorking || !currentModel;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasReadyAttachments = pendingAttachments.some((attachment) => attachment.status === 'ready');
+  const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isWorking || !currentModel || isUploadingAttachments;
   const isInputDisabled = isWorking || !currentModel;
   const placeholder = getPlaceholder(availability, currentModel);
+  const handlePickFiles = () => fileInputRef.current?.click();
 
   if (compact) {
     return (
       <div className="w-full rounded-2xl border border-[#2f2f2b] bg-[#20201e] p-2 shadow-2xl focus-within:border-[#e2875e]/60">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.xlsx"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            if (event.target.files?.length) {
+              void onSelectFiles(event.target.files);
+            }
+            event.currentTarget.value = '';
+          }}
+        />
+        <PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <div className="min-w-0 flex-1">
             <input
@@ -92,7 +120,7 @@ export function ChatComposer({
               />
             </div>
             <div className="flex items-center gap-1.5 text-zinc-500">
-              <button type="button" className="rounded-lg p-1.5 hover:bg-zinc-800 hover:text-zinc-300">
+              <button type="button" onClick={handlePickFiles} className="rounded-lg p-1.5 hover:bg-zinc-800 hover:text-zinc-300">
                 <Paperclip size={16} />
               </button>
               {isWorking ? (
@@ -123,6 +151,20 @@ export function ChatComposer({
 
   return (
     <div className="mb-6 w-full rounded-2xl border border-[#2f2f2b] bg-[#20201e] p-3 duration-200 focus-within:border-[#e2875e]/60 focus-within:shadow-2xl focus-within:shadow-[#e2875e]/5">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.xlsx"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          if (event.target.files?.length) {
+            void onSelectFiles(event.target.files);
+          }
+          event.currentTarget.value = '';
+        }}
+      />
+      <PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
       <textarea
         value={inputValue}
         disabled={isInputDisabled}
@@ -134,7 +176,7 @@ export function ChatComposer({
 
       <div className="flex items-center justify-between border-t border-[#292925] pt-2">
         <div className="flex items-center gap-1 text-zinc-500">
-          <button type="button" className="rounded-xl p-2 duration-150 hover:bg-[#282825] hover:text-zinc-300">
+          <button type="button" onClick={handlePickFiles} className="rounded-xl p-2 duration-150 hover:bg-[#282825] hover:text-zinc-300">
             <Paperclip size={16} />
           </button>
           <button type="button" className="rounded-xl p-2 duration-150 hover:bg-[#282825] hover:text-zinc-300">

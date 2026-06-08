@@ -1,3 +1,10 @@
+import {
+  handleDeleteAiAttachment,
+  handleGetAiAttachment,
+  handleGetAiAttachmentContext,
+  handleGetAiAttachmentHealth,
+  handleParseAiAttachment,
+} from './ai-attachments/routes';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import type { Server } from 'node:http';
 import fs from 'node:fs/promises';
@@ -57,10 +64,15 @@ async function listenWithDevFallback(app: Express, mode: 'dev' | 'preview') {
 }
 
 function registerApiRoutes(app: Express) {
+  app.get('/api/ai/attachments/health', (_req, res) => void handleGetAiAttachmentHealth(_req, res));
+  app.post('/api/ai/attachments/parse', express.json({ limit: '35mb' }), (req, res) => void handleParseAiAttachment(req, res));
   app.use(express.json({ limit: '2mb' }));
   app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
   app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
   app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
+  app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
+  app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
+  app.delete('/api/ai/attachments/:attachmentId', (req, res) => void handleDeleteAiAttachment(req, res));
   app.get('/api/web-search', (req, res) => void handleWebSearch(req, res));
   app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
 }

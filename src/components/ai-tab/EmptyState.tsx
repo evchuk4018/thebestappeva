@@ -1,6 +1,7 @@
 import { ChatComposer } from './ChatComposer';
 import { PromptSuggestions } from './PromptSuggestions';
 import { ChatMode, OllamaAvailability, OllamaModel } from './types';
+import { PendingAttachment } from './useAiAttachments';
 
 interface EmptyStateProps {
   availability: OllamaAvailability;
@@ -10,13 +11,17 @@ interface EmptyStateProps {
   isModelDropdownOpen: boolean;
   isWorking: boolean;
   isModelLoading: boolean;
+  isUploadingAttachments: boolean;
   models: OllamaModel[];
+  pendingAttachments: PendingAttachment[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onRemoveAttachment: (localId: string) => Promise<void> | void;
   onSelectModel: (model: string) => void;
   onSelectSuggestion: (label: string) => void;
   onSend: () => void;
+  onSelectFiles: (files: FileList) => Promise<void> | void;
   onStop: () => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;
@@ -50,12 +55,16 @@ export function EmptyState(props: EmptyStateProps) {
         isModelDropdownOpen={props.isModelDropdownOpen}
         isWorking={props.isWorking}
         isModelLoading={props.isModelLoading}
+        isUploadingAttachments={props.isUploadingAttachments}
         models={props.models}
+        pendingAttachments={props.pendingAttachments}
         onAddModels={props.onAddModels}
         onInputChange={props.onInputChange}
         onKeyDown={props.onKeyDown}
+        onRemoveAttachment={props.onRemoveAttachment}
         onSelectModel={props.onSelectModel}
         onSend={props.onSend}
+        onSelectFiles={props.onSelectFiles}
         onStop={props.onStop}
         onToggleMode={props.onToggleMode}
         onToggleModelDropdown={props.onToggleModelDropdown}

@@ -1,5 +1,6 @@
 export type {
   AiMessage,
+  AiAttachmentReference,
   AiWorkspaceSnapshot,
   AssistantMessage,
   AssistantMessageStatus,
@@ -14,6 +15,7 @@ export type {
   UserMessage,
   UserMessageVersion,
 } from '../../../shared/ai-workspace-contract';
+export type { AiAttachmentHealth, AiParsedAttachment } from '../../../shared/ai-attachments-contract';
 
 export interface OllamaModel {
   name: string;

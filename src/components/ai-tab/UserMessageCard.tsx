@@ -1,5 +1,6 @@
 import { Check, Copy, Pencil, RotateCcw, Send, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { MessageAttachmentList } from './MessageAttachmentList';
 import { getUserMessageVersionInfo } from './message-branches';
 import { UserMessage } from './types';
 
@@ -60,7 +61,10 @@ export function UserMessageCard({ disabled, message, onCopy, onEdit, onSwitchVer
             className="min-h-24 w-full resize-y border-none bg-transparent text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-500"
           />
         ) : (
-          <p className="whitespace-pre-line">{message.content}</p>
+          <div>
+            <p className="whitespace-pre-line">{message.content}</p>
+            <MessageAttachmentList attachments={message.attachments ?? []} />
+          </div>
         )}
       </div>
 
