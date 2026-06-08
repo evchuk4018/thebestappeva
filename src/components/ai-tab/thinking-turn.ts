@@ -15,6 +15,7 @@ import { SystemPromptContext } from './system-prompt';
 import { AssistantMessage, Chat, OllamaAvailability } from './types';
 import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
+import { toPersistedToolResult } from './tools/result-persistence';
 import { ToolRegistryEntry } from './tools/types';
 
 export interface ResolvedTurn {
@@ -226,9 +227,10 @@ export async function resolveThinkingTurn({
 
         appendToolCall(invocation, reply.model);
 
-        const result = await executeToolInvocation(invocation, activeToolEntries, { signal });
+        const execution = await executeToolInvocation(invocation, activeToolEntries, { model, signal });
+        const { transientImages, ...result } = execution;
         throwIfAborted(signal);
-        appendToolResult(result, reply.model);
+        appendToolResult(toPersistedToolResult(result), reply.model);
 
         requestMessages = [
           ...requestMessages,
@@ -236,6 +238,7 @@ export async function resolveThinkingTurn({
             role: 'tool',
             tool_name: invocation.functionName,
             content: formatToolResultContent(result),
+            images: transientImages,
           } satisfies OllamaChatMessage,
         ];
       }

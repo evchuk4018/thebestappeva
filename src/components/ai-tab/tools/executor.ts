@@ -1,5 +1,5 @@
 import { isAbortError } from '../abort-utils';
-import { ToolExecutionContext, ToolInvocation, ToolRegistryEntry, ToolResult } from './types';
+import { ToolExecutionContext, ToolExecutionResult, ToolInvocation, ToolRegistryEntry, ToolResult } from './types';
 
 export const MAX_TOOL_CALL_DEPTH = 3;
 
@@ -13,7 +13,11 @@ function buildMissingToolResult(invocation: ToolInvocation): ToolResult {
   };
 }
 
-export async function executeToolInvocation(invocation: ToolInvocation, entries: ToolRegistryEntry[], context: ToolExecutionContext = {}) {
+export async function executeToolInvocation(
+  invocation: ToolInvocation,
+  entries: ToolRegistryEntry[],
+  context: ToolExecutionContext = {},
+): Promise<ToolExecutionResult> {
   const entry = entries.find((candidate) => candidate.definition.id === invocation.toolId);
   if (!entry) {
     return buildMissingToolResult(invocation);

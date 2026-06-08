@@ -39,6 +39,7 @@ interface OllamaToolCall {
 export interface OllamaChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  images?: string[];
   thinking?: string;
   tool_name?: string;
   tool_calls?: Array<{
@@ -48,6 +49,8 @@ export interface OllamaChatMessage {
     };
   }>;
 }
+
+const modelCapabilities = new Map<string, string[]>();
 
 export interface OllamaToolDefinition {
   type: 'function';
@@ -148,6 +151,27 @@ export async function listModels() {
     );
   } catch (error) {
     throw normalizeOllamaError(error, 'Unable to reach local Ollama.');
+  }
+}
+
+export async function getModelCapabilities(model: string) {
+  const cached = modelCapabilities.get(model);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, verbose: false }),
+    });
+    const payload = await readJson<{ capabilities?: string[] }>(response);
+    const capabilities = Array.isArray(payload.capabilities) ? payload.capabilities : [];
+    modelCapabilities.set(model, capabilities);
+    return capabilities;
+  } catch (error) {
+    throw normalizeOllamaError(error, 'Unable to inspect the selected Ollama model.');
   }
 }
 

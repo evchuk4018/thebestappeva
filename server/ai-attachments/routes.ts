@@ -6,6 +6,8 @@ import { AiAttachmentHealth, AiParsedAttachment } from '../../shared/ai-attachme
 import { serverConfig } from '../config';
 import { HttpError, getOptionalQueryParam, getRequiredQueryParam, toErrorMessage } from '../http';
 import { buildAttachmentChunks, buildAttachmentContext } from './chunking';
+import { classifyPdfReaderMode } from './pdf-content';
+import { getPdfReaderMode } from './pdf-record';
 import { parseDocumentWithDocling, readParserHealth } from './parser';
 import { deleteAttachmentRecord, readAttachmentRecord, saveAttachmentRecord, saveAttachmentSource, toParsedAttachment } from './storage';
 import { StoredAiAttachmentRecord } from './types';
@@ -63,6 +65,8 @@ function buildStoredRecord(args: {
 }): StoredAiAttachmentRecord {
   const createdAt = new Date().toISOString();
   const { chunks, outline } = buildAttachmentChunks(args.parsed.markdown || args.parsed.text);
+  const pageCount = args.parsed.stats.pageCount;
+  const isPdf = args.extension === '.pdf';
   const attachment: AiParsedAttachment = {
     id: args.id,
     createdAt,
@@ -74,6 +78,8 @@ function buildStoredRecord(args: {
     textChars: args.parsed.text.length,
     chunkCount: chunks.length,
     warningCount: args.parsed.warnings.length,
+    pageCount: isPdf ? pageCount : undefined,
+    pdfReaderMode: isPdf ? classifyPdfReaderMode(pageCount) : undefined,
     outline,
     warnings: args.parsed.warnings,
     stats: args.parsed.stats,
@@ -85,6 +91,7 @@ function buildStoredRecord(args: {
     markdown: args.parsed.markdown,
     text: args.parsed.text,
     chunks,
+    pages: args.parsed.pages,
     sourceExtension: args.extension,
   };
 }
@@ -147,13 +154,41 @@ export async function handleGetAiAttachmentContext(request: Request, response: R
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
     const query = getOptionalQueryParam(request.query.query);
     const record = await readAttachmentRecord(attachmentId);
-    const payload = buildAttachmentContext({
-      fileName: record.attachment.fileName,
-      markdown: record.markdown,
-      chunks: record.chunks,
-      outline: record.attachment.outline,
-      query,
-    });
+    const pdfMode = getPdfReaderMode(record);
+    const payload =
+      pdfMode === 'inline'
+        ? {
+            context: [
+              `Brief PDF: ${record.attachment.fileName}`,
+              `Pages: ${record.attachment.stats.pageCount}`,
+              'The complete PDF content is loaded below. Briefly mention in the final answer that this was a brief PDF, so there was no need for a tool.',
+              '',
+              record.markdown,
+            ].join('\n'),
+            mode: 'inline' as const,
+            selectedChunkCount: record.chunks.length,
+          }
+        : pdfMode === 'tool'
+        ? {
+            context: [
+              `PDF: ${record.attachment.fileName}`,
+              `Pages: ${record.attachment.stats.pageCount ?? 'unknown'}`,
+              record.attachment.outline.length ? `Outline: ${record.attachment.outline.slice(0, 12).join(' | ')}` : null,
+              `Preview: ${record.attachment.previewText}`,
+              'Use pdf_reader to search or inspect specific pages.',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            mode: 'ranked' as const,
+            selectedChunkCount: 0,
+          }
+        : buildAttachmentContext({
+            fileName: record.attachment.fileName,
+            markdown: record.markdown,
+            chunks: record.chunks,
+            outline: record.attachment.outline,
+            query,
+          });
 
     response.json({
       attachment: record.attachment,

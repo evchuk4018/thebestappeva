@@ -14,7 +14,9 @@ import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, swit
 import { SystemPromptContext } from './system-prompt';
 import { AiAttachmentReference, Chat, ChatMode } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
+import { collectLongPdfAttachments, createPdfReaderTool } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
+import { ToolRegistryEntry } from './tools/types';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
@@ -49,12 +51,14 @@ export function useOllamaChat() {
   } = useOllamaModelState({ currentModel, hydrationStatus, setCurrentModel });
 
   const toolRegistryEntries = getToolRegistryEntries();
+  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
+  const selectedPdfAttachments = selectedChat ? collectLongPdfAttachments(selectedChat.messages) : [];
+  const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
   const tools = toolRegistryEntries.map(({ definition }) => ({
     ...definition,
     enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
-  }));
-  const activeToolEntries = toolRegistryEntries.filter(({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault);
-  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
+  })).concat([{ ...selectedPdfTool.definition, enabled: selectedPdfAttachments.length > 0 }]);
+  const activeToolEntries = getActiveToolEntries(selectedChat);
   const chatMode = selectedChat?.mode ?? draftMode;
   const systemPromptContext: SystemPromptContext = {
     customPrompt: customSystemPrompt,
@@ -89,8 +93,16 @@ export function useOllamaChat() {
     setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
   }
 
-  function resolveToolId(functionName: string) {
-    const entry = activeToolEntries.find(({ definition }) => definition.functions.some((candidate) => candidate.name === functionName));
+  function getActiveToolEntries(chat: Chat | null) {
+    const enabledEntries = toolRegistryEntries.filter(
+      ({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault,
+    );
+    const pdfAttachments = chat ? collectLongPdfAttachments(chat.messages) : [];
+    return pdfAttachments.length ? [...enabledEntries, createPdfReaderTool(pdfAttachments)] : enabledEntries;
+  }
+
+  function resolveToolId(functionName: string, entries: ToolRegistryEntry[]) {
+    const entry = entries.find(({ definition }) => definition.functions.some((candidate) => candidate.name === functionName));
     return entry?.definition.id ?? functionName;
   }
 
@@ -120,14 +132,20 @@ export function useOllamaChat() {
     }
   }
 
-  async function sendThinkingReply(chat: Chat, model: string, promptContext: SystemPromptContext, signal?: AbortSignal): Promise<ResolvedTurn> {
+  async function sendThinkingReply(
+    chat: Chat,
+    model: string,
+    promptContext: SystemPromptContext,
+    entries: ToolRegistryEntry[],
+    signal?: AbortSignal,
+  ): Promise<ResolvedTurn> {
     return resolveThinkingTurn({
       chat,
       model,
-      activeToolEntries,
+      activeToolEntries: entries,
       onProgress: (nextChat) => setChats((currentChats) => replaceChat(currentChats, nextChat)),
       promptContext,
-      resolveToolId,
+      resolveToolId: (functionName) => resolveToolId(functionName, entries),
       signal,
     });
   }
@@ -137,22 +155,25 @@ export function useOllamaChat() {
       return;
     }
 
-    setChats((currentChats) => replaceChat(currentChats, baseChat));
+    const effectiveMode = collectLongPdfAttachments(baseChat.messages).length ? 'thinking' : nextChatMode;
+    const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
+    setChats((currentChats) => replaceChat(currentChats, turnChat));
     setIsTyping(true);
     setLastError(null);
     const controller = new AbortController();
     activeTurnControllerRef.current = controller;
 
     try {
+      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntries(turnChat) : [];
       const promptContext = {
         customPrompt: customSystemPrompt,
-        mode: nextChatMode,
-        tools: nextChatMode === 'thinking' ? activeToolEntries.map(({ definition }) => definition) : [],
+        mode: effectiveMode,
+        tools: turnToolEntries.map(({ definition }) => definition),
       } satisfies SystemPromptContext;
       const resolvedTurn =
-        nextChatMode === 'flash'
-          ? await sendFlashReply(baseChat, currentModel, promptContext, controller.signal)
-          : await sendThinkingReply(baseChat, currentModel, promptContext, controller.signal);
+        effectiveMode === 'flash'
+          ? await sendFlashReply(turnChat, currentModel, promptContext, controller.signal)
+          : await sendThinkingReply(turnChat, currentModel, promptContext, turnToolEntries, controller.signal);
       setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
@@ -172,8 +193,9 @@ export function useOllamaChat() {
     }
 
     const userMessage = createUserMessage(normalizedContent, attachments);
-    const nextChatMode = chatMode;
-    const baseChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, nextChatMode);
+    const appendedChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, chatMode);
+    const nextChatMode = collectLongPdfAttachments(appendedChat.messages).length ? 'thinking' : chatMode;
+    const baseChat = { ...appendedChat, mode: nextChatMode };
 
     if (!selectedChat) {
       setSelectedChatId(baseChat.id);

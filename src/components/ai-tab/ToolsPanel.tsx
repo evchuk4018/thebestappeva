@@ -29,20 +29,26 @@ export function ToolsPanel({ tools, onToggleTool }: ToolsPanelProps) {
               </div>
               <p className="mt-1 text-xs leading-relaxed text-zinc-400">{tool.description}</p>
             </div>
-            <button
-              type="button"
-              aria-pressed={tool.enabled}
-              onClick={() => onToggleTool(tool.id, !tool.enabled)}
-              className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition ${
-                tool.enabled ? 'bg-[#e2875e]' : 'bg-[#2a2a27]'
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${
-                  tool.enabled ? 'left-6' : 'left-1'
+            {tool.automatic ? (
+              <span className="rounded-full border border-[#3b3328] bg-[#211b16] px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#e2875e]">
+                {tool.enabled ? 'Auto' : 'Needs PDF'}
+              </span>
+            ) : (
+              <button
+                type="button"
+                aria-pressed={tool.enabled}
+                onClick={() => onToggleTool(tool.id, !tool.enabled)}
+                className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition ${
+                  tool.enabled ? 'bg-[#e2875e]' : 'bg-[#2a2a27]'
                 }`}
-              />
-            </button>
+              >
+                <span
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${
+                    tool.enabled ? 'left-6' : 'left-1'
+                  }`}
+                />
+              </button>
+            )}
           </div>
 
           <div className="mt-4 flex flex-col gap-2">

@@ -31,6 +31,7 @@ export const serverConfig = {
   aiAttachmentInlineChars: readNumberEnv('AI_ATTACHMENT_INLINE_CHARS', 12000),
   aiAttachmentMaxContextChars: readNumberEnv('AI_ATTACHMENT_MAX_CONTEXT_CHARS', 18000),
   aiAttachmentTopChunks: readNumberEnv('AI_ATTACHMENT_TOP_CHUNKS', 6),
+  aiPdfRenderScale: readNumberEnv('AI_PDF_RENDER_SCALE', 1.5),
   aiParserTimeoutMs: readNumberEnv('AI_PARSER_TIMEOUT_MS', 120000),
   aiParserPythonCommand: readStringEnv('AI_PARSER_PYTHON_COMMAND', defaultParserCommand),
   aiParserPythonArgs: readStringListEnv('AI_PARSER_PYTHON_ARGS').length ? readStringListEnv('AI_PARSER_PYTHON_ARGS') : defaultParserArgs,

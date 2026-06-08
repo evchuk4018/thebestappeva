@@ -98,12 +98,17 @@ export function formatToolResultContent(result: {
 
 function formatAttachmentSummary(attachment: AiAttachmentReference) {
   return [
+    `Attachment ID: ${attachment.id}`,
     `File: ${attachment.fileName}`,
     `Title: ${attachment.title}`,
     `Type: ${attachment.mediaType}`,
     `Characters: ${attachment.textChars}`,
     `Chunks: ${attachment.chunkCount}`,
-  ].join('\n');
+    typeof attachment.pageCount !== 'undefined' ? `Pages: ${attachment.pageCount ?? 'unknown'}` : null,
+    attachment.pdfReaderMode ? `PDF handling: ${attachment.pdfReaderMode === 'inline' ? 'full brief PDF loaded' : 'use pdf_reader tools'}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 async function buildUserMessageContent(content: string, attachments: AiAttachmentReference[] | undefined) {

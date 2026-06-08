@@ -25,7 +25,13 @@ export function PendingAttachmentTray({ attachments, onRemove }: PendingAttachme
           {attachment.status === 'uploading' ? <LoaderCircle size={13} className="animate-spin text-[#e2875e]" /> : attachment.status === 'error' ? <TriangleAlert size={13} /> : <Paperclip size={13} />}
           <span className="max-w-52 truncate">{attachment.fileName}</span>
           {attachment.status === 'ready' && attachment.attachment && (
-            <span className="text-[10px] text-zinc-500">{attachment.attachment.chunkCount} chunks</span>
+            <span className="text-[10px] text-zinc-500">
+              {attachment.attachment.pdfReaderMode === 'tool'
+                ? `${attachment.attachment.pageCount ?? '?'} pages | PDF reader`
+                : attachment.attachment.pdfReaderMode === 'inline'
+                  ? `${attachment.attachment.pageCount} pages | loaded`
+                  : `${attachment.attachment.chunkCount} chunks`}
+            </span>
           )}
           {attachment.status === 'error' && attachment.error && (
             <span className="max-w-44 truncate text-[10px] text-[#dfa7a7]">{attachment.error}</span>

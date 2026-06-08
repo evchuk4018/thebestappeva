@@ -27,6 +27,8 @@ function toReference(attachment: AiParsedAttachment): AiAttachmentReference {
     textChars: attachment.textChars,
     chunkCount: attachment.chunkCount,
     warningCount: attachment.warningCount,
+    pageCount: attachment.pageCount,
+    pdfReaderMode: attachment.pdfReaderMode,
   };
 }
 

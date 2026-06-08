@@ -25,6 +25,7 @@ python -m pip install -r python/requirements-docling.txt
 ```
 
 On Windows, the app defaults to the `py -3` launcher for the parser sidecar. Override `AI_PARSER_PYTHON_COMMAND` or `AI_PARSER_PYTHON_ARGS` in `.env` if your local Python command differs.
+PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
 
@@ -101,9 +102,12 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
   - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
+- long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
+- PDFs with 1-3 pages are fully loaded into the model prompt and the assistant is told to mention that no PDF tool was needed; PDFs with 4+ pages or unknown page counts load summary context first and use `pdf_reader` on demand
+- when a long PDF is submitted from `Flash`, that chat turn switches to `Thinking` so `pdf_reader` can run
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - user prompts can be copied, edited, resent from their original point in the thread, and switched between persisted edit branches with compact version controls
 - the composer paperclip now accepts local `.pdf`, `.docx`, and `.xlsx` uploads, parses them through a local Docling sidecar, and attaches the extracted content to the next AI turn
@@ -119,6 +123,7 @@ Implementation notes:
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`
 - Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
+- PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`
 - Model discovery: `GET /api/tags`
@@ -127,6 +132,7 @@ Implementation notes:
 - Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
 - Local proxy tools: same-origin `GET /api/web-search` and `GET /api/fetch-url`, served by the repo-owned Node host under `server/`
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key

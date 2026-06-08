@@ -6,18 +6,32 @@ export interface StoredAiAttachmentChunk {
   text: string;
 }
 
+export interface StoredAiAttachmentPage {
+  markdown: string;
+  pageNumber: number;
+  text: string;
+}
+
 export interface StoredAiAttachmentRecord {
   attachment: AiParsedAttachment;
   markdown: string;
   text: string;
   chunks: StoredAiAttachmentChunk[];
+  pages?: StoredAiAttachmentPage[];
   sourceExtension: string;
+}
+
+export interface ParsedDocumentPage {
+  markdown: string;
+  pageNumber: number;
+  text: string;
 }
 
 export interface ParsedDocumentPayload {
   title: string;
   markdown: string;
   text: string;
+  pages?: ParsedDocumentPage[];
   warnings: string[];
   stats: {
     pageCount: number | null;

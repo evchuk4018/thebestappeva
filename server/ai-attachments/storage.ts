@@ -13,6 +13,14 @@ function getSourcePath(id: string, extension: string) {
   return path.join(serverConfig.aiAttachmentStoragePath, `${id}${extension}`);
 }
 
+function getPageCacheDir(id: string) {
+  return path.join(serverConfig.aiAttachmentStoragePath, `${id}-pages`);
+}
+
+function getPageImagePath(id: string, pageNumber: number) {
+  return path.join(getPageCacheDir(id), `${pageNumber}.png`);
+}
+
 export async function ensureAttachmentStorage() {
   await fs.mkdir(serverConfig.aiAttachmentStoragePath, { recursive: true });
 }
@@ -22,6 +30,10 @@ export async function saveAttachmentSource(id: string, extension: string, fileBu
   const sourcePath = getSourcePath(id, extension);
   await fs.writeFile(sourcePath, fileBuffer);
   return sourcePath;
+}
+
+export function getAttachmentSourcePath(id: string, extension: string) {
+  return getSourcePath(id, extension);
 }
 
 export async function saveAttachmentRecord(record: StoredAiAttachmentRecord) {
@@ -46,7 +58,25 @@ export async function deleteAttachmentRecord(id: string, sourceExtension: string
   await Promise.allSettled([
     fs.unlink(getRecordPath(id)),
     fs.unlink(getSourcePath(id, sourceExtension)),
+    fs.rm(getPageCacheDir(id), { recursive: true, force: true }),
   ]);
+}
+
+export async function readCachedPdfPageImage(id: string, pageNumber: number) {
+  try {
+    return await fs.readFile(getPageImagePath(id, pageNumber));
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+export async function saveCachedPdfPageImage(id: string, pageNumber: number, image: Buffer) {
+  await fs.mkdir(getPageCacheDir(id), { recursive: true });
+  await fs.writeFile(getPageImagePath(id, pageNumber), image);
 }
 
 export function toParsedAttachment(record: StoredAiAttachmentRecord): AiParsedAttachment {

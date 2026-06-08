@@ -22,6 +22,7 @@ export interface ToolDefinition {
   description: string;
   functions: ToolFunctionDefinition[];
   enabledByDefault: boolean;
+  automatic?: boolean;
 }
 
 export interface ToolCallRequest {
@@ -31,10 +32,15 @@ export interface ToolCallRequest {
 }
 
 export interface ToolExecutionContext {
+  model?: string;
   signal?: AbortSignal;
+}
+
+export interface ToolExecutionResult extends ToolResult {
+  transientImages?: string[];
 }
 
 export interface ToolRegistryEntry {
   definition: ToolDefinition;
-  execute: (invocation: ToolInvocation, context: ToolExecutionContext) => Promise<ToolResult>;
+  execute: (invocation: ToolInvocation, context: ToolExecutionContext) => Promise<ToolExecutionResult>;
 }

@@ -15,6 +15,8 @@ export interface AiAttachmentReference {
   textChars: number;
   chunkCount: number;
   warningCount: number;
+  pageCount?: number | null;
+  pdfReaderMode?: 'inline' | 'tool';
 }
 
 export interface AiParsedAttachment extends AiAttachmentReference {
@@ -79,6 +81,22 @@ function expectNullableNumber(value: unknown, field: string) {
   return value === null ? null : expectNumber(value, field);
 }
 
+function expectOptionalNullableNumber(value: unknown, field: string) {
+  return typeof value === 'undefined' ? undefined : expectNullableNumber(value, field);
+}
+
+function parseOptionalPdfReaderMode(value: unknown, field: string) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (value !== 'inline' && value !== 'tool') {
+    throw new Error(`Invalid ${field}. Expected "inline" or "tool".`);
+  }
+
+  return value;
+}
+
 function parseStats(value: unknown, field: string): AiAttachmentStats {
   const record = expectRecord(value, field);
   return {
@@ -105,6 +123,8 @@ export function parseAiAttachmentReference(value: unknown, field = 'AI attachmen
     textChars: expectNumber(record.textChars, `${field}.textChars`),
     chunkCount: expectNumber(record.chunkCount, `${field}.chunkCount`),
     warningCount: expectNumber(record.warningCount, `${field}.warningCount`),
+    pageCount: expectOptionalNullableNumber(record.pageCount, `${field}.pageCount`),
+    pdfReaderMode: parseOptionalPdfReaderMode(record.pdfReaderMode, `${field}.pdfReaderMode`),
   };
 }
 

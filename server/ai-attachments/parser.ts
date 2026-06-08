@@ -56,3 +56,18 @@ export async function parseDocumentWithDocling(filePath: string) {
   const { stdout } = await runParserCommand(['--parse', filePath]);
   return parseJson<ParsedDocumentPayload>(stdout, 'The local Docling parser returned invalid document data.');
 }
+
+export async function renderPdfPage(filePath: string, pageNumber: number) {
+  const { stdout } = await runParserCommand([
+    '--render-page',
+    filePath,
+    '--page',
+    String(pageNumber),
+    '--scale',
+    String(serverConfig.aiPdfRenderScale),
+  ]);
+  return parseJson<{ base64Data: string; mediaType: 'image/png'; pageNumber: number }>(
+    stdout,
+    'The local PDF renderer returned invalid image data.',
+  );
+}

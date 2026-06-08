@@ -3,6 +3,11 @@ import {
   parseAiAttachmentHealth,
   parseAiParsedAttachment,
 } from '../../shared/ai-attachments-contract';
+import {
+  parseAiPdfPageImagePayload,
+  parseAiPdfPagePayload,
+  parseAiPdfSearchPayload,
+} from '../../shared/ai-pdf-reader-contract';
 
 async function readJsonResponse(response: Response) {
   const payload = await response.json().catch(() => ({ ok: false, error: 'The local server returned invalid JSON.' }));
@@ -64,4 +69,22 @@ export async function deleteAiAttachment(attachmentId: string) {
 export async function loadAiAttachmentHealth() {
   const response = await fetch('/api/ai/attachments/health');
   return parseAiAttachmentHealth(await readJsonResponse(response));
+}
+
+export async function searchAiPdf(attachmentId: string, query: string, limit = 10) {
+  const url = new URL(`/api/ai/attachments/${attachmentId}/pdf/search`, window.location.origin);
+  url.searchParams.set('query', query);
+  url.searchParams.set('limit', String(limit));
+  const response = await fetch(url);
+  return parseAiPdfSearchPayload(await readJsonResponse(response));
+}
+
+export async function loadAiPdfPage(attachmentId: string, pageNumber: number) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}`);
+  return parseAiPdfPagePayload(await readJsonResponse(response));
+}
+
+export async function loadAiPdfPageImage(attachmentId: string, pageNumber: number) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}/image`);
+  return parseAiPdfPageImagePayload(await readJsonResponse(response));
 }
