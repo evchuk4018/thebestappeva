@@ -1,7 +1,8 @@
 import { isAbortError } from '../abort-utils';
 import { ToolExecutionContext, ToolExecutionResult, ToolInvocation, ToolRegistryEntry, ToolResult } from './types';
 
-export const MAX_TOOL_CALL_DEPTH = 3;
+export const MAX_CONSECUTIVE_TOOL_ERRORS = 3;
+export const MAX_TOOL_CALLS_PER_TURN = 20;
 
 function buildMissingToolResult(invocation: ToolInvocation): ToolResult {
   return {

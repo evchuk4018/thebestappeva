@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit",
     "test": "npm run test:files && npm run test:pdf-reader",
     "test:files": "node scripts/check-file-lengths.mjs",
-    "test:pdf-reader": "tsx --test server/ai-attachments/pdf-content.test.ts src/components/ai-tab/tools/result-persistence.test.ts",
+    "test:pdf-reader": "tsx --test server/ai-attachments/pdf-content.test.ts shared/ai-pdf-reader-contract.test.ts src/components/ai-tab/tools/pdf-reader-tool.test.ts src/components/ai-tab/tools/result-persistence.test.ts src/lib/ai-attachments-storage.test.ts",
     "searxng:up": "docker compose -f docker-compose.searxng.yml up -d",
     "searxng:down": "docker compose -f docker-compose.searxng.yml down"
   },

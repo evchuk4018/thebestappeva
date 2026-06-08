@@ -1,4 +1,4 @@
-import { loadAiPdfPage, loadAiPdfPageImage, searchAiPdf } from '../../../lib/ai-attachments-storage';
+import { loadAiPdfPage, loadAiPdfPageImage, loadAiPdfPages, searchAiPdf } from '../../../lib/ai-attachments-storage';
 import { getModelCapabilities } from '../ollama-client';
 import { AiAttachmentReference, AiMessage } from '../types';
 import { ToolExecutionResult, ToolRegistryEntry } from './types';
@@ -40,6 +40,18 @@ function requirePageNumber(value: unknown) {
   return value;
 }
 
+function optionalPageNumber(value: unknown, name: string) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`pdf_reader requires \`${name}\` as a positive integer when provided.`);
+  }
+
+  return value;
+}
+
 function optionalLimit(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(1, Math.min(10, Math.round(value))) : 10;
 }
@@ -69,17 +81,26 @@ export function createPdfReaderTool(attachments: AiAttachmentReference[]): ToolR
       id: 'pdf-reader',
       label: 'PDF Reader',
       alias: '/pdf-reader',
-      description: 'Automatically searches and opens pages from long PDFs attached to this chat.',
+      description: 'Reads long PDFs attached to this chat. Use read_pdf_pages first for complete document audits.',
       enabledByDefault: false,
       automatic: true,
       functions: [
         {
           name: 'search_pdf',
-          description: 'Search an attached PDF for exact words or phrases and return page-numbered snippets.',
+          description: 'Search an attached PDF for a specific non-empty word or phrase and return page-numbered snippets.',
           parameters: [
             { name: 'attachmentId', type: 'string', description: 'Attachment ID shown in the PDF summary.', required: true },
             { name: 'query', type: 'string', description: 'Case-insensitive word or phrase to search for.', required: true },
             { name: 'limit', type: 'number', description: 'Maximum matches to return, from 1 to 10.' },
+          ],
+        },
+        {
+          name: 'read_pdf_pages',
+          description: 'Read a consecutive page range. For a complete audit, call this first without page bounds; at most 25 pages are returned.',
+          parameters: [
+            { name: 'attachmentId', type: 'string', description: 'Attachment ID shown in the PDF summary.', required: true },
+            { name: 'startPage', type: 'number', description: 'Optional one-based first page; defaults to page 1.' },
+            { name: 'endPage', type: 'number', description: 'Optional one-based last page; defaults to the document end, capped to 25 pages.' },
           ],
         },
         {
@@ -110,6 +131,25 @@ export function createPdfReaderTool(attachments: AiAttachmentReference[]): ToolR
           invocation.toolId,
           invocation.functionName,
           `Found ${payload.matchCount} match${payload.matchCount === 1 ? '' : 'es'} for "${query}" in ${attachment.fileName}.`,
+          { attachmentId: attachment.id, fileName: attachment.fileName, ...payload },
+        );
+      }
+
+      if (invocation.functionName === 'read_pdf_pages') {
+        const startPage = optionalPageNumber(invocation.args.startPage, 'startPage');
+        const endPage = optionalPageNumber(invocation.args.endPage, 'endPage');
+        if (startPage && endPage && endPage < startPage) {
+          throw new Error('pdf_reader requires `endPage` to be greater than or equal to `startPage`.');
+        }
+
+        const payload = await loadAiPdfPages(attachment.id, startPage, endPage);
+        const firstPage = payload.pages[0]?.pageNumber;
+        const lastPage = payload.pages.at(-1)?.pageNumber;
+        const range = firstPage && lastPage ? `pages ${firstPage}-${lastPage}` : 'no pages';
+        return result(
+          invocation.toolId,
+          invocation.functionName,
+          `Loaded ${range} of ${payload.pageCount} from ${attachment.fileName}.`,
           { attachmentId: attachment.id, fileName: attachment.fileName, ...payload },
         );
       }

@@ -9,7 +9,18 @@ function getTsxExecutable() {
 export async function startAppServerProcess(logger: BootstrapLogger) {
   logger.step('Starting the local app server...');
 
-  const child = spawn(process.execPath, [getTsxExecutable(), 'server/index.ts'], {
+  const child = spawn(process.execPath, [
+    getTsxExecutable(),
+    'watch',
+    '--exclude',
+    '.local-data/**',
+    '--exclude',
+    'dist/**',
+    '--exclude',
+    'node_modules/**',
+    '--clear-screen=false',
+    'server/index.ts',
+  ], {
     cwd: process.cwd(),
     stdio: 'inherit',
     windowsHide: true,

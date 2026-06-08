@@ -12,6 +12,7 @@ npm run dev
 ```
 
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
+The Node host runs through `tsx watch`, so backend and shared-code changes restart it automatically. Generated data under `.local-data`, `dist`, and `node_modules` is excluded from restart watching.
 The local Node host also creates a SQLite database for server-owned app persistence at `.local-data/thebestappeva.sqlite`. Override that path with `LOCAL_DB_PATH` when needed.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
@@ -102,11 +103,12 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
   - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
-- long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_page`, and `view_pdf_page`
+- long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - PDFs with 1-3 pages are fully loaded into the model prompt and the assistant is told to mention that no PDF tool was needed; PDFs with 4+ pages or unknown page counts load summary context first and use `pdf_reader` on demand
+- complete PDF audits use `read_pdf_pages`, which returns up to 25 consecutive pages per call; larger documents continue with explicit page bounds
 - when a long PDF is submitted from `Flash`, that chat turn switches to `Thinking` so `pdf_reader` can run
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - user prompts can be copied, edited, resent from their original point in the thread, and switched between persisted edit branches with compact version controls
@@ -123,7 +125,7 @@ Implementation notes:
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`
 - Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
-- PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
+- PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`
 - Model discovery: `GET /api/tags`

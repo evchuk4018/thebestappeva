@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { HttpError, getOptionalIntParam, getRequiredQueryParam, toErrorMessage } from '../http';
-import { findPdfPage, searchPdfPages } from './pdf-content';
+import { findPdfPage, searchPdfPages, selectPdfPageRange } from './pdf-content';
 import { ensurePdfPages } from './pdf-record';
 import { renderPdfPage } from './parser';
 import {
@@ -19,6 +19,19 @@ function readPageNumber(value: unknown) {
   const pageNumber = Number(getRequiredQueryParam(value, 'pageNumber'));
   if (!Number.isInteger(pageNumber) || pageNumber < 1) {
     throw new HttpError(400, 'pageNumber must be a positive integer.');
+  }
+
+  return pageNumber;
+}
+
+function readOptionalPageNumber(value: unknown, fallback: number, name: string) {
+  if (typeof value === 'undefined') {
+    return fallback;
+  }
+
+  const pageNumber = Number(value);
+  if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+    throw new HttpError(400, `${name} must be a positive integer.`);
   }
 
   return pageNumber;
@@ -53,6 +66,25 @@ export async function handleGetAiPdfPage(request: Request, response: Response) {
     response.json({ attachment: record.attachment, ...page });
   } catch (error) {
     sendRouteError(response, error, 'Unable to read this PDF page.');
+  }
+}
+
+export async function handleGetAiPdfPages(request: Request, response: Response) {
+  try {
+    const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
+    const record = await readAttachmentRecord(attachmentId);
+    const allPages = await ensurePdfPages(record);
+    const startPage = readOptionalPageNumber(request.query.startPage, 1, 'startPage');
+    const endPage = readOptionalPageNumber(request.query.endPage, allPages.length, 'endPage');
+    const pages = selectPdfPageRange(allPages, startPage, endPage);
+
+    response.json({
+      attachment: record.attachment,
+      pageCount: allPages.length,
+      pages,
+    });
+  } catch (error) {
+    sendRouteError(response, error, 'Unable to read these PDF pages.');
   }
 }
 

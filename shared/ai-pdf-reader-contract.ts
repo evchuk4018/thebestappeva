@@ -19,6 +19,18 @@ export interface AiPdfPagePayload {
   text: string;
 }
 
+export interface AiPdfPageContent {
+  markdown: string;
+  pageNumber: number;
+  text: string;
+}
+
+export interface AiPdfPagesPayload {
+  attachment: AiParsedAttachment;
+  pageCount: number;
+  pages: AiPdfPageContent[];
+}
+
 export interface AiPdfPageImagePayload {
   attachment: AiParsedAttachment;
   base64Data: string;
@@ -85,6 +97,28 @@ export function parseAiPdfPagePayload(value: unknown, field = 'PDF page payload'
     markdown: expectString(record.markdown, `${field}.markdown`),
     pageNumber: expectNumber(record.pageNumber, `${field}.pageNumber`),
     text: expectString(record.text, `${field}.text`),
+  };
+}
+
+export function parseAiPdfPagesPayload(value: unknown, field = 'PDF pages payload'): AiPdfPagesPayload {
+  const record = expectRecord(value, field);
+  const pages = Array.isArray(record.pages)
+    ? record.pages.map((page, index) => {
+        const item = expectRecord(page, `${field}.pages[${index}]`);
+        return {
+          markdown: expectString(item.markdown, `${field}.pages[${index}].markdown`),
+          pageNumber: expectNumber(item.pageNumber, `${field}.pages[${index}].pageNumber`),
+          text: expectString(item.text, `${field}.pages[${index}].text`),
+        };
+      })
+    : (() => {
+        throw new Error(`Invalid ${field}.pages. Expected an array.`);
+      })();
+
+  return {
+    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    pageCount: expectNumber(record.pageCount, `${field}.pageCount`),
+    pages,
   };
 }
 

@@ -7,6 +7,7 @@ import {
 } from './ai-attachments/routes';
 import {
   handleGetAiPdfPage,
+  handleGetAiPdfPages,
   handleGetAiPdfPageImage,
   handleSearchAiPdf,
 } from './ai-attachments/pdf-routes';
@@ -78,6 +79,7 @@ function registerApiRoutes(app: Express) {
   app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
   app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/search', (req, res) => void handleSearchAiPdf(req, res));
+  app.get('/api/ai/attachments/:attachmentId/pdf/pages', (req, res) => void handleGetAiPdfPages(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber', (req, res) => void handleGetAiPdfPage(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber/image', (req, res) => void handleGetAiPdfPageImage(req, res));
   app.delete('/api/ai/attachments/:attachmentId', (req, res) => void handleDeleteAiAttachment(req, res));

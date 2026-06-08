@@ -1,6 +1,8 @@
 import { HttpError } from '../http';
 import { StoredAiAttachmentPage } from './types';
 
+export const MAX_PDF_PAGE_RANGE = 25;
+
 export function classifyPdfReaderMode(pageCount: number | null | undefined) {
   return pageCount !== null && typeof pageCount !== 'undefined' && pageCount > 0 && pageCount <= 3 ? 'inline' : 'tool';
 }
@@ -12,6 +14,27 @@ export function findPdfPage(pages: StoredAiAttachmentPage[], pageNumber: number)
   }
 
   return page;
+}
+
+export function selectPdfPageRange(
+  pages: StoredAiAttachmentPage[],
+  startPage = 1,
+  endPage = pages.length,
+) {
+  if (!Number.isInteger(startPage) || startPage < 1) {
+    throw new HttpError(400, 'startPage must be a positive integer.');
+  }
+
+  if (!Number.isInteger(endPage) || endPage < startPage) {
+    throw new HttpError(400, 'endPage must be an integer greater than or equal to startPage.');
+  }
+
+  if (startPage > pages.length) {
+    throw new HttpError(400, `Page ${startPage} is outside this PDF's 1-${pages.length} page range.`);
+  }
+
+  const cappedEndPage = Math.min(endPage, startPage + MAX_PDF_PAGE_RANGE - 1, pages.length);
+  return pages.filter((page) => page.pageNumber >= startPage && page.pageNumber <= cappedEndPage);
 }
 
 function buildSnippet(text: string, index: number, queryLength: number) {

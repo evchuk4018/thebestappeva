@@ -13,7 +13,11 @@ import { chatWithModel, OllamaChatMessage } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
 import { SystemPromptContext } from './system-prompt';
 import { AssistantMessage, Chat, OllamaAvailability } from './types';
-import { MAX_TOOL_CALL_DEPTH, executeToolInvocation } from './tools/executor';
+import {
+  MAX_CONSECUTIVE_TOOL_ERRORS,
+  MAX_TOOL_CALLS_PER_TURN,
+  executeToolInvocation,
+} from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
 import { toPersistedToolResult } from './tools/result-persistence';
 import { ToolRegistryEntry } from './tools/types';
@@ -44,6 +48,7 @@ export async function resolveThinkingTurn({
   signal,
 }: ResolveThinkingTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
+  let consecutiveToolErrors = 0;
   let toolCallCount = 0;
   let requestMessages: OllamaChatMessage[] = [];
   const availableTools = buildOllamaTools(activeToolEntries);
@@ -185,9 +190,9 @@ export async function resolveThinkingTurn({
         };
       }
 
-      if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALL_DEPTH) {
+      if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALLS_PER_TURN) {
         if (assistantMessage) {
-          finalizeAssistant('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model, 'error');
+          finalizeAssistant('I hit the 20-call local tool limit for this turn. Please narrow the request or continue in a follow-up.', reply.model, 'error');
           return {
             chat: workingChat,
             availability: 'ready',
@@ -198,7 +203,7 @@ export async function resolveThinkingTurn({
         return {
           chat: appendMessage(
             workingChat,
-            createAssistantErrorMessage('I hit the local tool-call limit for this turn. Please narrow the request or ask a follow-up.', reply.model),
+            createAssistantErrorMessage('I hit the 20-call local tool limit for this turn. Please narrow the request or continue in a follow-up.', reply.model),
           ),
           availability: 'ready',
           lastError: 'Tool-call limit reached for this turn.',
@@ -231,6 +236,8 @@ export async function resolveThinkingTurn({
         const { transientImages, ...result } = execution;
         throwIfAborted(signal);
         appendToolResult(toPersistedToolResult(result), reply.model);
+        toolCallCount += 1;
+        consecutiveToolErrors = result.ok ? 0 : consecutiveToolErrors + 1;
 
         requestMessages = [
           ...requestMessages,
@@ -241,9 +248,20 @@ export async function resolveThinkingTurn({
             images: transientImages,
           } satisfies OllamaChatMessage,
         ];
-      }
 
-      toolCallCount += reply.toolCalls.length;
+        if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
+          finalizeAssistant(
+            'I stopped after three consecutive local tool errors. Restart the development server if its API routes changed, then try again.',
+            reply.model,
+            'error',
+          );
+          return {
+            chat: workingChat,
+            availability: 'ready',
+            lastError: 'Three consecutive tool errors stopped this turn.',
+          };
+        }
+      }
     }
   } catch (error) {
     if (isAbortError(error)) {

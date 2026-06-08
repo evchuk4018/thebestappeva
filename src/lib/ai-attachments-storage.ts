@@ -6,14 +6,35 @@ import {
 import {
   parseAiPdfPageImagePayload,
   parseAiPdfPagePayload,
+  parseAiPdfPagesPayload,
   parseAiPdfSearchPayload,
 } from '../../shared/ai-pdf-reader-contract';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function buildInvalidApiResponseMessage(rawBody: string) {
+  const detail = /^\s*</.test(rawBody) ? 'HTML instead of JSON' : 'an invalid JSON response';
+  return `The local API returned ${detail}. Restart the development server so its routes match the loaded app.`;
+}
+
 async function readJsonResponse(response: Response) {
-  const payload = await response.json().catch(() => ({ ok: false, error: 'The local server returned invalid JSON.' }));
+  const rawBody = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    throw new Error(buildInvalidApiResponseMessage(rawBody));
+  }
+
+  const error = isRecord(payload) && typeof payload.error === 'string' ? payload.error.trim() : '';
   if (!response.ok) {
-    const message = payload && typeof payload.error === 'string' ? payload.error : `The local server failed with ${response.status}.`;
-    throw new Error(message);
+    throw new Error(error || `The local server failed with ${response.status}.`);
+  }
+
+  if (isRecord(payload) && payload.ok === false) {
+    throw new Error(error || 'The local API reported an unsuccessful response.');
   }
 
   return payload;
@@ -82,6 +103,19 @@ export async function searchAiPdf(attachmentId: string, query: string, limit = 1
 export async function loadAiPdfPage(attachmentId: string, pageNumber: number) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}`);
   return parseAiPdfPagePayload(await readJsonResponse(response));
+}
+
+export async function loadAiPdfPages(attachmentId: string, startPage?: number, endPage?: number) {
+  const url = new URL(`/api/ai/attachments/${attachmentId}/pdf/pages`, window.location.origin);
+  if (typeof startPage === 'number') {
+    url.searchParams.set('startPage', String(startPage));
+  }
+  if (typeof endPage === 'number') {
+    url.searchParams.set('endPage', String(endPage));
+  }
+
+  const response = await fetch(url);
+  return parseAiPdfPagesPayload(await readJsonResponse(response));
 }
 
 export async function loadAiPdfPageImage(attachmentId: string, pageNumber: number) {
