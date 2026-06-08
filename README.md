@@ -99,14 +99,16 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels
 - each chat has a mode toggle beside the model picker:
-  - `Thinking` enables Ollama thinking and shows the returned reasoning trace in a collapsible block
-  - `Flash` uses a single fast request with `think: false`, no tools, and no visible reasoning
+  - `Thinking` enables Ollama thinking, streams the reasoning trace live in a collapsible block, and streams the final answer in the same reply bubble
+  - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
+- live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
+- in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
 - PDFs with 1-3 pages are fully loaded into the model prompt and the assistant is told to mention that no PDF tool was needed; PDFs with 4+ pages or unknown page counts load summary context first and use `pdf_reader` on demand
 - complete PDF audits use `read_pdf_pages`, which returns up to 25 consecutive pages per call; larger documents continue with explicit page bounds
 - when a long PDF is submitted from `Flash`, that chat turn switches to `Thinking` so `pdf_reader` can run

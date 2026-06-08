@@ -7,12 +7,13 @@ import { AssistantMessage } from './types';
 
 interface AssistantMessageCardProps {
   disabled: boolean;
+  isStreaming?: boolean;
   message: AssistantMessage;
   onCopy: (messageId: string) => Promise<void> | void;
   onRegenerate: (messageId: string) => Promise<void> | void;
 }
 
-export function AssistantMessageCard({ disabled, message, onCopy, onRegenerate }: AssistantMessageCardProps) {
+export function AssistantMessageCard({ disabled, isStreaming = false, message, onCopy, onRegenerate }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasTrace = Boolean(message.trace?.length);
   const isError = message.status === 'error';
@@ -22,13 +23,13 @@ export function AssistantMessageCard({ disabled, message, onCopy, onRegenerate }
     : isCancelled
       ? 'rounded-2xl border border-[#6a4a2d] bg-[#2d2218] p-4 text-[#f5dec8]'
       : 'rounded-2xl border border-transparent bg-transparent p-4';
-  const metaLabel = isError ? 'Local model error' : isCancelled ? 'Stopped reply' : 'Local model';
+  const metaLabel = isError ? 'Local model error' : isCancelled ? 'Stopped reply' : isStreaming ? 'Generating reply' : 'Local model';
 
   useEffect(() => {
-    if (hasTrace && !message.content.trim()) {
+    if (hasTrace && (isStreaming || !message.content.trim())) {
       setShowThinking(true);
     }
-  }, [hasTrace, message.content]);
+  }, [hasTrace, isStreaming, message.content]);
 
   return (
     <div className="flex max-w-full flex-col items-start">

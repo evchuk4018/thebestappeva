@@ -5,7 +5,8 @@ import { UserMessageCard } from './UserMessageCard';
 interface ActiveChatViewProps {
   activeChat: Chat;
   currentModel: string | null;
-  isTyping: boolean;
+  liveAssistantMessageId: string | null;
+  showTypingIndicator: boolean;
   onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
   onRegenerateAssistantMessage: (messageId: string) => Promise<void> | void;
   onCopyUserMessage: (messageId: string) => Promise<void> | void;
@@ -16,7 +17,8 @@ interface ActiveChatViewProps {
 export function ActiveChatView({
   activeChat,
   currentModel,
-  isTyping,
+  liveAssistantMessageId,
+  showTypingIndicator,
   onCopyAssistantMessage,
   onRegenerateAssistantMessage,
   onCopyUserMessage,
@@ -42,7 +44,8 @@ export function ActiveChatView({
           return (
             <AssistantMessageCard
               key={message.id}
-              disabled={isTyping}
+              disabled={Boolean(liveAssistantMessageId)}
+              isStreaming={message.id === liveAssistantMessageId}
               message={message}
               onCopy={onCopyAssistantMessage}
               onRegenerate={onRegenerateAssistantMessage}
@@ -53,7 +56,7 @@ export function ActiveChatView({
         return (
           <UserMessageCard
             key={message.id}
-            disabled={isTyping}
+            disabled={Boolean(liveAssistantMessageId)}
             message={message}
             onCopy={onCopyUserMessage}
             onEdit={onEditUserMessage}
@@ -62,7 +65,7 @@ export function ActiveChatView({
         );
       })}
 
-      {isTyping && (
+      {showTypingIndicator && (
         <div className="flex flex-col items-start">
           <div className="mb-1 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
             <span className="text-[#e2875e]">*</span>

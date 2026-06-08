@@ -6,14 +6,15 @@ import {
   createAssistantMessage,
   createNewChat,
   createUserMessage,
+  upsertMessage,
 } from './helpers';
 import { TurnAbortedError, isAbortError } from './abort-utils';
-import { chatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
+import { sendFlashTurn } from './flash-turn';
+import { LiveChatState, resolveActiveChat, shouldShowTypingIndicator } from './live-turn';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
 import { SystemPromptContext } from './system-prompt';
 import { AiAttachmentReference, Chat, ChatMode } from './types';
-import { buildPlainModelMessages } from './tools/prompting';
 import { collectLongPdfAttachments, createPdfReaderTool } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { ToolRegistryEntry } from './tools/types';
@@ -26,6 +27,7 @@ const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
+  const [liveChat, setLiveChat] = useState<LiveChatState | null>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const activeTurnControllerRef = useRef<AbortController | null>(null);
   const {
@@ -51,14 +53,16 @@ export function useOllamaChat() {
   } = useOllamaModelState({ currentModel, hydrationStatus, setCurrentModel });
 
   const toolRegistryEntries = getToolRegistryEntries();
-  const selectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
-  const selectedPdfAttachments = selectedChat ? collectLongPdfAttachments(selectedChat.messages) : [];
+  const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
+  const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
+  const selectedChat = resolveActiveChat(persistedSelectedChat, selectedLiveChat);
+  const selectedPdfAttachments = persistedSelectedChat ? collectLongPdfAttachments(persistedSelectedChat.messages) : [];
   const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
   const tools = toolRegistryEntries.map(({ definition }) => ({
     ...definition,
     enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
   })).concat([{ ...selectedPdfTool.definition, enabled: selectedPdfAttachments.length > 0 }]);
-  const activeToolEntries = getActiveToolEntries(selectedChat);
+  const activeToolEntries = getActiveToolEntries(persistedSelectedChat);
   const chatMode = selectedChat?.mode ?? draftMode;
   const systemPromptContext: SystemPromptContext = {
     customPrompt: customSystemPrompt,
@@ -106,30 +110,8 @@ export function useOllamaChat() {
     return entry?.definition.id ?? functionName;
   }
 
-  async function sendFlashReply(chat: Chat, model: string, promptContext: SystemPromptContext, signal?: AbortSignal): Promise<ResolvedTurn> {
-    try {
-      const reply = await chatWithModel(model, await buildPlainModelMessages(chat.messages, promptContext), { think: false, signal });
-      return {
-        chat: appendMessage(chat, createAssistantMessage(reply.content, reply.model)),
-        availability: 'ready',
-        lastError: null,
-      };
-    } catch (error) {
-      if (isAbortError(error)) {
-        return {
-          chat: appendMessage(chat, createAssistantCancelledMessage(buildTurnCancelledMessage(), model)),
-          availability: 'ready',
-          lastError: null,
-        };
-      }
-
-      const clientError = normalizeTurnError(error);
-      return {
-        chat: appendMessage(chat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
-        availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
-        lastError: clientError.message,
-      };
-    }
+  function findLatestAssistantMessageId(chat: Chat) {
+    return [...chat.messages].reverse().find((message) => message.kind === 'assistant')?.id ?? null;
   }
 
   async function sendThinkingReply(
@@ -137,13 +119,14 @@ export function useOllamaChat() {
     model: string,
     promptContext: SystemPromptContext,
     entries: ToolRegistryEntry[],
+    onProgress: (nextChat: Chat, assistantMessageId: string | null) => void,
     signal?: AbortSignal,
   ): Promise<ResolvedTurn> {
     return resolveThinkingTurn({
       chat,
       model,
       activeToolEntries: entries,
-      onProgress: (nextChat) => setChats((currentChats) => replaceChat(currentChats, nextChat)),
+      onProgress: (nextChat) => onProgress(nextChat, findLatestAssistantMessageId(nextChat)),
       promptContext,
       resolveToolId: (functionName) => resolveToolId(functionName, entries),
       signal,
@@ -158,6 +141,7 @@ export function useOllamaChat() {
     const effectiveMode = collectLongPdfAttachments(baseChat.messages).length ? 'thinking' : nextChatMode;
     const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
     setChats((currentChats) => replaceChat(currentChats, turnChat));
+    setLiveChat({ chatId: turnChat.id, chat: turnChat, assistantMessageId: null });
     setIsTyping(true);
     setLastError(null);
     const controller = new AbortController();
@@ -172,8 +156,21 @@ export function useOllamaChat() {
       } satisfies SystemPromptContext;
       const resolvedTurn =
         effectiveMode === 'flash'
-          ? await sendFlashReply(turnChat, currentModel, promptContext, controller.signal)
-          : await sendThinkingReply(turnChat, currentModel, promptContext, turnToolEntries, controller.signal);
+          ? await sendFlashTurn({
+              chat: turnChat,
+              model: currentModel,
+              promptContext,
+              onProgress: (nextChat, assistantMessageId) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId }),
+              signal: controller.signal,
+            })
+          : await sendThinkingReply(
+              turnChat,
+              currentModel,
+              promptContext,
+              turnToolEntries,
+              (nextChat, assistantMessageId) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId }),
+              controller.signal,
+            );
       setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
@@ -182,6 +179,7 @@ export function useOllamaChat() {
         activeTurnControllerRef.current = null;
       }
 
+      setLiveChat(null);
       setIsTyping(false);
     }
   }
@@ -193,7 +191,7 @@ export function useOllamaChat() {
     }
 
     const userMessage = createUserMessage(normalizedContent, attachments);
-    const appendedChat = selectedChat ? appendMessage(selectedChat, userMessage) : createNewChat(userMessage, chatMode);
+    const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
     const nextChatMode = collectLongPdfAttachments(appendedChat.messages).length ? 'thinking' : chatMode;
     const baseChat = { ...appendedChat, mode: nextChatMode };
 
@@ -206,20 +204,20 @@ export function useOllamaChat() {
   }
 
   async function editAndResendMessage(messageId: string, nextContent: string) {
-    if (!selectedChat || !currentModel || activeTurnControllerRef.current) return;
+    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current) return;
 
-    const baseChat = editUserMessageBranch(selectedChat, messageId, nextContent);
+    const baseChat = editUserMessageBranch(persistedSelectedChat, messageId, nextContent);
     if (!baseChat) return;
 
     await runModelTurn(baseChat, selectedChat.mode);
   }
 
   async function regenerateAssistantMessage(messageId: string) {
-    if (!selectedChat || !currentModel || activeTurnControllerRef.current) {
+    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current) {
       return;
     }
 
-    const baseChat = regenerateAssistantBranch(selectedChat, messageId);
+    const baseChat = regenerateAssistantBranch(persistedSelectedChat, messageId);
     if (!baseChat) {
       return;
     }
@@ -232,11 +230,11 @@ export function useOllamaChat() {
       return;
     }
 
-    setChats((currentChats) => {
-      const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
-      return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
-    });
-  }
+      setChats((currentChats) => {
+        const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
+        return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
+      });
+    }
 
   function stopMessage() {
     activeTurnControllerRef.current?.abort(new TurnAbortedError());
@@ -244,6 +242,9 @@ export function useOllamaChat() {
 
   function deleteChat(chatId: string) {
     setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
+    if (liveChat?.chatId === chatId) {
+      setLiveChat(null);
+    }
     if (selectedChatId === chatId) {
       selectChat(null);
     }
@@ -260,17 +261,20 @@ export function useOllamaChat() {
     chats,
     currentModel,
     customSystemPrompt,
+    activeChat: selectedChat,
     deleteChat,
     editAndResendMessage,
     hydrationStatus,
     isTyping,
     lastError,
+    liveAssistantMessageId: selectedLiveChat?.assistantMessageId ?? null,
     persistenceError,
     regenerateAssistantMessage,
     refreshModels,
     setCustomSystemPrompt,
     selectChat,
     selectedChatId,
+    showTypingIndicator: shouldShowTypingIndicator(isTyping, selectedLiveChat),
     sendMessage,
     systemPromptContext,
     setCurrentModel,

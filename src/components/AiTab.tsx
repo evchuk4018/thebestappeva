@@ -44,8 +44,8 @@ export default function AiTab() {
     readyAttachmentRefs,
     removePendingAttachment,
   } = useAiAttachments();
-
   const {
+    activeChat,
     availableModels,
     availability,
     chatMode,
@@ -57,6 +57,7 @@ export default function AiTab() {
     hydrationStatus,
     isTyping,
     lastError,
+    liveAssistantMessageId,
     persistenceError,
     regenerateAssistantMessage,
     refreshModels,
@@ -64,6 +65,7 @@ export default function AiTab() {
     selectedChatId,
     sendMessage,
     setCustomSystemPrompt,
+    showTypingIndicator,
     systemPromptContext,
     switchUserMessageVersion,
     toggleChatMode,
@@ -72,16 +74,14 @@ export default function AiTab() {
     toggleTool,
     tools,
   } = useOllamaChat();
-
   useResponsiveSidebar({ setIsMobile, setSidebarOpen });
 
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [chats, isTyping, selectedChatId]);
+  }, [activeChat, isTyping, selectedChatId]);
 
-  const activeChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const isModelLoading = availability === 'connecting';
   const systemPromptSections = buildSystemPromptSections(systemPromptContext);
   const openAddModels = () => {
@@ -93,7 +93,6 @@ export default function AiTab() {
     setModelDropdownOpen(false);
   };
   const handleSuggestionClick = (label: string) => setInputValue(getSuggestionPrompt(label));
-
   const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     deleteChat(chatId);
@@ -127,6 +126,7 @@ export default function AiTab() {
     await sendMessage(nextMessage, readyAttachmentRefs);
     clearReadyAttachments();
   };
+
   const handlePullModel = async (modelName: string) => {
     setIsPullingModel(true);
     setPullProgress({
@@ -243,14 +243,14 @@ export default function AiTab() {
             persistenceError={persistenceError}
             onOpenAddModels={openAddModels}
           />
-
           {hydrationStatus === 'loading' ? (
             <AiWorkspaceLoadingState />
           ) : activeChat ? (
             <ActiveChatView
               activeChat={activeChat}
               currentModel={currentModel}
-              isTyping={isTyping}
+              liveAssistantMessageId={liveAssistantMessageId}
+              showTypingIndicator={showTypingIndicator}
               onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
               onRegenerateAssistantMessage={regenerateAssistantMessage}
               onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
