@@ -14,5 +14,5 @@ export default function DocsNewRedirect() {
     void create();
   }, [navigate]);
 
-  return <div className="flex h-full items-center justify-center bg-[#07090d] text-zinc-400">Creating document…</div>;
+  return <div className="flex h-full items-center justify-center bg-[#07090d] text-zinc-400">Creating document...</div>;
 }

@@ -11,6 +11,7 @@ export default function DocsHomePage() {
       <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-6">
         <DocsHomeHeader
           busy={docs.busy}
+          error={docs.error}
           preferences={docs.preferences}
           query={docs.query}
           showTrash={docs.showTrash}

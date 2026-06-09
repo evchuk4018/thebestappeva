@@ -1,4 +1,5 @@
 import type BetterSqlite3 from 'better-sqlite3';
+import { ensureDocsSchema } from './docs-schema';
 
 export function ensureDatabaseSchema(database: BetterSqlite3.Database) {
   database.exec(`
@@ -15,4 +16,6 @@ export function ensureDatabaseSchema(database: BetterSqlite3.Database) {
       payload_json TEXT NOT NULL
     );
   `);
+
+  ensureDocsSchema(database);
 }

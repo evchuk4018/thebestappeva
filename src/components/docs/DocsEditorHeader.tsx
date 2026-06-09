@@ -3,13 +3,14 @@ import { DocRecord } from './docs-types';
 
 interface DocsEditorHeaderProps {
   doc: DocRecord;
+  error: string | null;
   saveState: 'idle' | 'saving' | 'saved';
   onBack: () => void;
   onToggleStar: () => void;
   onTitleChange: (title: string) => void;
 }
 
-export function DocsEditorHeader({ doc, saveState, onBack, onToggleStar, onTitleChange }: DocsEditorHeaderProps) {
+export function DocsEditorHeader({ doc, error, saveState, onBack, onToggleStar, onTitleChange }: DocsEditorHeaderProps) {
   return (
     <div className="flex items-center justify-between border-b border-[#1f242d] bg-[#11141b] px-5 py-3">
       <div className="flex items-center gap-3">
@@ -26,7 +27,7 @@ export function DocsEditorHeader({ doc, saveState, onBack, onToggleStar, onTitle
       </div>
       <div className="flex items-center gap-3">
         <div className="rounded-full bg-[#0a0d11] px-4 py-2 text-xs text-zinc-400">
-          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved to browser' : 'Editing'}
+          {saveState === 'saving' ? 'Saving...' : error ? error : saveState === 'saved' ? 'Saved to SQLite' : 'Editing'}
         </div>
         <button className="rounded-full border border-[#2d3340] p-2 text-zinc-300 transition hover:border-[#3f4656] hover:text-white">
           <History size={16} />

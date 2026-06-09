@@ -23,6 +23,31 @@ import { serverConfig } from './config';
 import { getDatabase } from './db/database';
 import { handleUrlFetch } from './url-fetch';
 import { handleWebSearch } from './web-search';
+import {
+  handleCreateDoc,
+  handleCreateDocVersion,
+  handleDeleteDoc,
+  handleDeleteDocCitation,
+  handleDeleteDocTab,
+  handleDuplicateDoc,
+  handleGetDoc,
+  handleGetDocCitations,
+  handleGetDocPreferences,
+  handleGetDocTabs,
+  handleGetDocVersion,
+  handleGetDocsMigrationStatus,
+  handleImportDocsMigration,
+  handleListDocs,
+  handleListDocVersions,
+  handlePostDocTab,
+  handlePutDoc,
+  handlePutDocPreferences,
+  handlePutDocTab,
+  handleRestoreDoc,
+  handleRestoreDocVersion,
+  handleSaveDocCitations,
+  handleTrashDoc,
+} from './docs';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, '..');
@@ -76,6 +101,30 @@ function registerApiRoutes(app: Express) {
   app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
   app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
   app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
+  app.get('/api/docs', (req, res) => void handleListDocs(req, res));
+  app.post('/api/docs', (req, res) => void handleCreateDoc(req, res));
+  app.get('/api/docs/preferences', (req, res) => void handleGetDocPreferences(req, res));
+  app.put('/api/docs/preferences', (req, res) => void handlePutDocPreferences(req, res));
+  app.get('/api/docs/migration/status', (req, res) => void handleGetDocsMigrationStatus(req, res));
+  app.post('/api/docs/migration/import', (req, res) => void handleImportDocsMigration(req, res));
+  app.get('/api/docs/:docId', (req, res) => void handleGetDoc(req, res));
+  app.put('/api/docs/:docId', (req, res) => void handlePutDoc(req, res));
+  app.delete('/api/docs/:docId', (req, res) => void handleDeleteDoc(req, res));
+  app.post('/api/docs/:docId/duplicate', (req, res) => void handleDuplicateDoc(req, res));
+  app.post('/api/docs/:docId/trash', (req, res) => void handleTrashDoc(req, res));
+  app.delete('/api/docs/:docId/trash', (req, res) => void handleRestoreDoc(req, res));
+  app.get('/api/docs/:docId/tabs', (req, res) => void handleGetDocTabs(req, res));
+  app.post('/api/docs/:docId/tabs', (req, res) => void handlePostDocTab(req, res));
+  app.put('/api/docs/:docId/tabs/:tabId', (req, res) => void handlePutDocTab(req, res));
+  app.delete('/api/docs/:docId/tabs/:tabId', (req, res) => void handleDeleteDocTab(req, res));
+  app.get('/api/docs/:docId/versions', (req, res) => void handleListDocVersions(req, res));
+  app.post('/api/docs/:docId/versions', (req, res) => void handleCreateDocVersion(req, res));
+  app.get('/api/docs/:docId/versions/:versionId', (req, res) => void handleGetDocVersion(req, res));
+  app.post('/api/docs/:docId/versions/:versionId/restore', (req, res) => void handleRestoreDocVersion(req, res));
+  app.get('/api/docs/:docId/citations', (req, res) => void handleGetDocCitations(req, res));
+  app.post('/api/docs/:docId/citations', (req, res) => void handleSaveDocCitations(req, res));
+  app.put('/api/docs/:docId/citations', (req, res) => void handleSaveDocCitations(req, res));
+  app.delete('/api/docs/:docId/citations/:citationId', (req, res) => void handleDeleteDocCitation(req, res));
   app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
   app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/search', (req, res) => void handleSearchAiPdf(req, res));

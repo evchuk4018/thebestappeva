@@ -6,30 +6,30 @@ import { docsRepository, ensureSeedDoc } from './docs-repository';
 import { filterDocs } from './docs-search';
 import { DocPreferences } from './docs-types';
 
-const preferencesKey = 'docs-home-preferences';
-
-function readPreferences() {
-  const stored = window.localStorage.getItem(preferencesKey);
-  if (!stored) return defaultDocPreferences;
-
-  try {
-    return { ...defaultDocPreferences, ...(JSON.parse(stored) as Partial<DocPreferences>) };
-  } catch {
-    return defaultDocPreferences;
-  }
-}
-
 export function useDocsHome() {
   const navigate = useNavigate();
   const [docs, setDocs] = useState([] as Awaited<ReturnType<typeof docsRepository.listDocs>>);
   const [query, setQuery] = useState('');
   const [showTrash, setShowTrash] = useState(false);
-  const [preferences, setPreferences] = useState(readPreferences);
+  const [preferences, setPreferences] = useState<DocPreferences>(defaultDocPreferences);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preferencesReady, setPreferencesReady] = useState(false);
 
   async function refresh() {
-    await ensureSeedDoc();
-    setDocs(await docsRepository.listDocs());
+    try {
+      await ensureSeedDoc();
+      const [nextDocs, nextPreferences] = await Promise.all([
+        docsRepository.listDocs(),
+        docsRepository.loadPreferences(),
+      ]);
+      setDocs(nextDocs);
+      setPreferences(nextPreferences);
+      setPreferencesReady(true);
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to load docs.');
+    }
   }
 
   useEffect(() => {
@@ -37,8 +37,11 @@ export function useDocsHome() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(preferencesKey, JSON.stringify(preferences));
-  }, [preferences]);
+    if (!preferencesReady) return;
+    void docsRepository.savePreferences(preferences).catch((nextError) => {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to save docs preferences.');
+    });
+  }, [preferences, preferencesReady]);
 
   const visibleDocs = useMemo(
     () => filterDocs(docs, query, preferences, showTrash),
@@ -46,42 +49,64 @@ export function useDocsHome() {
   );
 
   async function openNewDoc(templateId = 'blank') {
-    setBusy(true);
-    const bundle = await docsRepository.createDoc(templateId);
-    navigate(`/docs/${bundle.doc.id}`);
+    try {
+      setBusy(true);
+      const bundle = await docsRepository.createDoc(templateId);
+      navigate(`/docs/${bundle.doc.id}`);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to create a new document.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openImportedDoc(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setBusy(true);
-    const imported = await importDocx(file);
-    const bundle = await docsRepository.createImportedDoc(imported.title, imported.html);
-    navigate(`/docs/${bundle.doc.id}`);
+    try {
+      setBusy(true);
+      const imported = await importDocx(file);
+      const bundle = await docsRepository.createImportedDoc(imported.title, imported.html);
+      navigate(`/docs/${bundle.doc.id}`);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to import the document.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runAction(docId: string, action: 'star' | 'trash' | 'restore' | 'delete' | 'duplicate') {
-    setBusy(true);
-    if (action === 'star') await docsRepository.toggleStar(docId);
-    if (action === 'trash') await docsRepository.trashDoc(docId);
-    if (action === 'restore') await docsRepository.restoreDoc(docId);
-    if (action === 'delete') await docsRepository.deleteDoc(docId);
-    if (action === 'duplicate') {
-      const bundle = await docsRepository.duplicateDoc(docId);
-      if (bundle) navigate(`/docs/${bundle.doc.id}`);
+    try {
+      setBusy(true);
+      if (action === 'star') await docsRepository.toggleStar(docId);
+      if (action === 'trash') await docsRepository.trashDoc(docId);
+      if (action === 'restore') await docsRepository.restoreDoc(docId);
+      if (action === 'delete') await docsRepository.deleteDoc(docId);
+      if (action === 'duplicate') {
+        const bundle = await docsRepository.duplicateDoc(docId);
+        if (bundle) navigate(`/docs/${bundle.doc.id}`);
+      }
+      await refresh();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to update the document.');
+    } finally {
+      setBusy(false);
     }
-    await refresh();
-    setBusy(false);
   }
 
   async function renameDoc(docId: string, title: string) {
-    await docsRepository.renameDoc(docId, title);
-    await refresh();
+    try {
+      await docsRepository.renameDoc(docId, title);
+      await refresh();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Unable to rename the document.');
+    }
   }
 
   return {
     busy,
     docTemplates,
+    error,
     preferences,
     query,
     showTrash,

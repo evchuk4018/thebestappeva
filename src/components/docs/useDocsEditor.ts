@@ -5,8 +5,7 @@ import { defaultPageSettings } from './docs-data';
 import { docsEditorExtensions } from './docs-editor-extensions';
 import { buildEditorSnapshot, getActiveTab } from './docs-editor-utils';
 import { docsRepository } from './docs-repository';
-import { docsVersionService } from './docs-version-service';
-import { CitationSource, DocBundle, DocRecord, DocTabRecord, DocVersionKind } from './docs-types';
+import { CitationSource, DocBundle, DocRecord, DocTabRecord, VersionSaveOptions } from './docs-types';
 import { createId } from './docs-utils';
 
 type SidePanel = 'outline' | 'history' | 'citations' | 'none';
@@ -15,6 +14,10 @@ type SaveState = 'idle' | 'saving' | 'saved';
 interface UseDocsEditorOptions {
   beforeDocumentReset?: () => void;
   pausePersistence?: boolean;
+}
+
+function toErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export function useDocsEditor(options: UseDocsEditorOptions = {}) {
@@ -28,20 +31,17 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isListening, setIsListening] = useState(false);
   const [revisionKey, setRevisionKey] = useState(0);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   const editor = useEditor({
     extensions: docsEditorExtensions,
     immediatelyRender: false,
-    content: '<p>Loading document…</p>',
+    content: '<p>Loading document...</p>',
     onUpdate: () => {
       setSaveState('idle');
       setRevisionKey((current) => current + 1);
     },
-    editorProps: {
-      attributes: {
-        class: 'docs-prose min-h-[960px] focus:outline-none',
-      },
-    },
+    editorProps: { attributes: { class: 'docs-prose min-h-[960px] focus:outline-none' } },
   });
 
   const activeTab = useMemo(
@@ -49,24 +49,21 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
     [bundle],
   );
 
-  const performSave = useEffectEvent(async (kind: DocVersionKind = 'auto', label?: string) => {
+  const performSave = useEffectEvent(async (options: VersionSaveOptions = { kind: 'auto' }, requestOptions?: { keepalive?: boolean }) => {
     if (!bundle || !editor || !activeTab) return;
-
     const nextTab = buildEditorSnapshot(editor, activeTab);
-    const nextTabs = bundle.tabs.map((tab) => tab.id === nextTab.id ? nextTab : tab);
-    const nextDoc: DocRecord = {
-      ...bundle.doc,
-      updatedAt: new Date().toISOString(),
-      lastOpenedAt: new Date().toISOString(),
-    };
+    const nextDoc: DocRecord = { ...bundle.doc, updatedAt: new Date().toISOString(), lastOpenedAt: new Date().toISOString() };
 
-    setSaveState('saving');
-    await docsRepository.saveDoc(nextDoc);
-    await docsRepository.saveTab(nextTab);
-    await docsVersionService.createVersion(nextDoc, nextTab, kind, label);
-    const versions = await docsVersionService.listVersions(nextDoc.id);
-    setBundle({ ...bundle, doc: nextDoc, tabs: nextTabs, versions });
-    setSaveState('saved');
+    try {
+      setSaveState('saving');
+      const nextBundle = await docsRepository.saveDoc({ doc: nextDoc, tab: nextTab, version: options }, requestOptions);
+      setBundle(nextBundle);
+      setPersistenceError(null);
+      setSaveState('saved');
+    } catch (error) {
+      setPersistenceError(toErrorMessage(error, 'Unable to save this document.'));
+      setSaveState('idle');
+    }
   });
 
   useEffect(() => {
@@ -81,16 +78,21 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
     let canceled = false;
 
     async function load() {
-      const nextBundle = await docsRepository.getDocBundle(docId);
-      if (!nextBundle) {
-        navigate('/docs');
-        return;
+      try {
+        const nextBundle = await docsRepository.getDocBundle(docId);
+        if (!nextBundle) {
+          navigate('/docs');
+          return;
+        }
+        if (canceled) return;
+        setBundle({
+          ...nextBundle,
+          doc: { ...nextBundle.doc, pageSettings: nextBundle.doc.pageSettings ?? defaultPageSettings },
+        });
+        setPersistenceError(null);
+      } catch (error) {
+        if (!canceled) setPersistenceError(toErrorMessage(error, 'Unable to load this document.'));
       }
-      if (canceled) return;
-      setBundle({
-        ...nextBundle,
-        doc: { ...nextBundle.doc, pageSettings: nextBundle.doc.pageSettings ?? defaultPageSettings },
-      });
     }
 
     void load();
@@ -104,15 +106,14 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
   }, [activeTab?.id, editor]);
 
   useEffect(() => {
-    if (!editor || !bundle || revisionKey === 0) return;
-    if (pausePersistence) return;
-    const timeout = window.setTimeout(() => { void performSave('auto'); }, 10000);
+    if (!editor || !bundle || revisionKey === 0 || pausePersistence) return;
+    const timeout = window.setTimeout(() => { void performSave({ kind: 'auto' }); }, 10000);
     return () => window.clearTimeout(timeout);
   }, [bundle, editor, pausePersistence, performSave, revisionKey]);
 
   useEffect(() => {
     if (pausePersistence) return;
-    const flush = () => { void performSave('auto'); };
+    const flush = () => { void performSave({ kind: 'auto' }, { keepalive: true }); };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);
   }, [pausePersistence, performSave]);
@@ -129,50 +130,55 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
 
   function updateCitations(citations: CitationSource[]) {
     setBundle((current) => current ? { ...current, citations } : current);
-    if (bundle) void docsRepository.saveCitations(bundle.doc.id, citations);
+    if (!bundle) return;
+    void docsRepository.saveCitations(bundle.doc.id, citations)
+      .then((nextCitations) => {
+        setBundle((current) => current ? { ...current, citations: nextCitations } : current);
+        setPersistenceError(null);
+      })
+      .catch((error) => setPersistenceError(toErrorMessage(error, 'Unable to save document citations.')));
   }
 
   function switchTab(tabId: string) {
     if (!bundle || !editor || !activeTab) return;
     beforeDocumentResetRef.current?.();
     const persisted = buildEditorSnapshot(editor, activeTab);
-    const nextTabs = bundle.tabs.map((tab) => tab.id === persisted.id ? persisted : tab);
-    setBundle({ ...bundle, doc: { ...bundle.doc, activeTabId: tabId }, tabs: nextTabs });
+    const nextDoc = { ...bundle.doc, activeTabId: tabId, updatedAt: new Date().toISOString(), lastOpenedAt: new Date().toISOString() };
+    setBundle({ ...bundle, doc: nextDoc, tabs: bundle.tabs.map((tab) => tab.id === persisted.id ? persisted : tab) });
+    void docsRepository.saveDoc({ doc: nextDoc, tab: persisted }).catch((error) => setPersistenceError(toErrorMessage(error, 'Unable to switch tabs.')));
   }
 
   function addTab() {
     if (!bundle) return;
     beforeDocumentResetRef.current?.();
-    const nextTab: DocTabRecord = {
-      id: createId('tab'),
-      docId: bundle.doc.id,
-      parentTabId: null,
-      title: `Tab ${bundle.tabs.length + 1}`,
-      order: bundle.tabs.length,
-      outlineVisible: true,
-      content: '<h1>New tab</h1><p>Start writing.</p>',
-      contentFormat: 'html',
-      textContent: 'New tab Start writing.',
-    };
-    setBundle({ ...bundle, doc: { ...bundle.doc, activeTabId: nextTab.id }, tabs: [...bundle.tabs, nextTab] });
-    void docsRepository.saveTabs([...bundle.tabs, nextTab]);
+    const now = new Date().toISOString();
+    const nextTab: DocTabRecord = { id: createId('tab'), docId: bundle.doc.id, parentTabId: null, title: `Tab ${bundle.tabs.length + 1}`, order: bundle.tabs.length, outlineVisible: true, content: '<h1>New tab</h1><p>Start writing.</p>', contentFormat: 'html', textContent: 'New tab Start writing.', createdAt: now, updatedAt: now };
+    const nextDoc = { ...bundle.doc, activeTabId: nextTab.id, updatedAt: now, lastOpenedAt: now };
+    setBundle({ ...bundle, doc: nextDoc, tabs: [...bundle.tabs, nextTab] });
+    void docsRepository.saveDoc({ doc: nextDoc, tab: nextTab }).catch((error) => setPersistenceError(toErrorMessage(error, 'Unable to add a new tab.')));
   }
 
   async function restoreVersion(versionId: string) {
-    if (!bundle || !editor) return;
+    if (!bundle) return;
     beforeDocumentResetRef.current?.();
-    const version = bundle.versions.find((entry) => entry.id === versionId);
-    if (!version) return;
-    const targetTab = bundle.tabs.find((tab) => tab.id === version.tabId) ?? bundle.tabs[0];
-    if (!targetTab) return;
-    const content = version.contentFormat === 'json' ? JSON.parse(version.content) : version.content;
-    editor.commands.setContent(content);
-    setBundle({
-      ...bundle,
-      doc: { ...bundle.doc, activeTabId: targetTab.id },
-      tabs: bundle.tabs.map((tab) => tab.id === targetTab.id ? { ...tab, content: version.content, contentFormat: version.contentFormat, textContent: editor.getText() } : tab),
-    });
-    await performSave('restore', `Restored • ${version.label}`);
+    try {
+      const nextBundle = await docsRepository.restoreVersion(bundle.doc.id, versionId);
+      setBundle(nextBundle);
+      setPersistenceError(null);
+      setSaveState('saved');
+    } catch (error) {
+      setPersistenceError(toErrorMessage(error, 'Unable to restore this version.'));
+    }
+  }
+
+  async function loadMoreVersions() {
+    if (!bundle?.nextVersionCursor) return;
+    try {
+      const nextPage = await docsRepository.loadMoreVersions(bundle.doc.id, bundle.nextVersionCursor);
+      setBundle({ ...bundle, versions: [...bundle.versions, ...nextPage.versions], nextVersionCursor: nextPage.nextCursor });
+    } catch (error) {
+      setPersistenceError(toErrorMessage(error, 'Unable to load more version history.'));
+    }
   }
 
   function insertChip(type: 'person' | 'date' | 'dropdown' | 'variable' | 'file') {
@@ -180,7 +186,7 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
     const content = {
       person: '<span data-chip="person" style="background:#172554;color:#bfdbfe;padding:2px 8px;border-radius:999px;">@person</span>',
       date: `<span data-chip="date" style="background:#1f2937;color:#fde68a;padding:2px 8px;border-radius:999px;">${new Date().toLocaleDateString()}</span>`,
-      dropdown: '<span data-chip="dropdown" style="background:#3f1d1d;color:#fecaca;padding:2px 8px;border-radius:999px;">Status ▾</span>',
+      dropdown: '<span data-chip="dropdown" style="background:#3f1d1d;color:#fecaca;padding:2px 8px;border-radius:999px;">Status v</span>',
       variable: '<span data-chip="variable" style="background:#1f2937;color:#c4b5fd;padding:2px 8px;border-radius:999px;">{{variable}}</span>',
       file: '<span data-chip="file" style="background:#0f3d2e;color:#bbf7d0;padding:2px 8px;border-radius:999px;">Linked file</span>',
     };
@@ -229,6 +235,8 @@ export function useDocsEditor(options: UseDocsEditorOptions = {}) {
     bundle,
     editor,
     isListening,
+    loadMoreVersions,
+    persistenceError,
     saveState,
     sidePanel,
     setSidePanel,

@@ -1,24 +1,4 @@
-export function createId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
-
-export function createTimestampLabel(date = new Date()) {
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-export function stripHtml(html: string) {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+export { createDocId as createId, createTimestampLabel, stripDocHtml as stripHtml } from '../../../shared/docs-helpers';
 
 export function formatRelativeDate(value: string) {
   const date = new Date(value);

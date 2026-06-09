@@ -4,6 +4,7 @@ import { DocPreferences } from './docs-types';
 
 interface DocsHomeHeaderProps {
   busy: boolean;
+  error: string | null;
   preferences: DocPreferences;
   query: string;
   showTrash: boolean;
@@ -16,6 +17,7 @@ interface DocsHomeHeaderProps {
 
 export function DocsHomeHeader({
   busy,
+  error,
   preferences,
   query,
   showTrash,
@@ -44,7 +46,7 @@ export function DocsHomeHeader({
             <input type="file" accept=".docx" className="hidden" onChange={onImport} />
           </label>
           <button onClick={onToggleTrash} className={`rounded-full border px-4 py-3 text-sm transition ${showTrash ? 'border-red-500 bg-red-500/15 text-red-200' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'}`}>
-            <Trash2 size={16} className="inline-block mr-2" />
+            <Trash2 size={16} className="mr-2 inline-block" />
             {showTrash ? 'Showing trash' : 'View trash'}
           </button>
         </div>
@@ -69,7 +71,7 @@ export function DocsHomeHeader({
           <option value="title">Sort: Title</option>
         </select>
         <div className="rounded-full border border-zinc-800 bg-[#090b0f] px-4 py-3 text-sm text-zinc-500">
-          {busy ? 'Working…' : 'Stored offline in your browser'}
+          {busy ? 'Working...' : error ? error : 'Stored in the local SQLite workspace'}
         </div>
       </div>
     </header>

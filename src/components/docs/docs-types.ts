@@ -1,114 +1,56 @@
-export type DocLayoutMode = 'pages' | 'pageless';
-export type DocVersionKind = 'auto' | 'named' | 'import' | 'restore';
-export type DocSort = 'lastOpenedAt' | 'updatedAt' | 'title';
+import type { DocTabRecord, DocVersionKind, SaveDocRequest } from '../../../shared/docs-contract';
 
-export interface DocMarginSettings {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
-
-export interface DocPageSettings {
-  paperSize: 'Letter' | 'A4';
-  orientation: 'portrait' | 'landscape';
-  pageColor: string;
-  margins: DocMarginSettings;
-}
-
-export interface DocPreferences {
-  sort: DocSort;
-  showTemplates: boolean;
-}
-
-export interface DocRecord {
-  id: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  lastOpenedAt: string;
-  starred: boolean;
-  trashedAt: string | null;
-  templateId: string;
-  activeTabId: string;
-  layoutMode: DocLayoutMode;
-  zoom: number;
-  pageSettings: DocPageSettings;
-}
-
-export interface DocTabRecord {
-  id: string;
-  docId: string;
-  parentTabId: string | null;
-  title: string;
-  order: number;
-  outlineVisible: boolean;
-  content: string;
-  contentFormat: 'html' | 'json';
-  textContent: string;
-}
-
-export interface DocVersionRecord {
-  id: string;
-  docId: string;
-  tabId: string | null;
-  createdAt: string;
-  label: string;
-  kind: DocVersionKind;
-  content: string;
-  contentFormat: 'html' | 'json';
-  snapshotTitle: string;
-}
-
-export interface CitationSource {
-  id: string;
-  label: string;
-  details: string;
-}
-
-export interface DocBundle {
-  doc: DocRecord;
-  tabs: DocTabRecord[];
-  versions: DocVersionRecord[];
-  citations: CitationSource[];
-}
-
-export interface DocTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  title: string;
-  tabs: Array<{
-    title: string;
-    parentTabId: string | null;
-    html: string;
-  }>;
-}
-
-export interface DocSearchIndexEntry {
-  id: string;
-  title: string;
-  updatedAt: string;
-  lastOpenedAt: string;
-  starred: boolean;
-  trashedAt: string | null;
-  preview: string;
-}
+export type {
+  CitationSource,
+  CreateDocRequest,
+  CreateImportedDocRequest,
+  DocBundle,
+  DocContentFormat,
+  DocLayoutMode,
+  DocMarginSettings,
+  DocPageSettings,
+  DocPreferences,
+  DocRecord,
+  DocSearchIndexEntry,
+  DocSort,
+  DocTemplate,
+  DocTabRecord,
+  DocVersionDetail,
+  DocVersionKind,
+  DocVersionSummary,
+  DocsMigrationImportRequest,
+  DocsMigrationStatusResponse,
+  ListDocVersionsResponse,
+  RestoreVersionResponse,
+  SaveCitationsRequest,
+  SaveDocRequest,
+  SaveTabsRequest,
+} from '../../../shared/docs-contract';
 
 export interface DocsRepository {
-  listDocs(): Promise<DocSearchIndexEntry[]>;
-  createDoc(templateId?: string): Promise<DocBundle>;
-  createImportedDoc(title: string, html: string): Promise<DocBundle>;
-  getDocBundle(docId: string): Promise<DocBundle | null>;
-  saveDoc(doc: DocRecord): Promise<void>;
-  saveTab(tab: DocTabRecord): Promise<void>;
-  saveTabs(tabs: DocTabRecord[]): Promise<void>;
-  duplicateDoc(docId: string): Promise<DocBundle | null>;
-  renameDoc(docId: string, title: string): Promise<void>;
-  toggleStar(docId: string): Promise<void>;
-  trashDoc(docId: string): Promise<void>;
-  restoreDoc(docId: string): Promise<void>;
+  listDocs(): Promise<import('../../../shared/docs-contract').DocSearchIndexEntry[]>;
+  createDoc(templateId?: string): Promise<import('../../../shared/docs-contract').DocBundle>;
+  createImportedDoc(title: string, html: string): Promise<import('../../../shared/docs-contract').DocBundle>;
+  getDocBundle(docId: string, cursor?: string | null): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  saveDoc(request: SaveDocRequest, options?: { keepalive?: boolean }): Promise<import('../../../shared/docs-contract').DocBundle>;
+  saveTab(tab: DocTabRecord): Promise<import('../../../shared/docs-contract').DocBundle>;
+  saveTabs(tabs: DocTabRecord[]): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  loadMoreVersions(docId: string, cursor: string): Promise<import('../../../shared/docs-contract').ListDocVersionsResponse>;
+  getVersion(docId: string, versionId: string): Promise<import('../../../shared/docs-contract').DocVersionDetail>;
+  createVersion(docId: string, request: SaveDocRequest): Promise<import('../../../shared/docs-contract').DocBundle>;
+  restoreVersion(docId: string, versionId: string): Promise<import('../../../shared/docs-contract').DocBundle>;
+  duplicateDoc(docId: string): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  renameDoc(docId: string, title: string): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  toggleStar(docId: string): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  trashDoc(docId: string): Promise<import('../../../shared/docs-contract').DocBundle | null>;
+  restoreDoc(docId: string): Promise<import('../../../shared/docs-contract').DocBundle | null>;
   deleteDoc(docId: string): Promise<void>;
-  saveCitations(docId: string, citations: CitationSource[]): Promise<void>;
+  saveCitations(docId: string, citations: import('../../../shared/docs-contract').CitationSource[]): Promise<import('../../../shared/docs-contract').CitationSource[]>;
+  loadPreferences(): Promise<import('../../../shared/docs-contract').DocPreferences>;
+  savePreferences(preferences: import('../../../shared/docs-contract').DocPreferences): Promise<import('../../../shared/docs-contract').DocPreferences>;
+}
+
+export interface VersionSaveOptions {
+  kind: DocVersionKind;
+  label?: string;
 }

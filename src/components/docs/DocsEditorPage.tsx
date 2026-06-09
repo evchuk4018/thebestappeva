@@ -43,13 +43,13 @@ export default function DocsEditorPage() {
 
   async function handleSaveVersion() {
     resetRewriteUi();
-    await docs.performSave('named', 'Named version');
+    await docs.performSave({ kind: 'named', label: 'Named version' });
   }
 
   async function handleMenuAction(action: string) {
     if (action === 'File') {
       resetRewriteUi();
-      await docs.performSave('named', `Named version - ${new Date().toLocaleTimeString()}`);
+      await docs.performSave({ kind: 'named', label: `Named version - ${new Date().toLocaleTimeString()}` });
     }
     if (action === 'Edit') {
       const query = window.prompt('Find text');
@@ -78,9 +78,12 @@ export default function DocsEditorPage() {
     <div className="relative flex h-full flex-col overflow-hidden bg-[#0a0d12] text-white">
       <DocsEditorHeader
         doc={docs.bundle.doc}
+        error={docs.persistenceError}
         saveState={docs.saveState}
         onBack={handleBack}
-        onToggleStar={() => void docsRepository.toggleStar(docs.bundle!.doc.id).then(() => docs.updateDoc((doc) => ({ ...doc, starred: !doc.starred })))}
+        onToggleStar={() => void docsRepository.toggleStar(docs.bundle!.doc.id).then((nextBundle) => {
+          if (nextBundle) docs.updateDoc(() => nextBundle.doc);
+        })}
         onTitleChange={(title) => docs.updateDoc((doc) => ({ ...doc, title }))}
       />
       <DocsEditorMenuBar activePanel={docs.sidePanel} onAction={(action) => void handleMenuAction(action)} />
@@ -112,6 +115,7 @@ export default function DocsEditorPage() {
           activeHtml={activeHtml}
           citations={docs.bundle.citations}
           isListening={docs.isListening}
+          nextVersionCursor={docs.bundle.nextVersionCursor}
           sidePanel={docs.sidePanel}
           versions={docs.bundle.versions}
           onAddCitation={() => {
@@ -120,6 +124,7 @@ export default function DocsEditorPage() {
             const details = window.prompt('Citation details', 'Author. Title. Publisher, 2026.') ?? '';
             docs.updateCitations([...docs.bundle!.citations, { id: createId('citation'), label, details }]);
           }}
+          onLoadMoreVersions={() => void docs.loadMoreVersions()}
           onRestoreVersion={(versionId) => {
             resetRewriteUi();
             void docs.restoreVersion(versionId);

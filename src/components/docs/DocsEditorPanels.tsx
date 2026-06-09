@@ -1,14 +1,16 @@
 import { Clock3, FileText, Mic, Plus } from 'lucide-react';
-import { CitationSource, DocVersionRecord } from './docs-types';
+import { CitationSource, DocVersionSummary } from './docs-types';
 import { buildOutlineFromHtml } from './docs-editor-utils';
 
 interface DocsEditorPanelsProps {
   activeHtml: string;
   citations: CitationSource[];
   isListening: boolean;
+  nextVersionCursor: string | null;
   sidePanel: 'outline' | 'history' | 'citations' | 'none';
-  versions: DocVersionRecord[];
+  versions: DocVersionSummary[];
   onAddCitation: () => void;
+  onLoadMoreVersions: () => void;
   onRestoreVersion: (versionId: string) => void;
   onToggleVoice: () => void;
 }
@@ -17,9 +19,11 @@ export function DocsEditorPanels({
   activeHtml,
   citations,
   isListening,
+  nextVersionCursor,
   sidePanel,
   versions,
   onAddCitation,
+  onLoadMoreVersions,
   onRestoreVersion,
   onToggleVoice,
 }: DocsEditorPanelsProps) {
@@ -52,12 +56,17 @@ export function DocsEditorPanels({
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><Clock3 size={15} /> Version history</h3>
           <div className="mt-4 space-y-2">
-            {versions.slice().reverse().map((version) => (
+            {versions.map((version) => (
               <button key={version.id} onClick={() => onRestoreVersion(version.id)} className="block w-full rounded-2xl border border-[#28303c] bg-[#11161e] px-3 py-3 text-left transition hover:border-[#3d4758]">
                 <p className="font-medium text-white">{version.label}</p>
                 <p className="mt-1 text-xs uppercase tracking-[0.22em] text-zinc-500">{version.kind}</p>
               </button>
             ))}
+            {nextVersionCursor && (
+              <button onClick={onLoadMoreVersions} className="w-full rounded-2xl border border-[#28303c] px-3 py-3 text-left text-xs uppercase tracking-[0.22em] text-zinc-400 transition hover:border-[#3d4758] hover:text-white">
+                Load more history
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -64,17 +64,17 @@ The app now includes a `/docs` module with:
 
 - `/docs`: template gallery, recent files, local search, `.docx` import, trash, duplicate, rename, and star actions.
 - `/docs/new`: blank-document creation redirect.
-- `/docs/:docId`: desktop-first document editor with local IndexedDB persistence, autosave, version history, document tabs, outline, citations, voice typing, `.docx` export, print/PDF flow, and selected-text Ollama rewrites opened with `/`.
+- `/docs/:docId`: desktop-first document editor with server-backed SQLite persistence, autosave, unlimited version history, document tabs, outline, citations, voice typing, `.docx` export, print/PDF flow, and selected-text Ollama rewrites opened with `/`.
 
 Implementation notes:
 
 - Editor stack: `@tiptap/react`
-- Local persistence: `Dexie` / IndexedDB
+- Local persistence: same-origin docs APIs backed by the repo-owned SQLite database
 - AI rewrites: local Ollama flash-style requests with approve/reject preview flow
 - `.docx` import: `mammoth`
 - `.docx` export: `docx`
 
-Documents are stored locally in the browser for a single user. There is no collaboration, comments, or server-side sync in the current implementation.
+Existing browser-stored docs data is migrated once into the local SQLite workspace and then removed from IndexedDB/localStorage. The docs feature remains single-user with no collaboration or comments in this implementation.
 
 ## Notes workspace
 
