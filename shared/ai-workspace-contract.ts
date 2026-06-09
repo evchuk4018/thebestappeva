@@ -1,4 +1,5 @@
 import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachments-contract';
+import { ArtifactCardSummary, parseArtifactCardSummary } from './ai-artifacts-contract';
 export type { AiAttachmentReference } from './ai-attachments-contract';
 
 export interface ToolInvocation {
@@ -69,6 +70,7 @@ export interface AssistantMessage {
   createdAt: string;
   model?: string;
   trace?: AssistantTraceStep[];
+  artifactCards?: ArtifactCardSummary[];
   status: AssistantMessageStatus;
 }
 
@@ -79,6 +81,8 @@ export interface Chat {
   id: string;
   title: string;
   messages: AiMessage[];
+  activeArtifactId: string | null;
+  includedArtifactIds: string[];
   mode: ChatMode;
   updatedAt: string;
 }
@@ -230,6 +234,9 @@ function parseMessage(value: unknown, field: string): AiMessage {
       trace: Array.isArray(record.trace)
         ? record.trace.map((step, index) => parseTraceStep(step, `${field}.trace[${index}]`))
         : undefined,
+      artifactCards: Array.isArray(record.artifactCards)
+        ? record.artifactCards.map((card, index) => parseArtifactCardSummary(card, `${field}.artifactCards[${index}]`))
+        : undefined,
       status,
     };
   }
@@ -254,6 +261,12 @@ function parseChat(value: unknown, field: string): Chat {
     id: expectString(record.id, `${field}.id`),
     title: expectString(record.title, `${field}.title`),
     messages,
+    activeArtifactId: record.activeArtifactId === null || typeof record.activeArtifactId === 'undefined'
+      ? null
+      : expectString(record.activeArtifactId, `${field}.activeArtifactId`),
+    includedArtifactIds: Array.isArray(record.includedArtifactIds)
+      ? record.includedArtifactIds.map((artifactId, index) => expectString(artifactId, `${field}.includedArtifactIds[${index}]`))
+      : [],
     mode,
     updatedAt: expectString(record.updatedAt, `${field}.updatedAt`),
   };

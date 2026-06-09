@@ -14,8 +14,10 @@ import { sendFlashTurn } from './flash-turn';
 import { LiveChatState, resolveActiveChat, shouldShowTypingIndicator } from './live-turn';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
 import { SystemPromptContext } from './system-prompt';
+import { buildArtifactContext } from '../../lib/ai-artifact-context';
+import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
 import { AiAttachmentReference, Chat, ChatMode } from './types';
-import { collectLongPdfAttachments, createPdfReaderTool } from './tools/pdf-reader-tool';
+import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { ToolRegistryEntry } from './tools/types';
 import { useOllamaModelState } from './useOllamaModelState';
@@ -56,18 +58,14 @@ export function useOllamaChat() {
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
   const selectedChat = resolveActiveChat(persistedSelectedChat, selectedLiveChat);
-  const selectedPdfAttachments = persistedSelectedChat ? collectLongPdfAttachments(persistedSelectedChat.messages) : [];
-  const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
-  const tools = toolRegistryEntries.map(({ definition }) => ({
-    ...definition,
-    enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
-  })).concat([{ ...selectedPdfTool.definition, enabled: selectedPdfAttachments.length > 0 }]);
-  const activeToolEntries = getActiveToolEntries(persistedSelectedChat);
+  const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat);
+  const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools);
   const chatMode = selectedChat?.mode ?? draftMode;
   const systemPromptContext: SystemPromptContext = {
     customPrompt: customSystemPrompt,
     mode: chatMode,
     tools: activeToolEntries.map(({ definition }) => definition),
+    artifactContext: undefined,
   };
 
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
@@ -95,14 +93,6 @@ export function useOllamaChat() {
 
   function toggleChatMode() {
     setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
-  }
-
-  function getActiveToolEntries(chat: Chat | null) {
-    const enabledEntries = toolRegistryEntries.filter(
-      ({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault,
-    );
-    const pdfAttachments = chat ? collectLongPdfAttachments(chat.messages) : [];
-    return pdfAttachments.length ? [...enabledEntries, createPdfReaderTool(pdfAttachments)] : enabledEntries;
   }
 
   function resolveToolId(functionName: string, entries: ToolRegistryEntry[]) {
@@ -148,11 +138,13 @@ export function useOllamaChat() {
     activeTurnControllerRef.current = controller;
 
     try {
-      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntries(turnChat) : [];
+      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools) : [];
+      const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
       const promptContext = {
         customPrompt: customSystemPrompt,
         mode: effectiveMode,
         tools: turnToolEntries.map(({ definition }) => definition),
+        artifactContext,
       } satisfies SystemPromptContext;
       const resolvedTurn =
         effectiveMode === 'flash'
@@ -254,6 +246,16 @@ export function useOllamaChat() {
     setEnabledTools((current) => ({ ...current, [toolId]: enabled }));
   }
 
+  function setActiveArtifact(artifactId: string | null) {
+    if (!selectedChatId) return;
+    setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatActiveArtifactState(chat, artifactId) : chat));
+  }
+
+  function setArtifactIncluded(artifactId: string, included: boolean) {
+    if (!selectedChatId) return;
+    setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatIncludedArtifactState(chat, artifactId, included) : chat));
+  }
+
   return {
     availableModels,
     availability,
@@ -274,8 +276,12 @@ export function useOllamaChat() {
     setCustomSystemPrompt,
     selectChat,
     selectedChatId,
+    activeArtifactId: selectedChat?.activeArtifactId ?? null,
+    includedArtifactIds: selectedChat?.includedArtifactIds ?? [],
     showTypingIndicator: shouldShowTypingIndicator(isTyping, selectedLiveChat),
     sendMessage,
+    setActiveArtifact,
+    setArtifactIncluded,
     systemPromptContext,
     setCurrentModel,
     stopMessage,

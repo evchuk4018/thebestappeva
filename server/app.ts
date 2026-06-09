@@ -6,6 +6,20 @@ import {
   handleParseAiAttachment,
 } from './ai-attachments/routes';
 import {
+  handleCreateArtifact,
+  handleDeleteArtifact,
+  handleExportArtifactToDoc,
+  handleFetchArtifactLines,
+  handleGetArtifact,
+  handleGetArtifactOutline,
+  handleListArtifacts,
+  handleListArtifactVersions,
+  handlePatchArtifact,
+  handleRestoreArtifactVersion,
+  handleSearchArtifact,
+  handleUpdateArtifactTable,
+} from './ai-artifacts';
+import {
   handleGetAiPdfPage,
   handleGetAiPdfPages,
   handleGetAiPdfPageImage,
@@ -101,6 +115,18 @@ function registerApiRoutes(app: Express) {
   app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
   app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
   app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
+  app.get('/api/ai/chats/:chatId/artifacts', (req, res) => void handleListArtifacts(req, res));
+  app.post('/api/ai/chats/:chatId/artifacts', (req, res) => void handleCreateArtifact(req, res));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleGetArtifact(req, res));
+  app.patch('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handlePatchArtifact(req, res));
+  app.delete('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleDeleteArtifact(req, res));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/lines', (req, res) => void handleFetchArtifactLines(req, res));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/search', (req, res) => void handleSearchArtifact(req, res));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/outline', (req, res) => void handleGetArtifactOutline(req, res));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/versions', (req, res) => void handleListArtifactVersions(req, res));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/versions/:versionId/restore', (req, res) => void handleRestoreArtifactVersion(req, res));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/export-to-doc', (req, res) => void handleExportArtifactToDoc(req, res));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/table', (req, res) => void handleUpdateArtifactTable(req, res));
   app.get('/api/docs', (req, res) => void handleListDocs(req, res));
   app.post('/api/docs', (req, res) => void handleCreateDoc(req, res));
   app.get('/api/docs/preferences', (req, res) => void handleGetDocPreferences(req, res));

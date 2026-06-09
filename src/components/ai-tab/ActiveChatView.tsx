@@ -8,6 +8,7 @@ interface ActiveChatViewProps {
   liveAssistantMessageId: string | null;
   showTypingIndicator: boolean;
   onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
+  onOpenArtifact: (artifactId: string) => void;
   onRegenerateAssistantMessage: (messageId: string) => Promise<void> | void;
   onCopyUserMessage: (messageId: string) => Promise<void> | void;
   onEditUserMessage: (messageId: string, nextContent: string) => Promise<void> | void;
@@ -20,6 +21,7 @@ export function ActiveChatView({
   liveAssistantMessageId,
   showTypingIndicator,
   onCopyAssistantMessage,
+  onOpenArtifact,
   onRegenerateAssistantMessage,
   onCopyUserMessage,
   onEditUserMessage,
@@ -48,6 +50,7 @@ export function ActiveChatView({
               isStreaming={message.id === liveAssistantMessageId}
               message={message}
               onCopy={onCopyAssistantMessage}
+              onOpenArtifact={onOpenArtifact}
               onRegenerate={onRegenerateAssistantMessage}
             />
           );

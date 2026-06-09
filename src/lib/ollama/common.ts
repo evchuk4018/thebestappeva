@@ -36,7 +36,7 @@ export interface OllamaToolDefinition {
     description: string;
     parameters: {
       type: 'object';
-      properties: Record<string, { type: 'string' | 'number' | 'boolean'; description: string }>;
+      properties: Record<string, Record<string, unknown>>;
       required?: string[];
     };
   };

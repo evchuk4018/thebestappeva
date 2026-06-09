@@ -174,8 +174,10 @@ export function buildOllamaTools(entries: ToolRegistryEntry[]): OllamaToolDefini
             toolFunction.parameters.map((parameter) => [
               parameter.name,
               {
-                type: parameter.type,
-                description: parameter.description,
+                ...(parameter.schema ?? {
+                  type: parameter.type,
+                  description: parameter.description,
+                }),
               },
             ]),
           ),

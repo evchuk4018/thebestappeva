@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ArtifactCards } from './artifacts/ArtifactCards';
 import { AssistantMessageActions } from './AssistantMessageActions';
 import { AssistantMessageContent } from './AssistantMessageContent';
 import { AssistantTracePanel } from './AssistantTracePanel';
@@ -10,10 +11,11 @@ interface AssistantMessageCardProps {
   isStreaming?: boolean;
   message: AssistantMessage;
   onCopy: (messageId: string) => Promise<void> | void;
+  onOpenArtifact: (artifactId: string) => void;
   onRegenerate: (messageId: string) => Promise<void> | void;
 }
 
-export function AssistantMessageCard({ disabled, isStreaming = false, message, onCopy, onRegenerate }: AssistantMessageCardProps) {
+export function AssistantMessageCard({ disabled, isStreaming = false, message, onCopy, onOpenArtifact, onRegenerate }: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasTrace = Boolean(message.trace?.length);
   const isError = message.status === 'error';
@@ -62,6 +64,7 @@ export function AssistantMessageCard({ disabled, isStreaming = false, message, o
           {isError && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#ffb3b3]">Failed reply</p>}
           {isCancelled && <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#f0bb8f]">Stopped reply</p>}
           <AssistantMessageContent content={message.content} />
+          <ArtifactCards cards={message.artifactCards ?? []} onOpen={onOpenArtifact} />
         </div>
 
         <AssistantMessageActions disabled={disabled} messageId={message.id} onCopy={onCopy} onRegenerate={onRegenerate} />

@@ -103,12 +103,14 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
+- `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
 - in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
+- artifact bodies are stored outside chat payload JSON; chat persistence keeps only lightweight artifact metadata such as active and included artifact IDs plus assistant artifact cards
 - PDFs with 1-3 pages are fully loaded into the model prompt and the assistant is told to mention that no PDF tool was needed; PDFs with 4+ pages or unknown page counts load summary context first and use `pdf_reader` on demand
 - complete PDF audits use `read_pdf_pages`, which returns up to 25 consecutive pages per call; larger documents continue with explicit page bounds
 - when a long PDF is submitted from `Flash`, that chat turn switches to `Thinking` so `pdf_reader` can run
@@ -136,12 +138,20 @@ Implementation notes:
 - Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
 - PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
 - Local proxy tools: same-origin `GET /api/web-search` and `GET /api/fetch-url`, served by the repo-owned Node host under `server/`
 - Weather data: Open-Meteo geocoding + forecast APIs with no API key
 - Web search backend: local SearXNG via Docker Compose, defaulting to `http://127.0.0.1:8888`
 - `fetch_url` is still HTML-only; document uploads now use the dedicated attachment parser path instead of the web page fetcher
+
+Artifact workflow notes:
+
+- the model-facing artifact tool set is `create_artifact`, `fetch_artifact_lines`, `list_artifacts`, `update_artifact`, `search_artifact`, `get_artifact_outline`, `export_artifact_to_doc`, and `update_artifact_table`
+- long artifacts are not dumped back into prompts by default; included artifacts inject bounded Markdown context, heading outlines, and instructions to use search/line-fetch tools
+- the `/ai` artifact panel is Markdown-first with rendered preview, autosave, history restore, table operations, and `/docs` export
+- first export creates a linked `/docs` document; later exports update the linked doc unless the caller explicitly chooses a new doc
 
 ## Recent refactor
 

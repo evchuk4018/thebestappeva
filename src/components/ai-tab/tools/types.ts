@@ -4,9 +4,10 @@ export type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace
 
 export interface ToolFunctionParameter {
   name: string;
-  type: 'string' | 'number' | 'boolean';
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
   description: string;
   required?: boolean;
+  schema?: Record<string, unknown>;
 }
 
 export interface ToolFunctionDefinition {

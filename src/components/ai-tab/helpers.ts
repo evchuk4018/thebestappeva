@@ -3,6 +3,7 @@ import {
   AiAttachmentReference,
   AssistantMessage,
   AssistantMessageStatus,
+  ArtifactCardSummary,
   AssistantTraceStep,
   Chat,
   ChatMode,
@@ -31,6 +32,7 @@ export function createAssistantMessage(
   content: string,
   model?: string,
   options: {
+    artifactCards?: ArtifactCardSummary[];
     status?: AssistantMessageStatus;
     trace?: AssistantTraceStep[];
   } = {},
@@ -40,6 +42,7 @@ export function createAssistantMessage(
     kind: 'assistant',
     content: content.trim(),
     model,
+    artifactCards: options.artifactCards?.length ? options.artifactCards : undefined,
     trace: options.trace?.length ? options.trace : undefined,
     status: options.status ?? 'complete',
     createdAt: new Date().toISOString(),
@@ -103,6 +106,8 @@ export function createNewChat(message: UserMessage, mode: ChatMode): Chat {
     id: `chat-${Date.now()}`,
     title: createChatTitle(message.content),
     messages: [message],
+    activeArtifactId: null,
+    includedArtifactIds: [],
     mode,
     updatedAt: message.createdAt,
   };

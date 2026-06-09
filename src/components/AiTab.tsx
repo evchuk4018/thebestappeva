@@ -3,9 +3,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ActiveChatView } from './ai-tab/ActiveChatView';
-import { AddModelsModal } from './ai-tab/AddModelsModal';
 import { AiActiveComposer } from './ai-tab/AiActiveComposer';
-import { AiSettingsModal } from './ai-tab/AiSettingsModal';
+import { AiTabOverlays } from './ai-tab/AiTabOverlays';
 import { AiStatusBanner } from './ai-tab/AiStatusBanner';
 import { AiWorkspaceLoadingState } from './ai-tab/AiWorkspaceLoadingState';
 import { copyTextToClipboard } from './ai-tab/clipboard';
@@ -15,7 +14,7 @@ import { MobileHeader } from './ai-tab/MobileHeader';
 import { pullModel } from './ai-tab/ollama-client';
 import { RuntimePill } from './ai-tab/RuntimePill';
 import { Sidebar } from './ai-tab/Sidebar';
-import { buildSystemPromptSections } from './ai-tab/system-prompt';
+import { AiArtifactsWorkspace } from './ai-tab/AiArtifactsWorkspace';
 import { PullProgress } from './ai-tab/types';
 import { useAiAttachments } from './ai-tab/useAiAttachments';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
@@ -63,7 +62,11 @@ export default function AiTab() {
     refreshModels,
     selectChat,
     selectedChatId,
+    activeArtifactId,
+    includedArtifactIds,
     sendMessage,
+    setActiveArtifact,
+    setArtifactIncluded,
     setCustomSystemPrompt,
     showTypingIndicator,
     systemPromptContext,
@@ -83,7 +86,6 @@ export default function AiTab() {
   }, [activeChat, isTyping, selectedChatId]);
 
   const isModelLoading = availability === 'connecting';
-  const systemPromptSections = buildSystemPromptSections(systemPromptContext);
   const openAddModels = () => {
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
@@ -99,10 +101,7 @@ export default function AiTab() {
   };
   const handleCopyMessage = async (messageId: string, kind: 'assistant' | 'user') => {
     const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
-    if (!message || message.kind !== kind) {
-      return;
-    }
-
+    if (!message || message.kind !== kind) return;
     await copyTextToClipboard(message.content);
   };
   const handleEditUserMessage = async (messageId: string, nextContent: string) => {
@@ -112,16 +111,11 @@ export default function AiTab() {
   const handleNewChat = () => {
     setActivePanel('chats');
     selectChat(null);
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
+    if (isMobile) setSidebarOpen(false);
   };
   const handleSend = async () => {
     const nextMessage = inputValue.trim();
-    if ((!nextMessage && !readyAttachmentRefs.length) || isTyping || !currentModel) {
-      return;
-    }
-
+    if ((!nextMessage && !readyAttachmentRefs.length) || isTyping || !currentModel) return;
     setInputValue('');
     await sendMessage(nextMessage, readyAttachmentRefs);
     clearReadyAttachments();
@@ -252,6 +246,7 @@ export default function AiTab() {
               liveAssistantMessageId={liveAssistantMessageId}
               showTypingIndicator={showTypingIndicator}
               onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
+              onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
               onRegenerateAssistantMessage={regenerateAssistantMessage}
               onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
               onEditUserMessage={handleEditUserMessage}
@@ -266,30 +261,31 @@ export default function AiTab() {
           )}
         </div>
 
-        {activeChat && (
-          <AiActiveComposer
-            {...composerProps}
-            isTyping={isTyping}
-          />
-        )}
+        {activeChat && <AiActiveComposer {...composerProps} isTyping={isTyping} />}
       </div>
 
-      <AddModelsModal
-        installedModelNames={availableModels.map((model) => model.name)}
-        isOpen={addModelsOpen}
-        isPulling={isPullingModel}
-        pullProgress={pullProgress}
-        onClose={() => setAddModelsOpen(false)}
-        onPullModel={handlePullModel}
+      <AiArtifactsWorkspace
+        activeArtifactId={activeArtifactId}
+        chatId={selectedChatId}
+        chatUpdatedAt={activeChat?.updatedAt}
+        includedArtifactIds={includedArtifactIds}
+        onOpenArtifact={setActiveArtifact}
+        onSetIncluded={setArtifactIncluded}
       />
 
-      <AiSettingsModal
+      <AiTabOverlays
+        addModelsOpen={addModelsOpen}
+        availableModels={availableModels}
         chatMode={chatMode}
-        customPrompt={customSystemPrompt}
-        isOpen={settingsOpen}
-        sections={systemPromptSections}
-        onClose={() => setSettingsOpen(false)}
-        onSave={(value) => {
+        customSystemPrompt={customSystemPrompt}
+        isPullingModel={isPullingModel}
+        pullProgress={pullProgress}
+        settingsOpen={settingsOpen}
+        tools={systemPromptContext.tools}
+        onCloseAddModels={() => setAddModelsOpen(false)}
+        onCloseSettings={() => setSettingsOpen(false)}
+        onPullModel={handlePullModel}
+        onSaveSettings={(value) => {
           setCustomSystemPrompt(value);
           setSettingsOpen(false);
         }}

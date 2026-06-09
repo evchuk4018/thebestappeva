@@ -5,6 +5,7 @@ import {
   createToolResultTraceStep,
   upsertMessage,
 } from './helpers';
+import { mergeArtifactCardsFromToolResult } from './artifact-cards';
 import { AssistantMessage, Chat } from './types';
 
 interface CreateAssistantLiveUpdaterOptions {
@@ -55,6 +56,7 @@ export function createAssistantLiveUpdater({ chat, model, onProgress }: CreateAs
       syncAssistantMessage(
         {
           ...baseMessage,
+          artifactCards: mergeArtifactCardsFromToolResult(baseMessage.artifactCards, result),
           model: replyModel ?? baseMessage.model,
           trace: [...(baseMessage.trace ?? []), createToolResultTraceStep(result, createdAt)],
         },

@@ -5,10 +5,11 @@ export interface SystemPromptContext {
   customPrompt: string;
   mode: ChatMode;
   tools: ToolDefinition[];
+  artifactContext?: string;
 }
 
 export interface SystemPromptSection {
-  id: 'custom' | 'formatting' | 'workflow' | 'tools';
+  id: 'custom' | 'formatting' | 'workflow' | 'tools' | 'artifacts';
   title: string;
   content: string;
   readOnly: boolean;
@@ -21,6 +22,15 @@ const FORMATTING_SYSTEM_PROMPT = [
   'For display math, put $$ on separate lines before and after the equation block.',
   'Do not use raw HTML unless the user explicitly asks for HTML.',
   'Do not wrap the entire reply in a single code fence.',
+].join('\n');
+
+const ARTIFACT_WORKFLOW_PROMPT = [
+  'When drafting substantial reusable content, prefer creating or updating an artifact instead of dumping the full document into chat.',
+  'Use create_artifact for new documents, list_artifacts to inspect what already exists, get_artifact_outline or search_artifact to locate sections, and fetch_artifact_lines for exact recall.',
+  'Prefer update_artifact patches over full replacements when editing existing artifacts.',
+  'Preserve user-authored content outside the requested edit range.',
+  'Keep Markdown tables valid. Use update_artifact_table for structural table changes when possible.',
+  'Export finished artifacts to /docs with export_artifact_to_doc when the user wants a document in the docs workspace.',
 ].join('\n');
 
 const THINKING_WORKFLOW_SYSTEM_PROMPT = [
@@ -61,10 +71,15 @@ function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
   ].join('\n');
 }
 
+function buildArtifactPromptContent(context: string | undefined) {
+  return context?.trim() ? context.trim() : null;
+}
+
 export function buildSystemPromptSections(context: SystemPromptContext) {
   const customPrompt = context.customPrompt.trim();
   const sections: SystemPromptSection[] = [];
   const workflowPrompt = buildWorkflowPromptContent(context.mode);
+  const artifactPrompt = buildArtifactPromptContent(context.artifactContext);
 
   if (customPrompt) {
     sections.push({
@@ -93,9 +108,17 @@ export function buildSystemPromptSections(context: SystemPromptContext) {
     {
       id: 'tools',
       title: 'Tool context',
-      content: buildToolPromptContent(context.mode, context.tools),
+      content: [buildToolPromptContent(context.mode, context.tools), ARTIFACT_WORKFLOW_PROMPT].join('\n\n'),
       readOnly: true,
     },
+    ...(artifactPrompt
+      ? [{
+          id: 'artifacts' as const,
+          title: 'Artifact context',
+          content: artifactPrompt,
+          readOnly: true,
+        }]
+      : []),
   );
 
   return sections;

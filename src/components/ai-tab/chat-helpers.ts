@@ -14,6 +14,14 @@ export function updateChatMode(currentChats: Chat[], chatId: string, mode: ChatM
   return currentChats.map((chat) => (chat.id === chatId ? { ...chat, mode } : chat));
 }
 
+export function updateChatArtifacts(
+  currentChats: Chat[],
+  chatId: string,
+  updater: (chat: Chat) => Chat,
+) {
+  return currentChats.map((chat) => (chat.id === chatId ? updater(chat) : chat));
+}
+
 export function buildTurnFailureMessage(error: OllamaClientError) {
   if (error.kind === 'connection') {
     return 'I could not reach the local Ollama runtime for this turn. Check that Ollama is still running, then try again.';
