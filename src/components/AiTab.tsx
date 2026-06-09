@@ -25,6 +25,7 @@ type SidebarPanel = 'chats' | 'tools';
 export default function AiTab() {
   const navigate = useNavigate();
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [activePanel, setActivePanel] = useState<SidebarPanel>('chats');
   const [addModelsOpen, setAddModelsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -214,64 +215,67 @@ export default function AiTab() {
         onToggleTool={toggleTool}
       />
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {!sidebarOpen && !isMobile && (
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="absolute left-4 top-4 z-20 rounded-xl border border-[#2c2c28] bg-[#20201e] p-2 text-zinc-300 shadow-xl duration-200 hover:text-white"
-          >
-            <PanelLeft size={18} />
-          </button>
-        )}
-
-        <div className="flex h-16 select-none items-center justify-center pt-3">
-          <RuntimePill availability={availability} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
-        </div>
-
-        <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
-          <AiStatusBanner
-            availability={availability}
-            lastError={lastError}
-            parserHealth={parserHealth}
-            persistenceError={persistenceError}
-            onOpenAddModels={openAddModels}
-          />
-          {hydrationStatus === 'loading' ? (
-            <AiWorkspaceLoadingState />
-          ) : activeChat ? (
-            <ActiveChatView
-              activeChat={activeChat}
-              currentModel={currentModel}
-              liveAssistantMessageId={liveAssistantMessageId}
-              showTypingIndicator={showTypingIndicator}
-              onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
-              onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
-              onRegenerateAssistantMessage={regenerateAssistantMessage}
-              onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
-              onEditUserMessage={handleEditUserMessage}
-              onSwitchUserMessageVersion={switchUserMessageVersion}
-            />
-          ) : (
-            <EmptyState
-              {...composerProps}
-              isWorking={isTyping}
-              onSelectSuggestion={handleSuggestionClick}
-            />
+      <div ref={workspaceRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {!sidebarOpen && !isMobile && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="absolute left-4 top-4 z-20 rounded-xl border border-[#2c2c28] bg-[#20201e] p-2 text-zinc-300 shadow-xl duration-200 hover:text-white"
+            >
+              <PanelLeft size={18} />
+            </button>
           )}
+
+          <div className="flex h-16 select-none items-center justify-center pt-3">
+            <RuntimePill availability={availability} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
+          </div>
+
+          <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
+            <AiStatusBanner
+              availability={availability}
+              lastError={lastError}
+              parserHealth={parserHealth}
+              persistenceError={persistenceError}
+              onOpenAddModels={openAddModels}
+            />
+            {hydrationStatus === 'loading' ? (
+              <AiWorkspaceLoadingState />
+            ) : activeChat ? (
+              <ActiveChatView
+                activeChat={activeChat}
+                currentModel={currentModel}
+                liveAssistantMessageId={liveAssistantMessageId}
+                showTypingIndicator={showTypingIndicator}
+                onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
+                onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
+                onRegenerateAssistantMessage={regenerateAssistantMessage}
+                onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
+                onEditUserMessage={handleEditUserMessage}
+                onSwitchUserMessageVersion={switchUserMessageVersion}
+              />
+            ) : (
+              <EmptyState
+                {...composerProps}
+                isWorking={isTyping}
+                onSelectSuggestion={handleSuggestionClick}
+              />
+            )}
+          </div>
+
+          {activeChat && <AiActiveComposer {...composerProps} isTyping={isTyping} />}
         </div>
 
-        {activeChat && <AiActiveComposer {...composerProps} isTyping={isTyping} />}
+        <AiArtifactsWorkspace
+          activeArtifactId={activeArtifactId}
+          chatId={selectedChatId}
+          chatUpdatedAt={activeChat?.updatedAt}
+          includedArtifactIds={includedArtifactIds}
+          onOpenArtifact={setActiveArtifact}
+          onSetIncluded={setArtifactIncluded}
+          workspaceRef={workspaceRef}
+        />
       </div>
-
-      <AiArtifactsWorkspace
-        activeArtifactId={activeArtifactId}
-        chatId={selectedChatId}
-        chatUpdatedAt={activeChat?.updatedAt}
-        includedArtifactIds={includedArtifactIds}
-        onOpenArtifact={setActiveArtifact}
-        onSetIncluded={setArtifactIncluded}
-      />
 
       <AiTabOverlays
         addModelsOpen={addModelsOpen}

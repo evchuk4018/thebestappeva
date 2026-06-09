@@ -150,7 +150,7 @@ Artifact workflow notes:
 
 - the model-facing artifact tool set is `create_artifact`, `fetch_artifact_lines`, `list_artifacts`, `update_artifact`, `search_artifact`, `get_artifact_outline`, `export_artifact_to_doc`, and `update_artifact_table`
 - long artifacts are not dumped back into prompts by default; included artifacts inject bounded Markdown context, heading outlines, and instructions to use search/line-fetch tools
-- the `/ai` artifact panel is Markdown-first with rendered preview, autosave, history restore, table operations, and `/docs` export
+- the `/ai` artifact panel opens as a wider resizable workspace with a preview/code toggle, transient in-panel search highlighting, autosave, table operations, and `/docs` export
 - first export creates a linked `/docs` document; later exports update the linked doc unless the caller explicitly chooses a new doc
 
 ## Recent refactor

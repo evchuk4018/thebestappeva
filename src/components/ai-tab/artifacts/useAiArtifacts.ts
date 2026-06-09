@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   ArtifactRecord,
+  ArtifactSearchResponse,
   ArtifactSummary,
-  ArtifactVersionRecord,
   createArtifact,
   exportArtifactToDoc,
-  getArtifactOutline,
-  listArtifactVersions,
   listArtifacts,
   loadArtifact,
-  restoreArtifactVersion,
   searchArtifact,
   updateArtifact,
   updateArtifactTable,
@@ -26,9 +23,6 @@ export function useAiArtifacts({ activeArtifactId, chatId, chatUpdatedAt }: UseA
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [outline, setOutline] = useState<Awaited<ReturnType<typeof getArtifactOutline>> | null>(null);
-  const [searchResults, setSearchResults] = useState<Awaited<ReturnType<typeof searchArtifact>> | null>(null);
-  const [versions, setVersions] = useState<ArtifactVersionRecord[]>([]);
 
   async function refreshArtifacts(includePreview = true) {
     if (!chatId) {
@@ -46,20 +40,12 @@ export function useAiArtifacts({ activeArtifactId, chatId, chatUpdatedAt }: UseA
   async function refreshActiveArtifact() {
     if (!chatId || !activeArtifactId) {
       setActiveArtifact(null);
-      setOutline(null);
-      setVersions([]);
       return;
     }
     try {
       setIsLoading(true);
-      const [artifact, nextOutline, nextVersions] = await Promise.all([
-        loadArtifact(chatId, activeArtifactId),
-        getArtifactOutline(chatId, activeArtifactId),
-        listArtifactVersions(chatId, activeArtifactId),
-      ]);
+      const artifact = await loadArtifact(chatId, activeArtifactId);
       setActiveArtifact(artifact);
-      setOutline(nextOutline);
-      setVersions(nextVersions);
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load the active artifact.');
@@ -81,9 +67,6 @@ export function useAiArtifacts({ activeArtifactId, chatId, chatUpdatedAt }: UseA
     artifacts,
     error,
     isLoading,
-    outline,
-    searchResults,
-    versions,
     createArtifact: async (request: { title: string; type: string; content: string }) => {
       if (!chatId) return null;
       const artifact = await createArtifact(chatId, request);
@@ -98,17 +81,9 @@ export function useAiArtifacts({ activeArtifactId, chatId, chatUpdatedAt }: UseA
     },
     refreshArtifacts,
     refreshActiveArtifact,
-    restoreVersion: async (artifactId: string, versionId: string) => {
+    runSearch: async (artifactId: string, query: string, mode: 'keyword' | 'heading' | 'hybrid'): Promise<ArtifactSearchResponse | null> => {
       if (!chatId) return null;
-      const artifact = await restoreArtifactVersion(chatId, artifactId, versionId);
-      await Promise.all([refreshArtifacts(), refreshActiveArtifact()]);
-      return artifact;
-    },
-    runSearch: async (artifactId: string, query: string, mode: 'keyword' | 'heading' | 'hybrid') => {
-      if (!chatId) return null;
-      const result = await searchArtifact(chatId, artifactId, query, mode);
-      setSearchResults(result);
-      return result;
+      return searchArtifact(chatId, artifactId, query, mode);
     },
     saveArtifact: async (request: Parameters<typeof updateArtifact>[1]) => {
       if (!chatId) return null;

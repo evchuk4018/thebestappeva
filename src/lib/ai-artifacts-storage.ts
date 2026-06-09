@@ -100,4 +100,4 @@ export function findArtifactSummary(summaries: ArtifactSummary[], artifactId: st
   return summaries.find((artifact) => artifact.artifactId === artifactId) ?? null;
 }
 
-export type { ArtifactCardSummary, ArtifactRecord, ArtifactSummary, ArtifactVersionRecord };
+export type { ArtifactCardSummary, ArtifactRecord, ArtifactSearchResponse, ArtifactSummary, ArtifactVersionRecord };

@@ -244,3 +244,10 @@ body {
   font-size: 1em;
 }
 
+.artifact-preview-highlight {
+  border-radius: 0.35rem;
+  background: rgba(141, 180, 208, 0.28);
+  color: #f8fafc;
+  box-shadow: 0 0 0 1px rgba(141, 180, 208, 0.18);
+}
+
