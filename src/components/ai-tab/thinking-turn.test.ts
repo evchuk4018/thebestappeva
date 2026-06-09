@@ -97,3 +97,76 @@ test('streams thinking traces, tool steps, and the final answer', async () => {
   assert(progressSnapshots.includes('Final '));
   assert.equal(progressSnapshots.at(-1), 'Final answer');
 });
+
+test('preserves staged thinking blocks around tool work during long turns', async () => {
+  let requestCount = 0;
+  globalThis.fetch = async () => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      return createStreamResponse([
+        JSON.stringify({
+          model: 'qwen',
+          message: {
+            thinking: 'Tasks:\n1. Inspect the request.\n2. Gather the weather.\n3. Summarize the result.',
+            content: '',
+            tool_calls: [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }],
+          },
+          done: true,
+        }),
+      ]);
+    }
+
+    return createStreamResponse([
+      JSON.stringify({ model: 'qwen', message: { thinking: 'Task 2 complete.\nWeather retrieved.\nNext: summarize for the user.' } }),
+      JSON.stringify({ model: 'qwen', message: { content: 'Boston is 72F and sunny.' }, done: true }),
+    ]);
+  };
+
+  const toolEntry: ToolRegistryEntry = {
+    definition: {
+      id: 'weather',
+      label: 'Weather',
+      alias: '/weather',
+      description: 'Weather lookup',
+      enabledByDefault: true,
+      functions: [{ name: 'get_weather', description: 'Get weather', parameters: [] }],
+    },
+    execute: async (invocation) => ({
+      toolId: 'weather',
+      functionName: invocation.functionName,
+      ok: true,
+      summary: '72F and sunny.',
+      data: { temperature: 72 },
+    }),
+  };
+
+  const result = await resolveThinkingTurn({
+    chat: createNewChat(createUserMessage('Walk through the weather lookup.'), 'thinking'),
+    model: 'qwen',
+    activeToolEntries: [toolEntry],
+    onProgress: () => {},
+    promptContext: {
+      customPrompt: '',
+      mode: 'thinking',
+      tools: [toolEntry.definition],
+    },
+    resolveToolId: () => 'weather',
+  });
+
+  const assistant = result.chat.messages.at(-1);
+  assert.equal(requestCount, 2);
+  assert(assistant && assistant.kind === 'assistant');
+  assert.equal(assistant.content, 'Boston is 72F and sunny.');
+  assert.deepEqual(
+    assistant.trace?.map((step) => step.kind),
+    ['thinking', 'tool-call', 'tool-result', 'thinking'],
+  );
+  assert.equal(
+    assistant.trace?.[0]?.kind === 'thinking' ? assistant.trace[0].content : '',
+    'Tasks:\n1. Inspect the request.\n2. Gather the weather.\n3. Summarize the result.',
+  );
+  assert.equal(
+    assistant.trace?.[3]?.kind === 'thinking' ? assistant.trace[3].content : '',
+    'Task 2 complete.\nWeather retrieved.\nNext: summarize for the user.',
+  );
+});

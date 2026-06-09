@@ -4,6 +4,13 @@ interface AssistantTracePanelProps {
   steps: AssistantTraceStep[];
 }
 
+function formatThinkingSegments(content: string) {
+  return content
+    .split(/\n\s*\n/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
 function formatArgs(args: Record<string, unknown>) {
   const entries = Object.entries(args);
   if (entries.length === 0) {
@@ -43,15 +50,37 @@ function ToolResultStep({ step }: { step: Extract<AssistantTraceStep, { kind: 't
   );
 }
 
+function ThinkingStep({ step, index }: { step: Extract<AssistantTraceStep, { kind: 'thinking' }>; index: number }) {
+  const segments = formatThinkingSegments(step.content);
+
+  return (
+    <div className="rounded-xl border border-[#35352f] bg-[#1a1a17] px-3 py-3">
+      <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em] text-[#b0a68d]">
+        <span>{index === 0 ? 'Task Map' : 'Progress Block'}</span>
+        <span>Thinking</span>
+      </div>
+      <div className="mt-2 space-y-2">
+        {(segments.length ? segments : [step.content.trim()]).map((segment, segmentIndex) => (
+          <p key={`${step.id}-${segmentIndex}`} className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
+            {segment}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function AssistantTracePanel({ steps }: AssistantTracePanelProps) {
+  let thinkingCount = 0;
+
   return (
     <div className="space-y-2.5 border-t border-[#2a2a27] px-4 py-3">
       {steps.map((step) => {
         if (step.kind === 'thinking') {
+          const thinkingIndex = thinkingCount;
+          thinkingCount += 1;
           return (
-            <p key={step.id} className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-              {step.content}
-            </p>
+            <ThinkingStep key={step.id} step={step} index={thinkingIndex} />
           );
         }
 

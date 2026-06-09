@@ -51,7 +51,7 @@ export function AssistantMessageCard({ disabled, isStreaming = false, message, o
               aria-expanded={showThinking}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] text-zinc-400"
             >
-              <span>Thinking</span>
+              <span>Thinking Progress</span>
               <ChevronDown size={14} className={`transition ${showThinking ? 'rotate-180' : ''}`} />
             </button>
             {showThinking && message.trace && <AssistantTracePanel steps={message.trace} />}

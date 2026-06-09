@@ -8,7 +8,7 @@ export interface SystemPromptContext {
 }
 
 export interface SystemPromptSection {
-  id: 'custom' | 'formatting' | 'tools';
+  id: 'custom' | 'formatting' | 'workflow' | 'tools';
   title: string;
   content: string;
   readOnly: boolean;
@@ -22,6 +22,24 @@ const FORMATTING_SYSTEM_PROMPT = [
   'Do not use raw HTML unless the user explicitly asks for HTML.',
   'Do not wrap the entire reply in a single code fence.',
 ].join('\n');
+
+const THINKING_WORKFLOW_SYSTEM_PROMPT = [
+  'When the request is short or simple, answer normally.',
+  'When the request is multi-step, long-running, or agentic, break your work into explicit thinking blocks.',
+  'Start by identifying the main tasks in the reasoning trace.',
+  'Work through one task block at a time.',
+  'After each completed block, tool batch, or meaningful pivot, emit a brief progress checkpoint in the reasoning trace.',
+  'Keep reasoning checkpoints concise and user-facing.',
+  'Reserve the final assistant reply content for the final summary or result, not another progress update.',
+].join('\n');
+
+function buildWorkflowPromptContent(mode: ChatMode) {
+  if (mode !== 'thinking') {
+    return null;
+  }
+
+  return ['Current mode workflow: Thinking.', THINKING_WORKFLOW_SYSTEM_PROMPT].join('\n');
+}
 
 function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
   if (mode === 'flash') {
@@ -46,6 +64,7 @@ function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
 export function buildSystemPromptSections(context: SystemPromptContext) {
   const customPrompt = context.customPrompt.trim();
   const sections: SystemPromptSection[] = [];
+  const workflowPrompt = buildWorkflowPromptContent(context.mode);
 
   if (customPrompt) {
     sections.push({
@@ -63,6 +82,14 @@ export function buildSystemPromptSections(context: SystemPromptContext) {
       content: FORMATTING_SYSTEM_PROMPT,
       readOnly: true,
     },
+    ...(workflowPrompt
+      ? [{
+          id: 'workflow' as const,
+          title: 'Thinking workflow',
+          content: workflowPrompt,
+          readOnly: true,
+        }]
+      : []),
     {
       id: 'tools',
       title: 'Tool context',
