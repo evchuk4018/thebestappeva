@@ -5,6 +5,7 @@ import { OllamaModel } from './types';
 
 interface ModelPickerProps {
   currentModel: string | null;
+  disabled?: boolean;
   isLoading: boolean;
   isOpen: boolean;
   models: OllamaModel[];
@@ -14,15 +15,16 @@ interface ModelPickerProps {
   onToggle: () => void;
 }
 
-export function ModelPicker({ currentModel, isLoading, isOpen, models, onAddModels, onClose, onSelect, onToggle }: ModelPickerProps) {
+export function ModelPicker({ currentModel, disabled = false, isLoading, isOpen, models, onAddModels, onClose, onSelect, onToggle }: ModelPickerProps) {
   const buttonLabel = currentModel ?? (isLoading ? 'Detecting models...' : 'No local models');
 
   return (
     <div className="relative">
       <button
         type="button"
+        disabled={disabled}
         onClick={onToggle}
-        className="flex items-center gap-1.5 rounded-lg border border-[#33332d] bg-[#272724] px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-[#2e2e2a] hover:text-white"
+        className="flex items-center gap-1.5 rounded-lg border border-[#33332d] bg-[#272724] px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-[#2e2e2a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? <LoaderCircle size={11} className="animate-spin" /> : <span className="h-1.5 w-1.5 rounded-full bg-[#e2875e]" />}
         <span className="max-w-[190px] truncate">{buttonLabel}</span>
@@ -30,7 +32,7 @@ export function ModelPicker({ currentModel, isLoading, isOpen, models, onAddMode
       </button>
 
       <AnimatePresence>
-        {isOpen && (
+        {isOpen && !disabled && (
           <>
             <div className="fixed inset-0 z-40" onClick={onClose} />
             <motion.div

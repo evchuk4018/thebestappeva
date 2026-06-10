@@ -26,8 +26,10 @@ test('thinking mode includes workflow guidance alongside tool guidance', () => {
   assert(sections.some((section) => section.id === 'workflow'));
   assert.match(content, /When the request is short or simple, answer normally\./);
   assert.match(content, /break your work into explicit thinking blocks/i);
+  assert.match(content, /call ask_user instead of guessing/i);
   assert.match(content, /Reserve the final assistant reply content for the final summary or result/i);
   assert.match(content, /Enabled tools:/);
+  assert.match(content, /ask_user tool pauses the current turn/i);
   assert.match(content, /Every tool call must be emitted as one valid JSON tool invocation/i);
   assert.match(content, /Weather \(/);
 });
@@ -47,6 +49,7 @@ test('flash mode excludes thinking workflow guidance', () => {
   assert(!sections.some((section) => section.id === 'workflow'));
   assert.doesNotMatch(content, /explicit thinking blocks/i);
   assert.match(content, /Current mode: Flash\./);
+  assert.doesNotMatch(content, /ask_user/i);
 });
 
 test('artifact guidance requires create_artifact for content requested in an artifact', () => {

@@ -12,8 +12,9 @@ interface ChatComposerProps {
   compact?: boolean;
   currentModel: string | null;
   inputValue: string;
+  isBusy: boolean;
   isModelDropdownOpen: boolean;
-  isWorking: boolean;
+  isTyping: boolean;
   isModelLoading: boolean;
   isUploadingAttachments: boolean;
   models: OllamaModel[];
@@ -52,8 +53,9 @@ export function ChatComposer({
   compact = false,
   currentModel,
   inputValue,
+  isBusy,
   isModelDropdownOpen,
-  isWorking,
+  isTyping,
   isModelLoading,
   isUploadingAttachments,
   models,
@@ -71,8 +73,8 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasReadyAttachments = pendingAttachments.some((attachment) => attachment.status === 'ready');
-  const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isWorking || !currentModel || isUploadingAttachments;
-  const isInputDisabled = isWorking || !currentModel;
+  const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isBusy || !currentModel || isUploadingAttachments;
+  const isInputDisabled = isBusy || !currentModel;
   const placeholder = getPlaceholder(availability, currentModel);
   const handlePickFiles = () => fileInputRef.current?.click();
 
@@ -107,9 +109,10 @@ export function ChatComposer({
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <ChatModeToggle mode={chatMode} onToggle={onToggleMode} />
+              <ChatModeToggle disabled={isBusy} mode={chatMode} onToggle={onToggleMode} />
               <ModelPicker
                 currentModel={currentModel}
+                disabled={isBusy}
                 isLoading={isModelLoading}
                 isOpen={isModelDropdownOpen}
                 models={models}
@@ -123,7 +126,7 @@ export function ChatComposer({
               <button type="button" onClick={handlePickFiles} className="rounded-lg p-1.5 hover:bg-zinc-800 hover:text-zinc-300">
                 <Paperclip size={16} />
               </button>
-              {isWorking ? (
+              {isTyping ? (
                 <button
                   type="button"
                   onClick={onStop}
@@ -185,9 +188,10 @@ export function ChatComposer({
         </div>
 
         <div className="flex items-center gap-2">
-          <ChatModeToggle mode={chatMode} onToggle={onToggleMode} />
+          <ChatModeToggle disabled={isBusy} mode={chatMode} onToggle={onToggleMode} />
           <ModelPicker
             currentModel={currentModel}
+            disabled={isBusy}
             isLoading={isModelLoading}
             isOpen={isModelDropdownOpen}
             models={models}
@@ -199,7 +203,7 @@ export function ChatComposer({
           <button type="button" className="rounded-xl p-2 text-zinc-500 duration-150 hover:bg-[#282825] hover:text-zinc-300">
             <Headphones size={16} />
           </button>
-          {isWorking ? (
+          {isTyping ? (
             <button
               type="button"
               onClick={onStop}

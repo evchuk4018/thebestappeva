@@ -63,6 +63,7 @@ test('read_pdf_pages defaults to the server-managed whole-document range', async
   const { requestedUrl, result } = await executeReadPages({});
   const url = new URL(requestedUrl);
   assert.equal(url.search, '');
+  assert(!('deferred' in result));
   assert.equal(result.ok, true);
   assert.match(result.summary, /pages 1-1 of 12/);
 });

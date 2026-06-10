@@ -1,14 +1,17 @@
 import { AssistantMessageCard } from './AssistantMessageCard';
-import { Chat } from './types';
+import { AskUserResponse, Chat } from './types';
 import { UserMessageCard } from './UserMessageCard';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
+  activeAskUserStepId?: string | null;
+  busy: boolean;
   currentModel: string | null;
   liveAssistantMessageId: string | null;
   showTypingIndicator: boolean;
   onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
   onOpenArtifact: (artifactId: string) => void;
+  onSubmitAskUser: (messageId: string, stepId: string, response: AskUserResponse) => Promise<void> | void;
   onRegenerateAssistantMessage: (messageId: string) => Promise<void> | void;
   onCopyUserMessage: (messageId: string) => Promise<void> | void;
   onEditUserMessage: (messageId: string, nextContent: string) => Promise<void> | void;
@@ -17,11 +20,14 @@ interface ActiveChatViewProps {
 
 export function ActiveChatView({
   activeChat,
+  activeAskUserStepId = null,
+  busy,
   currentModel,
   liveAssistantMessageId,
   showTypingIndicator,
   onCopyAssistantMessage,
   onOpenArtifact,
+  onSubmitAskUser,
   onRegenerateAssistantMessage,
   onCopyUserMessage,
   onEditUserMessage,
@@ -46,11 +52,13 @@ export function ActiveChatView({
           return (
             <AssistantMessageCard
               key={message.id}
-              disabled={Boolean(liveAssistantMessageId)}
+              disabled={busy}
+              activeAskUserStepId={activeAskUserStepId}
               isStreaming={message.id === liveAssistantMessageId}
               message={message}
               onCopy={onCopyAssistantMessage}
               onOpenArtifact={onOpenArtifact}
+              onSubmitAskUser={onSubmitAskUser}
               onRegenerate={onRegenerateAssistantMessage}
             />
           );
@@ -59,7 +67,7 @@ export function ActiveChatView({
         return (
           <UserMessageCard
             key={message.id}
-            disabled={Boolean(liveAssistantMessageId)}
+            disabled={busy}
             message={message}
             onCopy={onCopyUserMessage}
             onEdit={onEditUserMessage}

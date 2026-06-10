@@ -37,6 +37,8 @@ const ARTIFACT_WORKFLOW_PROMPT = [
 const THINKING_WORKFLOW_SYSTEM_PROMPT = [
   'When the request is short or simple, answer normally.',
   'When the request is multi-step, long-running, or agentic, break your work into explicit thinking blocks.',
+  'If one focused clarification from the user would materially improve the answer, call ask_user instead of guessing.',
+  'Only use ask_user for high-value clarifications, never more than three times in one turn, and do not keep asking after the user skips twice.',
   'Start by identifying the main tasks in the reasoning trace.',
   'Work through one task block at a time.',
   'After each completed block, tool batch, or meaningful pivot, emit a brief progress checkpoint in the reasoning trace.',
@@ -64,6 +66,7 @@ function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
   return [
     'Current mode: Thinking.',
     'You may call the enabled local tools below when they materially help answer the user.',
+    'The internal ask_user tool pauses the current turn, shows the user a multiple-choice prompt, and resumes after the user answers or skips.',
     'Every tool call must be emitted as one valid JSON tool invocation with no freeform prose or Markdown mixed into the tool arguments.',
     'Enabled tools:',
     ...tools.flatMap((tool) => [

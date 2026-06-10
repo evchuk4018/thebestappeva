@@ -55,6 +55,7 @@ export default function AiTab() {
     deleteChat,
     editAndResendMessage,
     hydrationStatus,
+    isBusy,
     isTyping,
     lastError,
     liveAssistantMessageId,
@@ -64,6 +65,7 @@ export default function AiTab() {
     selectChat,
     selectedChatId,
     activeArtifactId,
+    activeAskUserStepId,
     includedArtifactIds,
     sendMessage,
     setActiveArtifact,
@@ -74,6 +76,7 @@ export default function AiTab() {
     switchUserMessageVersion,
     toggleChatMode,
     setCurrentModel,
+    submitAskUserResponse,
     stopMessage,
     toggleTool,
     tools,
@@ -91,15 +94,9 @@ export default function AiTab() {
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
   };
-  const handleSelectModel = (model: string) => {
-    setCurrentModel(model);
-    setModelDropdownOpen(false);
-  };
+  const handleSelectModel = (model: string) => { setCurrentModel(model); setModelDropdownOpen(false); };
   const handleSuggestionClick = (label: string) => setInputValue(getSuggestionPrompt(label));
-  const handleDeleteChat = (chatId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    deleteChat(chatId);
-  };
+  const handleDeleteChat = (chatId: string, event: React.MouseEvent) => { event.stopPropagation(); deleteChat(chatId); };
   const handleCopyMessage = async (messageId: string, kind: 'assistant' | 'user') => {
     const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
     if (!message || message.kind !== kind) return;
@@ -162,6 +159,7 @@ export default function AiTab() {
     chatMode,
     currentModel,
     inputValue,
+    isBusy,
     isModelDropdownOpen: modelDropdownOpen,
     isModelLoading,
     isUploadingAttachments,
@@ -182,7 +180,6 @@ export default function AiTab() {
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden bg-[#1b1b19] font-sans text-[#efeae4]">
       <MobileHeader sidebarOpen={sidebarOpen} onNewChat={handleNewChat} onToggleSidebar={() => setSidebarOpen((open) => !open)} />
-
       <AnimatePresence>
         {isMobile && sidebarOpen && (
           <motion.div
@@ -244,11 +241,14 @@ export default function AiTab() {
             ) : activeChat ? (
               <ActiveChatView
                 activeChat={activeChat}
+                activeAskUserStepId={activeAskUserStepId}
+                busy={isBusy}
                 currentModel={currentModel}
                 liveAssistantMessageId={liveAssistantMessageId}
                 showTypingIndicator={showTypingIndicator}
                 onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
                 onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
+                onSubmitAskUser={submitAskUserResponse}
                 onRegenerateAssistantMessage={regenerateAssistantMessage}
                 onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
                 onEditUserMessage={handleEditUserMessage}
@@ -257,13 +257,13 @@ export default function AiTab() {
             ) : (
               <EmptyState
                 {...composerProps}
-                isWorking={isTyping}
+                isTyping={isTyping}
                 onSelectSuggestion={handleSuggestionClick}
               />
             )}
           </div>
 
-          {activeChat && <AiActiveComposer {...composerProps} isTyping={isTyping} />}
+          {activeChat && <AiActiveComposer {...composerProps} isBusy={isBusy} isTyping={isTyping} />}
         </div>
 
         <AiArtifactsWorkspace

@@ -1,6 +1,7 @@
 import {
   AiMessage,
   AiAttachmentReference,
+  AssistantAskUserTraceStep,
   AssistantMessage,
   AssistantMessageStatus,
   ArtifactCardSummary,
@@ -93,6 +94,16 @@ export function createToolResultTraceStep(result: ToolResult, createdAt = new Da
     kind: 'tool-result',
     createdAt,
     result,
+  };
+}
+
+export function createAskUserTraceStep(
+  step: Omit<AssistantAskUserTraceStep, 'id' | 'kind'>,
+): AssistantTraceStep {
+  return {
+    ...step,
+    id: createId('trace'),
+    kind: 'ask-user',
   };
 }
 

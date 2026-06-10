@@ -8,6 +8,7 @@ interface AiActiveComposerProps {
   chatMode: ChatMode;
   currentModel: string | null;
   inputValue: string;
+  isBusy: boolean;
   isModelDropdownOpen: boolean;
   isModelLoading: boolean;
   isTyping: boolean;
@@ -36,8 +37,9 @@ export function AiActiveComposer(props: AiActiveComposerProps) {
           compact
           currentModel={props.currentModel}
           inputValue={props.inputValue}
+          isBusy={props.isBusy}
           isModelDropdownOpen={props.isModelDropdownOpen}
-          isWorking={props.isTyping}
+          isTyping={props.isTyping}
           isModelLoading={props.isModelLoading}
           isUploadingAttachments={props.isUploadingAttachments}
           models={props.models}

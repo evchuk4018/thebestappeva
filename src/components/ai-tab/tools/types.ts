@@ -1,4 +1,5 @@
 import type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
+import type { AskUserPromptPayload } from '../ask-user';
 
 export type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
 
@@ -24,6 +25,7 @@ export interface ToolDefinition {
   functions: ToolFunctionDefinition[];
   enabledByDefault: boolean;
   automatic?: boolean;
+  internal?: boolean;
 }
 
 export interface ToolCallRequest {
@@ -41,7 +43,14 @@ export interface ToolExecutionResult extends ToolResult {
   transientImages?: string[];
 }
 
+export interface DeferredToolExecutionResult {
+  deferred: true;
+  prompt: AskUserPromptPayload;
+}
+
+export type ToolExecutionOutcome = ToolExecutionResult | DeferredToolExecutionResult;
+
 export interface ToolRegistryEntry {
   definition: ToolDefinition;
-  execute: (invocation: ToolInvocation, context: ToolExecutionContext) => Promise<ToolExecutionResult>;
+  execute: (invocation: ToolInvocation, context: ToolExecutionContext) => Promise<ToolExecutionOutcome>;
 }

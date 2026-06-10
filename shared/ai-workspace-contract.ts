@@ -1,22 +1,25 @@
 import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachments-contract';
 import { ArtifactCardSummary, parseArtifactCardSummary } from './ai-artifacts-contract';
+import {
+  AssistantTraceStep,
+  ToolInvocation,
+  ToolResult,
+  parseTraceStep,
+} from './ai-trace-contract';
 export type { AiAttachmentReference } from './ai-attachments-contract';
-
-export interface ToolInvocation {
-  toolId: string;
-  functionName: string;
-  args: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface ToolResult {
-  toolId: string;
-  functionName: string;
-  ok: boolean;
-  summary: string;
-  data?: Record<string, unknown>;
-  error?: string;
-}
+export type {
+  AskUserChoice,
+  AskUserPlacement,
+  AskUserResponse,
+  AskUserStatus,
+  AssistantAskUserTraceStep,
+  AssistantThinkingTraceStep,
+  AssistantToolCallTraceStep,
+  AssistantToolResultTraceStep,
+  AssistantTraceStep,
+  ToolInvocation,
+  ToolResult,
+} from './ai-trace-contract';
 
 export interface UserMessageVersion {
   id: string;
@@ -36,32 +39,6 @@ export interface UserMessage {
 }
 
 export type AssistantMessageStatus = 'complete' | 'error' | 'cancelled';
-
-export interface AssistantThinkingTraceStep {
-  id: string;
-  kind: 'thinking';
-  content: string;
-  createdAt: string;
-}
-
-export interface AssistantToolCallTraceStep {
-  id: string;
-  kind: 'tool-call';
-  invocation: ToolInvocation;
-  createdAt: string;
-}
-
-export interface AssistantToolResultTraceStep {
-  id: string;
-  kind: 'tool-result';
-  result: ToolResult;
-  createdAt: string;
-}
-
-export type AssistantTraceStep =
-  | AssistantThinkingTraceStep
-  | AssistantToolCallTraceStep
-  | AssistantToolResultTraceStep;
 
 export interface AssistantMessage {
   id: string;
@@ -118,69 +95,12 @@ function expectOptionalString(value: unknown, field: string) {
   return expectString(value, field);
 }
 
-function expectBoolean(value: unknown, field: string) {
-  if (typeof value !== 'boolean') {
-    throw new Error(`Invalid ${field}. Expected a boolean.`);
-  }
-
-  return value;
-}
-
 function expectRecord(value: unknown, field: string) {
   if (!isRecord(value)) {
     throw new Error(`Invalid ${field}. Expected an object.`);
   }
 
   return value;
-}
-
-function expectStringRecord(value: unknown, field: string) {
-  const record = expectRecord(value, field);
-  return record;
-}
-
-function parseToolInvocation(value: unknown, field: string): ToolInvocation {
-  const record = expectRecord(value, field);
-  return {
-    toolId: expectString(record.toolId, `${field}.toolId`),
-    functionName: expectString(record.functionName, `${field}.functionName`),
-    args: expectStringRecord(record.args, `${field}.args`),
-    createdAt: expectString(record.createdAt, `${field}.createdAt`),
-  };
-}
-
-function parseToolResult(value: unknown, field: string): ToolResult {
-  const record = expectRecord(value, field);
-  const data = typeof record.data === 'undefined' ? undefined : expectStringRecord(record.data, `${field}.data`);
-  const error = expectOptionalString(record.error, `${field}.error`);
-
-  return {
-    toolId: expectString(record.toolId, `${field}.toolId`),
-    functionName: expectString(record.functionName, `${field}.functionName`),
-    ok: expectBoolean(record.ok, `${field}.ok`),
-    summary: expectString(record.summary, `${field}.summary`),
-    data,
-    error,
-  };
-}
-
-function parseTraceStep(value: unknown, field: string): AssistantTraceStep {
-  const record = expectRecord(value, field);
-  const base = {
-    id: expectString(record.id, `${field}.id`),
-    createdAt: expectString(record.createdAt, `${field}.createdAt`),
-  };
-
-  switch (record.kind) {
-    case 'thinking':
-      return { ...base, kind: 'thinking', content: expectString(record.content, `${field}.content`) };
-    case 'tool-call':
-      return { ...base, kind: 'tool-call', invocation: parseToolInvocation(record.invocation, `${field}.invocation`) };
-    case 'tool-result':
-      return { ...base, kind: 'tool-result', result: parseToolResult(record.result, `${field}.result`) };
-    default:
-      throw new Error(`Invalid ${field}.kind. Expected "thinking", "tool-call", or "tool-result".`);
-  }
 }
 
 function parseUserMessageVersion(value: unknown, field: string): UserMessageVersion {
@@ -291,7 +211,13 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
   const selectedModel = record.selectedModel === null ? null : expectString(record.selectedModel, `${field}.selectedModel`);
   const enabledTools = expectRecord(record.enabledTools, `${field}.enabledTools`);
   const normalizedEnabledTools = Object.fromEntries(
-    Object.entries(enabledTools).map(([toolId, enabled]) => [toolId, expectBoolean(enabled, `${field}.enabledTools.${toolId}`)]),
+    Object.entries(enabledTools).map(([toolId, enabled]) => {
+      if (typeof enabled !== 'boolean') {
+        throw new Error(`Invalid ${field}.enabledTools.${toolId}. Expected a boolean.`);
+      }
+
+      return [toolId, enabled];
+    }),
   );
 
   return {

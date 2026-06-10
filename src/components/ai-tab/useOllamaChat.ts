@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   appendMessage,
-  createAssistantCancelledMessage,
-  createAssistantErrorMessage,
-  createAssistantMessage,
   createNewChat,
   createUserMessage,
-  upsertMessage,
 } from './helpers';
-import { TurnAbortedError, isAbortError } from './abort-utils';
-import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError, replaceChat, updateChatMode } from './chat-helpers';
+import { TurnAbortedError } from './abort-utils';
+import { replaceChat, updateChatMode } from './chat-helpers';
 import { sendFlashTurn } from './flash-turn';
 import { LiveChatState, resolveActiveChat, shouldShowTypingIndicator } from './live-turn';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
 import { SystemPromptContext } from './system-prompt';
 import { buildArtifactContext } from '../../lib/ai-artifact-context';
+import { findPendingAskUserState, updateAskUserStepInChat } from './ask-user';
 import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
-import { AiAttachmentReference, Chat, ChatMode } from './types';
+import { AiAttachmentReference, AskUserResponse, Chat, ChatMode } from './types';
 import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { ToolRegistryEntry } from './tools/types';
@@ -25,11 +22,11 @@ import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
 
 const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
-
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
   const [liveChat, setLiveChat] = useState<LiveChatState | null>(null);
+  const [pendingAskUserTurn, setPendingAskUserTurn] = useState<ReturnType<typeof findPendingAskUserState>>(null);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const activeTurnControllerRef = useRef<AbortController | null>(null);
   const {
@@ -61,6 +58,7 @@ export function useOllamaChat() {
   const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat);
   const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools);
   const chatMode = selectedChat?.mode ?? draftMode;
+  const isBusy = isTyping || Boolean(pendingAskUserTurn);
   const systemPromptContext: SystemPromptContext = {
     customPrompt: customSystemPrompt,
     mode: chatMode,
@@ -74,32 +72,31 @@ export function useOllamaChat() {
       void flushWorkspace();
     }
   }, [flushWorkspace, isTyping]);
-
-  function selectChat(chatId: string | null) {
-    setSelectedChatId(chatId);
-    if (!chatId) {
-      setDraftMode('thinking');
+  useEffect(() => {
+    if (pendingAskUserTurn || !persistedSelectedChat) {
+      return;
     }
-  }
+
+    const pendingPrompt = selectedChat ? findPendingAskUserState(selectedChat) : null;
+    if (pendingPrompt) {
+      setPendingAskUserTurn(pendingPrompt);
+    }
+  }, [pendingAskUserTurn, persistedSelectedChat, selectedChat]);
+
+  function selectChat(chatId: string | null) { setSelectedChatId(chatId); if (!chatId) setDraftMode('thinking'); }
 
   function setChatMode(mode: ChatMode) {
     if (selectedChatId) {
       setChats((currentChats) => updateChatMode(currentChats, selectedChatId, mode));
       return;
     }
-
     setDraftMode(mode);
   }
 
-  function toggleChatMode() {
-    setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
-  }
-
+  function toggleChatMode() { setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking'); }
   function resolveToolId(functionName: string, entries: ToolRegistryEntry[]) {
-    const entry = entries.find(({ definition }) => definition.functions.some((candidate) => candidate.name === functionName));
-    return entry?.definition.id ?? functionName;
+    return entries.find(({ definition }) => definition.functions.some((candidate) => candidate.name === functionName))?.definition.id ?? functionName;
   }
-
   function findLatestAssistantMessageId(chat: Chat) {
     return [...chat.messages].reverse().find((message) => message.kind === 'assistant')?.id ?? null;
   }
@@ -110,9 +107,11 @@ export function useOllamaChat() {
     promptContext: SystemPromptContext,
     entries: ToolRegistryEntry[],
     onProgress: (nextChat: Chat, assistantMessageId: string | null) => void,
+    assistantMessageId?: string | null,
     signal?: AbortSignal,
   ): Promise<ResolvedTurn> {
     return resolveThinkingTurn({
+      assistantMessageId,
       chat,
       model,
       activeToolEntries: entries,
@@ -123,15 +122,13 @@ export function useOllamaChat() {
     });
   }
 
-  async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode) {
-    if (!currentModel || activeTurnControllerRef.current) {
-      return;
-    }
-
+  async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {
+    if (!currentModel || activeTurnControllerRef.current) return;
     const effectiveMode = collectLongPdfAttachments(baseChat.messages).length ? 'thinking' : nextChatMode;
     const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
     setChats((currentChats) => replaceChat(currentChats, turnChat));
     setLiveChat({ chatId: turnChat.id, chat: turnChat, assistantMessageId: null });
+    setPendingAskUserTurn(null);
     setIsTyping(true);
     setLastError(null);
     const controller = new AbortController();
@@ -161,11 +158,13 @@ export function useOllamaChat() {
               promptContext,
               turnToolEntries,
               (nextChat, assistantMessageId) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId }),
+              assistantMessageId,
               controller.signal,
             );
       setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
+      setPendingAskUserTurn(resolvedTurn.status === 'paused' ? resolvedTurn.pendingAskUser : null);
     } finally {
       if (activeTurnControllerRef.current === controller) {
         activeTurnControllerRef.current = null;
@@ -178,55 +177,39 @@ export function useOllamaChat() {
 
   async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
     const normalizedContent = content.trim() || (attachments.length ? DEFAULT_ATTACHMENT_PROMPT : '');
-    if (!currentModel || activeTurnControllerRef.current || !normalizedContent) {
-      return;
-    }
-
+    if (!currentModel || activeTurnControllerRef.current || pendingAskUserTurn || !normalizedContent) return;
     const userMessage = createUserMessage(normalizedContent, attachments);
     const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
     const nextChatMode = collectLongPdfAttachments(appendedChat.messages).length ? 'thinking' : chatMode;
     const baseChat = { ...appendedChat, mode: nextChatMode };
 
-    if (!selectedChat) {
-      setSelectedChatId(baseChat.id);
-      setDraftMode('thinking');
-    }
-
+    if (!selectedChat) { setSelectedChatId(baseChat.id); setDraftMode('thinking'); }
     await runModelTurn(baseChat, nextChatMode);
   }
 
   async function editAndResendMessage(messageId: string, nextContent: string) {
-    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current) return;
-
+    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = editUserMessageBranch(persistedSelectedChat, messageId, nextContent);
     if (!baseChat) return;
-
     await runModelTurn(baseChat, selectedChat.mode);
   }
 
   async function regenerateAssistantMessage(messageId: string) {
-    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current) {
-      return;
-    }
-
+    if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = regenerateAssistantBranch(persistedSelectedChat, messageId);
-    if (!baseChat) {
-      return;
-    }
-
+    if (!baseChat) return;
     await runModelTurn(baseChat, selectedChat.mode);
   }
 
   function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
-    if (!selectedChatId || activeTurnControllerRef.current) {
+    if (!selectedChatId || activeTurnControllerRef.current || pendingAskUserTurn) {
       return;
     }
-
-      setChats((currentChats) => {
-        const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
-        return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
-      });
-    }
+    setChats((currentChats) => {
+      const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
+      return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
+    });
+  }
 
   function stopMessage() {
     activeTurnControllerRef.current?.abort(new TurnAbortedError());
@@ -236,6 +219,9 @@ export function useOllamaChat() {
     setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
     if (liveChat?.chatId === chatId) {
       setLiveChat(null);
+    }
+    if (pendingAskUserTurn?.chatId === chatId) {
+      setPendingAskUserTurn(null);
     }
     if (selectedChatId === chatId) {
       selectChat(null);
@@ -250,10 +236,25 @@ export function useOllamaChat() {
     if (!selectedChatId) return;
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatActiveArtifactState(chat, artifactId) : chat));
   }
-
   function setArtifactIncluded(artifactId: string, included: boolean) {
     if (!selectedChatId) return;
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatIncludedArtifactState(chat, artifactId, included) : chat));
+  }
+
+  async function submitAskUserResponse(messageId: string, stepId: string, response: AskUserResponse) {
+    if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) {
+      return;
+    }
+
+    const targetChat = chats.find((chat) => chat.id === pendingAskUserTurn.chatId);
+    if (!targetChat) {
+      setPendingAskUserTurn(null);
+      return;
+    }
+    const nextChat = updateAskUserStepInChat(targetChat, messageId, stepId, response);
+    setChats((currentChats) => replaceChat(currentChats, nextChat));
+    setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: messageId });
+    await runModelTurn(nextChat, nextChat.mode, messageId);
   }
 
   return {
@@ -267,6 +268,7 @@ export function useOllamaChat() {
     deleteChat,
     editAndResendMessage,
     hydrationStatus,
+    isBusy,
     isTyping,
     lastError,
     liveAssistantMessageId: selectedLiveChat?.assistantMessageId ?? null,
@@ -277,6 +279,7 @@ export function useOllamaChat() {
     selectChat,
     selectedChatId,
     activeArtifactId: selectedChat?.activeArtifactId ?? null,
+    activeAskUserStepId: pendingAskUserTurn?.stepId ?? null,
     includedArtifactIds: selectedChat?.includedArtifactIds ?? [],
     showTypingIndicator: shouldShowTypingIndicator(isTyping, selectedLiveChat),
     sendMessage,
@@ -284,6 +287,7 @@ export function useOllamaChat() {
     setArtifactIncluded,
     systemPromptContext,
     setCurrentModel,
+    submitAskUserResponse,
     stopMessage,
     toggleChatMode,
     toggleTool,

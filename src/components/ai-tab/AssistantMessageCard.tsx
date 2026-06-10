@@ -1,23 +1,37 @@
+import { AskUserCard } from './AskUserCard';
+import { findEndOfResponseAskUserStep } from './ask-user';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ArtifactCards } from './artifacts/ArtifactCards';
 import { AssistantMessageActions } from './AssistantMessageActions';
 import { AssistantMessageContent } from './AssistantMessageContent';
 import { AssistantTracePanel } from './AssistantTracePanel';
-import { AssistantMessage } from './types';
+import { AskUserResponse, AssistantMessage } from './types';
 
 interface AssistantMessageCardProps {
+  activeAskUserStepId?: string | null;
   disabled: boolean;
   isStreaming?: boolean;
   message: AssistantMessage;
   onCopy: (messageId: string) => Promise<void> | void;
   onOpenArtifact: (artifactId: string) => void;
+  onSubmitAskUser?: (messageId: string, stepId: string, response: AskUserResponse) => Promise<void> | void;
   onRegenerate: (messageId: string) => Promise<void> | void;
 }
 
-export function AssistantMessageCard({ disabled, isStreaming = false, message, onCopy, onOpenArtifact, onRegenerate }: AssistantMessageCardProps) {
+export function AssistantMessageCard({
+  activeAskUserStepId = null,
+  disabled,
+  isStreaming = false,
+  message,
+  onCopy,
+  onOpenArtifact,
+  onSubmitAskUser,
+  onRegenerate,
+}: AssistantMessageCardProps) {
   const [showThinking, setShowThinking] = useState(false);
   const hasTrace = Boolean(message.trace?.length);
+  const followUpStep = findEndOfResponseAskUserStep(message);
   const isError = message.status === 'error';
   const isCancelled = message.status === 'cancelled';
   const cardClassName = isError
@@ -56,7 +70,14 @@ export function AssistantMessageCard({ disabled, isStreaming = false, message, o
               <span>Thinking Progress</span>
               <ChevronDown size={14} className={`transition ${showThinking ? 'rotate-180' : ''}`} />
             </button>
-            {showThinking && message.trace && <AssistantTracePanel steps={message.trace} />}
+            {showThinking && message.trace && (
+              <AssistantTracePanel
+                disabled={disabled}
+                activeAskUserStepId={activeAskUserStepId}
+                steps={message.trace}
+                onSubmitAskUser={onSubmitAskUser ? (step, response) => onSubmitAskUser(message.id, step.id, response) : undefined}
+              />
+            )}
           </div>
         )}
 
@@ -66,6 +87,14 @@ export function AssistantMessageCard({ disabled, isStreaming = false, message, o
           <AssistantMessageContent content={message.content} />
           <ArtifactCards cards={message.artifactCards ?? []} onOpen={onOpenArtifact} />
         </div>
+
+        {followUpStep && (
+          <AskUserCard
+            disabled={disabled && followUpStep.id !== activeAskUserStepId}
+            step={followUpStep}
+            onSubmit={onSubmitAskUser ? (response) => onSubmitAskUser(message.id, followUpStep.id, response) : undefined}
+          />
+        )}
 
         <AssistantMessageActions disabled={disabled} messageId={message.id} onCopy={onCopy} onRegenerate={onRegenerate} />
       </div>

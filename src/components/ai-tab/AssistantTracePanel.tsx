@@ -1,6 +1,11 @@
-import { AssistantTraceStep } from './types';
+import { AskUserCard } from './AskUserCard';
+import { shouldHideToolCallStep } from './ask-user';
+import { AskUserResponse, AssistantAskUserTraceStep, AssistantTraceStep } from './types';
 
 interface AssistantTracePanelProps {
+  activeAskUserStepId?: string | null;
+  disabled?: boolean;
+  onSubmitAskUser?: (step: AssistantAskUserTraceStep, response: AskUserResponse) => Promise<void> | void;
   steps: AssistantTraceStep[];
 }
 
@@ -70,12 +75,12 @@ function ThinkingStep({ step, index }: { step: Extract<AssistantTraceStep, { kin
   );
 }
 
-export function AssistantTracePanel({ steps }: AssistantTracePanelProps) {
+export function AssistantTracePanel({ activeAskUserStepId = null, disabled = false, onSubmitAskUser, steps }: AssistantTracePanelProps) {
   let thinkingCount = 0;
 
   return (
     <div className="space-y-2.5 border-t border-[#2a2a27] px-4 py-3">
-      {steps.map((step) => {
+      {steps.map((step, index) => {
         if (step.kind === 'thinking') {
           const thinkingIndex = thinkingCount;
           thinkingCount += 1;
@@ -84,7 +89,25 @@ export function AssistantTracePanel({ steps }: AssistantTracePanelProps) {
           );
         }
 
+        if (step.kind === 'ask-user') {
+          if (step.placement !== 'inline_trace') {
+            return null;
+          }
+
+          return (
+            <AskUserCard
+              key={step.id}
+              disabled={disabled && step.id !== activeAskUserStepId}
+              step={step}
+              onSubmit={onSubmitAskUser ? (response) => onSubmitAskUser(step, response) : undefined}
+            />
+          );
+        }
+
         if (step.kind === 'tool-call') {
+          if (shouldHideToolCallStep(steps, index)) {
+            return null;
+          }
           return <ToolCallStep key={step.id} step={step} />;
         }
 

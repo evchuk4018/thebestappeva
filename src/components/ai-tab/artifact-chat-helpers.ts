@@ -13,13 +13,16 @@ export function buildVisibleTools(
   const selectedPdfAttachments = selectedChat ? collectLongPdfAttachments(selectedChat.messages) : [];
   const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
 
-  return baseEntries.map(({ definition }) => ({
-    ...definition,
-    enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
-  })).concat([
+  return baseEntries
+    .filter(({ definition }) => !definition.internal)
+    .map(({ definition }) => ({
+      ...definition,
+      enabled: enabledTools[definition.id] ?? definition.enabledByDefault,
+    }))
+    .concat([
     { ...artifactTool.definition, enabled: enabledTools[artifactTool.definition.id] ?? artifactTool.definition.enabledByDefault },
     { ...selectedPdfTool.definition, enabled: selectedPdfAttachments.length > 0 },
-  ]);
+    ]);
 }
 
 export function getActiveToolEntriesForChat(
@@ -27,7 +30,9 @@ export function getActiveToolEntriesForChat(
   baseEntries: ToolRegistryEntry[],
   enabledTools: Record<string, boolean>,
 ) {
-  const enabledEntries = baseEntries.filter(({ definition }) => enabledTools[definition.id] ?? definition.enabledByDefault);
+  const enabledEntries = baseEntries.filter(
+    ({ definition }) => definition.internal || (enabledTools[definition.id] ?? definition.enabledByDefault),
+  );
   const artifactEntries = chat && (enabledTools['artifact-workspace'] ?? true) ? [createArtifactWorkspaceTool(chat.id)] : [];
   const pdfAttachments = chat ? collectLongPdfAttachments(chat.messages) : [];
   return [...enabledEntries, ...artifactEntries, ...(pdfAttachments.length ? [createPdfReaderTool(pdfAttachments)] : [])];

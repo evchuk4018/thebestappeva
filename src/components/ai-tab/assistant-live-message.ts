@@ -1,22 +1,27 @@
 import {
   createAssistantMessage,
+  createAskUserTraceStep,
   createThinkingTraceStep,
   createToolCallTraceStep,
   createToolResultTraceStep,
   upsertMessage,
 } from './helpers';
 import { mergeArtifactCardsFromToolResult } from './artifact-cards';
-import { AssistantMessage, Chat } from './types';
+import { AssistantAskUserTraceStep, AssistantMessage, Chat } from './types';
 
 interface CreateAssistantLiveUpdaterOptions {
   chat: Chat;
+  assistantMessageId?: string | null;
   model: string;
   onProgress: (chat: Chat, assistantMessageId: string | null) => void;
 }
 
-export function createAssistantLiveUpdater({ chat, model, onProgress }: CreateAssistantLiveUpdaterOptions) {
+export function createAssistantLiveUpdater({ chat, assistantMessageId, model, onProgress }: CreateAssistantLiveUpdaterOptions) {
   let workingChat = chat;
-  let assistantMessage: AssistantMessage | null = null;
+  let assistantMessage: AssistantMessage | null =
+    assistantMessageId
+      ? ((chat.messages.find((message) => message.kind === 'assistant' && message.id === assistantMessageId) as AssistantMessage | undefined) ?? null)
+      : null;
   let activeThinkingStepId: string | null = null;
 
   const syncAssistantMessage = (nextMessage: AssistantMessage, updatedAt = new Date().toISOString()) => {
@@ -40,14 +45,16 @@ export function createAssistantLiveUpdater({ chat, model, onProgress }: CreateAs
     appendToolCall(invocation: Parameters<typeof createToolCallTraceStep>[0], replyModel?: string) {
       activeThinkingStepId = null;
       const baseMessage = ensureAssistantMessage(replyModel);
+      const nextStep = createToolCallTraceStep(invocation);
       syncAssistantMessage(
         {
           ...baseMessage,
           model: replyModel ?? baseMessage.model,
-          trace: [...(baseMessage.trace ?? []), createToolCallTraceStep(invocation)],
+          trace: [...(baseMessage.trace ?? []), nextStep],
         },
         invocation.createdAt,
       );
+      return { assistantMessageId: baseMessage.id, stepId: nextStep.id };
     },
     appendToolResult(result: Parameters<typeof createToolResultTraceStep>[0], replyModel?: string) {
       activeThinkingStepId = null;
@@ -62,6 +69,20 @@ export function createAssistantLiveUpdater({ chat, model, onProgress }: CreateAs
         },
         createdAt,
       );
+    },
+    appendAskUser(step: Omit<AssistantAskUserTraceStep, 'id' | 'kind'>, replyModel?: string) {
+      activeThinkingStepId = null;
+      const baseMessage = ensureAssistantMessage(replyModel);
+      const nextStep = createAskUserTraceStep(step);
+      syncAssistantMessage(
+        {
+          ...baseMessage,
+          model: replyModel ?? baseMessage.model,
+          trace: [...(baseMessage.trace ?? []), nextStep],
+        },
+        step.createdAt,
+      );
+      return { assistantMessageId: baseMessage.id, stepId: nextStep.id };
     },
     finalize(content: string, replyModel?: string, status: AssistantMessage['status'] = 'complete') {
       activeThinkingStepId = null;
@@ -81,6 +102,9 @@ export function createAssistantLiveUpdater({ chat, model, onProgress }: CreateAs
     },
     hasAssistantMessage() {
       return Boolean(assistantMessage);
+    },
+    getAssistantMessageId() {
+      return assistantMessage?.id ?? null;
     },
     syncContent(content: string, replyModel?: string, status: AssistantMessage['status'] = 'complete') {
       const baseMessage = ensureAssistantMessage(replyModel);

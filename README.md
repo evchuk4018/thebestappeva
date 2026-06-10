@@ -108,6 +108,8 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
+- `Thinking` mode now includes a first-party internal `ask_user` tool that can pause a turn, show a multiple-choice follow-up inline in the thinking trace or below the assistant reply, and then resume the same turn after the user answers or skips
+- answered and skipped `ask_user` prompts persist inside the assistant transcript, while prompts that were still pending during a page reload are normalized to skipped instead of trying to resume a dead turn
 - streamed Ollama error events are surfaced to the user with the runtime's exact message instead of being collapsed into a generic invalid-JSON failure
 - malformed streamed tool calls that end with Ollama's `unexpected end of JSON input` error are retried once without streaming; affected models then use non-streamed tool rounds for the rest of the browser session
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
@@ -140,6 +142,7 @@ Implementation notes:
 - Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
 - Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
 - PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported

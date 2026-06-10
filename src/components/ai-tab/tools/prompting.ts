@@ -1,6 +1,7 @@
 import { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
 import { loadAiAttachmentContext } from '../../../lib/ai-attachments-storage';
 import { buildSystemPromptContent, SystemPromptContext } from '../system-prompt';
+import { buildAskUserToolResult } from '../ask-user';
 import { AiAttachmentReference, AiMessage, AssistantMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
@@ -41,6 +42,19 @@ function buildAssistantTraceMessages(message: AssistantMessage) {
           },
         },
       ]);
+      continue;
+    }
+
+    if (step.kind === 'ask-user') {
+      if (step.status === 'pending') {
+        continue;
+      }
+
+      traceMessages.push({
+        role: 'tool',
+        tool_name: 'ask_user',
+        content: formatToolResultContent(buildAskUserToolResult(step)),
+      });
       continue;
     }
 

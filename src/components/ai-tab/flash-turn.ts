@@ -39,16 +39,17 @@ export async function sendFlashTurn({ chat, model, onProgress, promptContext, si
     });
 
     liveAssistant.finalize(reply.content, reply.model);
-    return { chat: workingChat, availability: 'ready', lastError: null };
+    return { chat: workingChat, availability: 'ready', lastError: null, status: 'completed' };
   } catch (error) {
     if (isAbortError(error)) {
       return liveAssistant.hasAssistantMessage()
         ? (liveAssistant.finalize(buildTurnCancelledMessage(), undefined, 'cancelled'),
-          { chat: workingChat, availability: 'ready', lastError: null })
+          { chat: workingChat, availability: 'ready', lastError: null, status: 'completed' })
         : {
             chat: appendMessage(chat, createAssistantCancelledMessage(buildTurnCancelledMessage(), model)),
             availability: 'ready',
             lastError: null,
+            status: 'completed',
           };
     }
 
@@ -59,6 +60,7 @@ export async function sendFlashTurn({ chat, model, onProgress, promptContext, si
         chat: workingChat,
         availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
         lastError: clientError.message,
+        status: 'completed',
       };
     }
 
@@ -66,6 +68,7 @@ export async function sendFlashTurn({ chat, model, onProgress, promptContext, si
       chat: appendMessage(chat, createAssistantErrorMessage(buildTurnFailureMessage(clientError), model)),
       availability: clientError.kind === 'connection' ? 'unavailable' : 'ready',
       lastError: clientError.message,
+      status: 'completed',
     };
   }
 }

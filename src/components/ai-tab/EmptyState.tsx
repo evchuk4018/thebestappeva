@@ -8,8 +8,9 @@ interface EmptyStateProps {
   chatMode: ChatMode;
   currentModel: string | null;
   inputValue: string;
+  isBusy: boolean;
   isModelDropdownOpen: boolean;
-  isWorking: boolean;
+  isTyping: boolean;
   isModelLoading: boolean;
   isUploadingAttachments: boolean;
   models: OllamaModel[];
@@ -52,8 +53,9 @@ export function EmptyState(props: EmptyStateProps) {
         chatMode={props.chatMode}
         currentModel={props.currentModel}
         inputValue={props.inputValue}
+        isBusy={props.isBusy}
         isModelDropdownOpen={props.isModelDropdownOpen}
-        isWorking={props.isWorking}
+        isTyping={props.isTyping}
         isModelLoading={props.isModelLoading}
         isUploadingAttachments={props.isUploadingAttachments}
         models={props.models}

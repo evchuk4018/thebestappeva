@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { createEmptyAiWorkspaceSnapshot } from '../../../shared/ai-workspace-contract';
 import { loadAiWorkspace, saveAiWorkspace } from '../../lib/ai-workspace-storage';
+import { normalizePendingAskUserChats } from './ask-user';
 import { AiWorkspaceSnapshot, Chat } from './types';
 
 type HydrationStatus = 'loading' | 'ready' | 'error';
@@ -69,12 +70,15 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
           return;
         }
 
+        const normalizedChats = normalizePendingAskUserChats(loadedSnapshot.chats);
+        const nextSnapshot = normalizedChats.changed ? { ...loadedSnapshot, chats: normalizedChats.chats } : loadedSnapshot;
+
         hydratedRef.current = true;
         lastSavedSnapshotRef.current = JSON.stringify(loadedSnapshot);
-        setChats(loadedSnapshot.chats);
-        setCurrentModel(loadedSnapshot.selectedModel);
-        setEnabledTools(loadedSnapshot.enabledTools);
-        setCustomSystemPrompt(loadedSnapshot.customSystemPrompt);
+        setChats(nextSnapshot.chats);
+        setCurrentModel(nextSnapshot.selectedModel);
+        setEnabledTools(nextSnapshot.enabledTools);
+        setCustomSystemPrompt(nextSnapshot.customSystemPrompt);
         setPersistenceError(null);
         setHydrationStatus('ready');
       } catch (error) {
