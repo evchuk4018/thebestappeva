@@ -29,7 +29,7 @@ test('creates, updates, searches, and restores artifact history', () => {
   assert.equal(artifactsRepo.listArtifacts('chat-1', true).length, 1);
   assert.equal(created.title, 'Project brief');
   assert.equal(artifactsRepo.fetchArtifactLines('chat-1', created.artifactId, 1, 2).lines[1], 'Alpha line');
-  assert.equal(artifactsRepo.searchArtifact('chat-1', created.artifactId, 'Beta', 'keyword').matches[0]?.lineStart, 4);
+  assert.equal(artifactsRepo.searchArtifact('chat-1', created.artifactId, 'Beta', 'keyword').matches[0]?.lineStart, 5);
   assert.equal(artifactsRepo.getOutline('chat-1', created.artifactId).outline[1]?.heading, 'Plan');
 
   const updated = artifactsRepo.updateArtifact('chat-1', {

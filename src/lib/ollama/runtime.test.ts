@@ -83,6 +83,76 @@ test('surfaces streamed Ollama error events verbatim', async () => {
   );
 });
 
+test('retries truncated streamed tool calls without streaming', async () => {
+  const requestStreams: boolean[] = [];
+  globalThis.fetch = async (_input, init) => {
+    const request = JSON.parse(String(init?.body)) as { stream: boolean };
+    requestStreams.push(request.stream);
+    if (request.stream) {
+      return createStreamResponse([
+        JSON.stringify({ model: 'qwen-tool-retry', message: { thinking: 'Drafting' } }),
+        JSON.stringify({ error: 'failed to parse JSON: unexpected end of JSON input' }),
+      ]);
+    }
+
+    return new Response(
+      JSON.stringify({
+        model: 'qwen-tool-retry',
+        message: {
+          thinking: 'Drafting',
+          tool_calls: [{
+            function: {
+              name: 'create_artifact',
+              arguments: { title: 'Story', type: 'story', content: 'Once upon a time.' },
+            },
+          }],
+        },
+        done: true,
+      }),
+      { headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  const reply = await streamChatWithModel('qwen-tool-retry', [], {
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'create_artifact',
+        description: 'Create an artifact.',
+        parameters: { type: 'object', properties: {} },
+      },
+    }],
+  });
+
+  assert.deepEqual(requestStreams, [true, false]);
+  assert.equal(reply.toolCalls?.[0]?.function.name, 'create_artifact');
+  assert.equal(reply.toolCalls?.[0]?.function.arguments.content, 'Once upon a time.');
+});
+
+test('remembers models that require non-streamed tool calls', async () => {
+  let requestStream = true;
+  globalThis.fetch = async (_input, init) => {
+    requestStream = (JSON.parse(String(init?.body)) as { stream: boolean }).stream;
+    return createStreamResponse([
+      JSON.stringify({ model: 'qwen-tool-retry', message: { content: 'Finished' }, done: true }),
+    ]);
+  };
+
+  const reply = await streamChatWithModel('qwen-tool-retry', [], {
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'create_artifact',
+        description: 'Create an artifact.',
+        parameters: { type: 'object', properties: {} },
+      },
+    }],
+  });
+
+  assert.equal(requestStream, false);
+  assert.equal(reply.content, 'Finished');
+});
+
 test('does not reclassify callback-thrown Ollama errors as invalid JSON', async () => {
   globalThis.fetch = async () => createStreamResponse([
     JSON.stringify({ model: 'qwen', message: { content: 'Hello' }, done: true }),

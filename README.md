@@ -109,6 +109,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - streamed Ollama error events are surfaced to the user with the runtime's exact message instead of being collapsed into a generic invalid-JSON failure
+- malformed streamed tool calls that end with Ollama's `unexpected end of JSON input` error are retried once without streaming; affected models then use non-streamed tool rounds for the rest of the browser session
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
 - in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
 - artifact bodies are stored outside chat payload JSON; chat persistence keeps only lightweight artifact metadata such as active and included artifact IDs plus assistant artifact cards
