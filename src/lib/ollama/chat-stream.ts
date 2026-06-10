@@ -29,6 +29,14 @@ interface OllamaChatStreamChunk extends OllamaChatResponse {
   error?: string;
 }
 
+function parseJsonLine<T>(value: string) {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new OllamaClientError('Ollama returned invalid JSON.', 'response');
+  }
+}
+
 function normalizeToolCalls(toolCalls?: OllamaToolCall[]) {
   return toolCalls
     ?.map((toolCall) => {
@@ -86,11 +94,8 @@ async function readJsonStream<T>(response: Response, onChunk: (chunk: T) => void
         continue;
       }
 
-      try {
-        onChunk(JSON.parse(trimmed) as T);
-      } catch {
-        throw new OllamaClientError('Ollama returned invalid JSON.', 'response');
-      }
+      const chunk = parseJsonLine<T>(trimmed);
+      onChunk(chunk);
     }
   }
 
@@ -98,11 +103,8 @@ async function readJsonStream<T>(response: Response, onChunk: (chunk: T) => void
     return;
   }
 
-  try {
-    onChunk(JSON.parse(buffer.trim()) as T);
-  } catch {
-    throw new OllamaClientError('Ollama returned invalid JSON.', 'response');
-  }
+  const chunk = parseJsonLine<T>(buffer.trim());
+  onChunk(chunk);
 }
 
 export async function streamChatWithModel(

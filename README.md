@@ -108,6 +108,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
+- streamed Ollama error events are surfaced to the user with the runtime's exact message instead of being collapsed into a generic invalid-JSON failure
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
 - in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
 - artifact bodies are stored outside chat payload JSON; chat persistence keeps only lightweight artifact metadata such as active and included artifact IDs plus assistant artifact cards
@@ -149,6 +150,7 @@ Implementation notes:
 Artifact workflow notes:
 
 - the model-facing artifact tool set is `create_artifact`, `fetch_artifact_lines`, `list_artifacts`, `update_artifact`, `search_artifact`, `get_artifact_outline`, `export_artifact_to_doc`, and `update_artifact_table`
+- artifact creation in `Thinking` mode depends on the selected local model producing valid JSON tool calls for Ollama's native tool API
 - long artifacts are not dumped back into prompts by default; included artifacts inject bounded Markdown context, heading outlines, and instructions to use search/line-fetch tools
 - the `/ai` artifact panel opens as a wider resizable workspace with a preview/code toggle, transient in-panel search highlighting, autosave, table operations, and `/docs` export
 - first export creates a linked `/docs` document; later exports update the linked doc unless the caller explicitly chooses a new doc

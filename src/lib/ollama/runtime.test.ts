@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { streamChatWithModel } from './runtime';
+import { OllamaClientError, streamChatWithModel } from './runtime';
 
 const originalFetch = globalThis.fetch;
 
@@ -70,6 +70,36 @@ test('surfaces streamed tool calls', async () => {
   assert.deepEqual(events, ['tool-calls', 'done']);
   assert.deepEqual(reply.toolCalls, [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }]);
   assert.equal(reply.content, '');
+});
+
+test('surfaces streamed Ollama error events verbatim', async () => {
+  globalThis.fetch = async () => createStreamResponse([
+    JSON.stringify({ model: 'qwen', error: 'failed to parse JSON: unexpected end of JSON input', done: true }),
+  ]);
+
+  await assert.rejects(
+    () => streamChatWithModel('qwen', []),
+    /failed to parse JSON: unexpected end of JSON input/i,
+  );
+});
+
+test('does not reclassify callback-thrown Ollama errors as invalid JSON', async () => {
+  globalThis.fetch = async () => createStreamResponse([
+    JSON.stringify({ model: 'qwen', message: { content: 'Hello' }, done: true }),
+  ]);
+
+  const callbackError = new OllamaClientError('Tool event callback failed.', 'response');
+  await assert.rejects(
+    () =>
+      streamChatWithModel('qwen', [], {
+        onEvent: (event) => {
+          if (event.type === 'content') {
+            throw callbackError;
+          }
+        },
+      }),
+    (error: unknown) => error === callbackError,
+  );
 });
 
 test('rejects malformed stream payloads', async () => {

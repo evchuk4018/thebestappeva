@@ -26,6 +26,7 @@ const FORMATTING_SYSTEM_PROMPT = [
 
 const ARTIFACT_WORKFLOW_PROMPT = [
   'When drafting substantial reusable content, prefer creating or updating an artifact instead of dumping the full document into chat.',
+  'When the user asks for content in an artifact, call create_artifact for the draft instead of returning the full document only in the chat reply.',
   'Use create_artifact for new documents, list_artifacts to inspect what already exists, get_artifact_outline or search_artifact to locate sections, and fetch_artifact_lines for exact recall.',
   'Prefer update_artifact patches over full replacements when editing existing artifacts.',
   'Preserve user-authored content outside the requested edit range.',
@@ -63,6 +64,7 @@ function buildToolPromptContent(mode: ChatMode, tools: ToolDefinition[]) {
   return [
     'Current mode: Thinking.',
     'You may call the enabled local tools below when they materially help answer the user.',
+    'Every tool call must be emitted as one valid JSON tool invocation with no freeform prose or Markdown mixed into the tool arguments.',
     'Enabled tools:',
     ...tools.flatMap((tool) => [
       `- ${tool.label} (${tool.alias}): ${tool.description}`,
