@@ -1,10 +1,11 @@
 import { ChevronDown, Download, LoaderCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatModelMeta } from './helpers';
-import { OllamaModel } from './types';
+import type { ModelProvider, OllamaModel } from './types';
 
 interface ModelPickerProps {
   currentModel: string | null;
+  currentProvider: ModelProvider;
   disabled?: boolean;
   isLoading: boolean;
   isOpen: boolean;
@@ -15,8 +16,9 @@ interface ModelPickerProps {
   onToggle: () => void;
 }
 
-export function ModelPicker({ currentModel, disabled = false, isLoading, isOpen, models, onAddModels, onClose, onSelect, onToggle }: ModelPickerProps) {
-  const buttonLabel = currentModel ?? (isLoading ? 'Detecting models...' : 'No local models');
+export function ModelPicker({ currentModel, currentProvider, disabled = false, isLoading, isOpen, models, onAddModels, onClose, onSelect, onToggle }: ModelPickerProps) {
+  const providerLabel = currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama';
+  const buttonLabel = currentModel ?? (isLoading ? `Checking ${providerLabel}...` : 'No models');
 
   return (
     <div className="relative">
@@ -41,7 +43,9 @@ export function ModelPicker({ currentModel, disabled = false, isLoading, isOpen,
               exit={{ opacity: 0, y: 5 }}
               className="absolute bottom-full right-0 z-50 mb-1.5 flex w-72 flex-col rounded-xl border border-[#2f2f2b] bg-[#1a1a18] p-1.5 text-left shadow-xl"
             >
-              <div className="mb-1 border-b border-[#292925] px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">Installed Models</div>
+              <div className="mb-1 border-b border-[#292925] px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                {providerLabel} Models
+              </div>
               {models.map((model) => {
                 const meta = formatModelMeta(model);
                 return (
@@ -54,8 +58,8 @@ export function ModelPicker({ currentModel, disabled = false, isLoading, isOpen,
                     }`}
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-xs">{model.name}</div>
-                      {meta && <div className="truncate text-[10px] text-zinc-500">{meta}</div>}
+                      <div className="truncate text-xs">{model.label ?? model.name}</div>
+                      {(meta || model.name !== model.label) && <div className="truncate text-[10px] text-zinc-500">{meta || model.name}</div>}
                     </div>
                     {currentModel === model.name && <span className="h-1.5 w-1.5 rounded-full bg-[#e2875e]" />}
                   </button>
@@ -63,17 +67,19 @@ export function ModelPicker({ currentModel, disabled = false, isLoading, isOpen,
               })}
               {!models.length && (
                 <div className="rounded-lg px-2 py-3 text-xs text-zinc-500">
-                  {isLoading ? 'Checking your local Ollama runtime...' : 'No installed models found.'}
+                  {isLoading ? `Checking ${providerLabel}...` : `No ${providerLabel} models found.`}
                 </div>
               )}
-              <button
-                type="button"
-                onClick={onAddModels}
-                className="mt-1 flex items-center justify-center gap-2 rounded-lg border border-[#33332d] bg-[#232320] px-3 py-2 text-xs font-medium text-[#efeae4] transition hover:border-[#e2875e]/40 hover:text-white"
-              >
-                <Download size={13} />
-                <span>Add models</span>
-              </button>
+              {currentProvider === 'ollama' && (
+                <button
+                  type="button"
+                  onClick={onAddModels}
+                  className="mt-1 flex items-center justify-center gap-2 rounded-lg border border-[#33332d] bg-[#232320] px-3 py-2 text-xs font-medium text-[#efeae4] transition hover:border-[#e2875e]/40 hover:text-white"
+                >
+                  <Download size={13} />
+                  <span>Add models</span>
+                </button>
+              )}
             </motion.div>
           </>
         )}

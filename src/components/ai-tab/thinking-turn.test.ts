@@ -70,6 +70,7 @@ test('streams thinking traces, tool steps, and the final answer', async () => {
   const result = await resolveThinkingTurn({
     chat: createNewChat(createUserMessage('Weather?'), 'thinking'),
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [toolEntry],
     onProgress: (chat) => {
       const assistant = [...chat.messages].reverse().find((message) => message.kind === 'assistant');
@@ -143,6 +144,7 @@ test('preserves staged thinking blocks around tool work during long turns', asyn
   const result = await resolveThinkingTurn({
     chat: createNewChat(createUserMessage('Walk through the weather lookup.'), 'thinking'),
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [toolEntry],
     onProgress: () => {},
     promptContext: {

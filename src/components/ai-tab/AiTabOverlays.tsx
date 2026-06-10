@@ -1,32 +1,40 @@
 import { AddModelsModal } from './AddModelsModal';
 import { AiSettingsModal } from './AiSettingsModal';
 import { buildSystemPromptSections } from './system-prompt';
-import { OllamaModel, PullProgress } from './types';
-import { ToolDefinition } from './tools/types';
-import { ChatMode } from './types';
+import type { ModelProvider, OllamaModel, PullProgress, RuntimeProviderOption } from './types';
+import type { ToolDefinition } from './tools/types';
+import type { ChatMode } from './types';
 
 interface AiTabOverlaysProps {
   addModelsOpen: boolean;
+  allModels: OllamaModel[];
   availableModels: OllamaModel[];
   chatMode: ChatMode;
+  currentModel: string | null;
+  currentProvider: ModelProvider;
   customSystemPrompt: string;
   isPullingModel: boolean;
   pullProgress: PullProgress | null;
+  providerOptions: RuntimeProviderOption[];
   settingsOpen: boolean;
   tools: ToolDefinition[];
   onCloseAddModels: () => void;
   onCloseSettings: () => void;
   onPullModel: (modelName: string) => Promise<void>;
-  onSaveSettings: (value: string) => void;
+  onSaveSettings: (value: { customPrompt: string; provider: ModelProvider; model: string | null }) => void;
 }
 
 export function AiTabOverlays({
   addModelsOpen,
+  allModels,
   availableModels,
   chatMode,
+  currentModel,
+  currentProvider,
   customSystemPrompt,
   isPullingModel,
   pullProgress,
+  providerOptions,
   settingsOpen,
   tools,
   onCloseAddModels,
@@ -52,9 +60,13 @@ export function AiTabOverlays({
         onPullModel={onPullModel}
       />
       <AiSettingsModal
+        availableModels={allModels}
         chatMode={chatMode}
+        currentModel={currentModel}
+        currentProvider={currentProvider}
         customPrompt={customSystemPrompt}
         isOpen={settingsOpen}
+        providerOptions={providerOptions}
         sections={sections}
         onClose={onCloseSettings}
         onSave={onSaveSettings}

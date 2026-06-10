@@ -165,7 +165,7 @@ export function createPdfReaderTool(attachments: AiAttachmentReference[]): ToolR
       }
 
       const payload = await loadAiPdfPageImage(attachment.id, pageNumber);
-      const capabilities = context.model ? await getModelCapabilities(context.model) : [];
+      const capabilities = context.model ? await getModelCapabilities(context.model, context.provider ?? 'ollama') : [];
       if (!capabilities.includes('vision')) {
         const message = `The selected model cannot inspect page images because it does not support vision. Extracted page text is included instead.`;
         return {

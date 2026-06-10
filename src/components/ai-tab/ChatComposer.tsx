@@ -2,15 +2,16 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ArrowRight, Headphones, Mic, Paperclip, Send, Square } from 'lucide-react';
 import { useRef } from 'react';
 import { ModelPicker } from './ModelPicker';
-import { ChatMode, OllamaAvailability, OllamaModel } from './types';
+import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import { PendingAttachmentTray } from './PendingAttachmentTray';
-import { PendingAttachment } from './useAiAttachments';
+import type { PendingAttachment } from './useAiAttachments';
 
 interface ChatComposerProps {
   availability: OllamaAvailability;
   chatMode: ChatMode;
   compact?: boolean;
   currentModel: string | null;
+  currentProvider: ModelProvider;
   inputValue: string;
   isBusy: boolean;
   isModelDropdownOpen: boolean;
@@ -31,9 +32,9 @@ interface ChatComposerProps {
   onToggleModelDropdown: () => void;
 }
 
-function getPlaceholder(availability: OllamaAvailability, currentModel: string | null) {
+function getPlaceholder(availability: OllamaAvailability, currentModel: string | null, currentProvider: ModelProvider) {
   if (availability === 'connecting') {
-    return 'Connecting to local Ollama...';
+    return `Checking ${currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama'}...`;
   }
 
   if (availability === 'no-models') {
@@ -41,10 +42,10 @@ function getPlaceholder(availability: OllamaAvailability, currentModel: string |
   }
 
   if (availability === 'unavailable') {
-    return 'Waiting for local Ollama to become available...';
+    return `Waiting for ${currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama'} to become available...`;
   }
 
-  return currentModel ? `Message ${currentModel}...` : 'Select a local model to start chatting.';
+  return currentModel ? `Message ${currentModel}...` : 'Select a model to start chatting.';
 }
 
 export function ChatComposer({
@@ -52,6 +53,7 @@ export function ChatComposer({
   chatMode,
   compact = false,
   currentModel,
+  currentProvider,
   inputValue,
   isBusy,
   isModelDropdownOpen,
@@ -73,9 +75,10 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasReadyAttachments = pendingAttachments.some((attachment) => attachment.status === 'ready');
-  const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isBusy || !currentModel || isUploadingAttachments;
-  const isInputDisabled = isBusy || !currentModel;
-  const placeholder = getPlaceholder(availability, currentModel);
+  const runtimeUnavailable = availability !== 'ready';
+  const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isBusy || !currentModel || isUploadingAttachments || runtimeUnavailable;
+  const isInputDisabled = isBusy || !currentModel || runtimeUnavailable;
+  const placeholder = getPlaceholder(availability, currentModel, currentProvider);
   const handlePickFiles = () => fileInputRef.current?.click();
 
   if (compact) {
@@ -112,6 +115,7 @@ export function ChatComposer({
               <ChatModeToggle disabled={isBusy} mode={chatMode} onToggle={onToggleMode} />
               <ModelPicker
                 currentModel={currentModel}
+                currentProvider={currentProvider}
                 disabled={isBusy}
                 isLoading={isModelLoading}
                 isOpen={isModelDropdownOpen}
@@ -127,12 +131,7 @@ export function ChatComposer({
                 <Paperclip size={16} />
               </button>
               {isTyping ? (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  aria-label="Stop reply"
-                  className="rounded-xl bg-[#7f3b31] p-1.5 text-[#fff2eb] hover:bg-[#934338]"
-                >
+                <button type="button" onClick={onStop} aria-label="Stop reply" className="rounded-xl bg-[#7f3b31] p-1.5 text-[#fff2eb] hover:bg-[#934338]">
                   <Square size={14} fill="currentColor" />
                 </button>
               ) : (
@@ -191,6 +190,7 @@ export function ChatComposer({
           <ChatModeToggle disabled={isBusy} mode={chatMode} onToggle={onToggleMode} />
           <ModelPicker
             currentModel={currentModel}
+            currentProvider={currentProvider}
             disabled={isBusy}
             isLoading={isModelLoading}
             isOpen={isModelDropdownOpen}
@@ -204,12 +204,7 @@ export function ChatComposer({
             <Headphones size={16} />
           </button>
           {isTyping ? (
-            <button
-              type="button"
-              onClick={onStop}
-              aria-label="Stop reply"
-              className="rounded-xl bg-[#7f3b31] p-2 text-[#fff2eb] duration-150 hover:bg-[#934338]"
-            >
+            <button type="button" onClick={onStop} aria-label="Stop reply" className="rounded-xl bg-[#7f3b31] p-2 text-[#fff2eb] duration-150 hover:bg-[#934338]">
               <Square size={16} fill="currentColor" />
             </button>
           ) : (
@@ -217,9 +212,7 @@ export function ChatComposer({
               type="button"
               onClick={onSend}
               disabled={isDisabled}
-              className={`rounded-xl p-2 duration-150 ${
-                isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-600' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'
-              }`}
+              className={`rounded-xl p-2 duration-150 ${isDisabled ? 'cursor-not-allowed bg-zinc-800 text-zinc-600' : 'bg-[#e2875e] text-[#121210] hover:bg-[#d67e5a]'}`}
             >
               <ArrowRight size={16} />
             </button>

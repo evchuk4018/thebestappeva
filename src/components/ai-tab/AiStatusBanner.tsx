@@ -1,15 +1,16 @@
 import { AlertTriangle, PackagePlus, Wifi, WifiOff } from 'lucide-react';
-import { AiAttachmentHealth, OllamaAvailability } from './types';
+import type { AiAttachmentHealth, ModelProvider, OllamaAvailability } from './types';
 
 interface AiStatusBannerProps {
   availability: OllamaAvailability;
+  currentProvider: ModelProvider;
   lastError: string | null;
   parserHealth: AiAttachmentHealth | null;
   persistenceError: string | null;
   onOpenAddModels: () => void;
 }
 
-export function AiStatusBanner({ availability, lastError, parserHealth, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
+export function AiStatusBanner({ availability, currentProvider, lastError, parserHealth, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
   if (availability === 'ready' && parserHealth?.available !== false && !lastError && !persistenceError) {
     return null;
   }
@@ -46,11 +47,14 @@ export function AiStatusBanner({ availability, lastError, parserHealth, persiste
     );
   }
 
+  const providerLabel = currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama';
   const config = {
     connecting: {
       icon: Wifi,
-      title: 'Connecting to local Ollama',
-      description: 'The app is checking http://127.0.0.1:11434 for installed models.',
+      title: `Checking ${providerLabel}`,
+      description: currentProvider === 'deepseek'
+        ? 'The app is reading server-side provider configuration.'
+        : 'The app is checking the configured local Ollama runtime for installed models.',
       action: null,
     },
     'no-models': {
@@ -61,14 +65,14 @@ export function AiStatusBanner({ availability, lastError, parserHealth, persiste
     },
     unavailable: {
       icon: WifiOff,
-      title: 'Unable to reach local Ollama',
+      title: `${providerLabel} unavailable`,
       description: lastError ?? 'The app will retry automatically every 10 seconds and whenever this window regains focus.',
       action: null,
     },
     ready: {
       icon: AlertTriangle,
-      title: 'Temporary Ollama issue',
-      description: lastError ?? 'The app hit an unexpected local runtime error.',
+      title: `Temporary ${providerLabel} issue`,
+      description: lastError ?? 'The app hit an unexpected runtime error.',
       action: null,
     },
   }[availability];

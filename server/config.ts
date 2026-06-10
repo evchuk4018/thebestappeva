@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
+import { normalizeModelProvider } from '../shared/ai-runtime-contract';
 
 dotenv.config();
 
@@ -25,6 +26,14 @@ function readStringListEnv(name: string) {
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),
   port: readNumberEnv('PORT', 3000),
+  modelProvider: normalizeModelProvider(process.env.MODEL_PROVIDER),
+  ollamaHost: readStringEnv('OLLAMA_HOST', 'http://127.0.0.1:11434').replace(/\/+$/, ''),
+  ollamaModel: readStringEnv('OLLAMA_MODEL', 'qwen3.5:9b-q4_K_M'),
+  modelLabel: readStringEnv('MODEL_LABEL', 'Qwen 3.5 9B'),
+  deepseekBaseUrl: readStringEnv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com').replace(/\/+$/, ''),
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY?.trim() || '',
+  deepseekModel: readStringEnv('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
+  deepseekModelLabel: readStringEnv('DEEPSEEK_MODEL_LABEL', 'DeepSeek V4 Flash'),
   localDbPath: path.resolve(process.cwd(), readStringEnv('LOCAL_DB_PATH', '.local-data/thebestappeva.sqlite')),
   aiAttachmentStoragePath: path.resolve(process.cwd(), readStringEnv('AI_ATTACHMENT_STORAGE_PATH', '.local-data/ai-attachments')),
   aiAttachmentMaxUploadBytes: readNumberEnv('AI_ATTACHMENT_MAX_UPLOAD_BYTES', 20 * 1024 * 1024),

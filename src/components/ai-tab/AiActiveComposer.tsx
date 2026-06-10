@@ -1,12 +1,13 @@
 import type { KeyboardEvent } from 'react';
-import { ChatMode, OllamaAvailability, OllamaModel } from './types';
+import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import { ChatComposer } from './ChatComposer';
-import { PendingAttachment } from './useAiAttachments';
+import type { PendingAttachment } from './useAiAttachments';
 
 interface AiActiveComposerProps {
   availability: OllamaAvailability;
   chatMode: ChatMode;
   currentModel: string | null;
+  currentProvider: ModelProvider;
   inputValue: string;
   isBusy: boolean;
   isModelDropdownOpen: boolean;
@@ -36,6 +37,7 @@ export function AiActiveComposer(props: AiActiveComposerProps) {
           chatMode={props.chatMode}
           compact
           currentModel={props.currentModel}
+          currentProvider={props.currentProvider}
           inputValue={props.inputValue}
           isBusy={props.isBusy}
           isModelDropdownOpen={props.isModelDropdownOpen}

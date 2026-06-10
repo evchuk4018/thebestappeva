@@ -46,10 +46,12 @@ export default function AiTab() {
   } = useAiAttachments();
   const {
     activeChat,
+    activeProviderOption,
     availableModels,
     availability,
     chatMode,
     chats,
+    currentProvider,
     currentModel,
     customSystemPrompt,
     deleteChat,
@@ -62,6 +64,7 @@ export default function AiTab() {
     persistenceError,
     regenerateAssistantMessage,
     refreshModels,
+    runtimeConfig,
     selectChat,
     selectedChatId,
     activeArtifactId,
@@ -71,6 +74,7 @@ export default function AiTab() {
     setActiveArtifact,
     setArtifactIncluded,
     setCustomSystemPrompt,
+    setProvider,
     showTypingIndicator,
     systemPromptContext,
     switchUserMessageVersion,
@@ -91,6 +95,9 @@ export default function AiTab() {
 
   const isModelLoading = availability === 'connecting';
   const openAddModels = () => {
+    if (currentProvider !== 'ollama') {
+      return;
+    }
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
   };
@@ -158,6 +165,7 @@ export default function AiTab() {
     availability,
     chatMode,
     currentModel,
+    currentProvider,
     inputValue,
     isBusy,
     isModelDropdownOpen: modelDropdownOpen,
@@ -225,12 +233,13 @@ export default function AiTab() {
           )}
 
           <div className="flex h-16 select-none items-center justify-center pt-3">
-            <RuntimePill availability={availability} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
+            <RuntimePill availability={availability} currentProvider={currentProvider} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
           </div>
 
           <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
             <AiStatusBanner
               availability={availability}
+              currentProvider={currentProvider}
               lastError={lastError}
               parserHealth={parserHealth}
               persistenceError={persistenceError}
@@ -243,6 +252,7 @@ export default function AiTab() {
                 activeChat={activeChat}
                 activeAskUserStepId={activeAskUserStepId}
                 busy={isBusy}
+                currentProvider={currentProvider}
                 currentModel={currentModel}
                 liveAssistantMessageId={liveAssistantMessageId}
                 showTypingIndicator={showTypingIndicator}
@@ -279,18 +289,24 @@ export default function AiTab() {
 
       <AiTabOverlays
         addModelsOpen={addModelsOpen}
+        allModels={runtimeConfig?.modelOptions ?? availableModels}
         availableModels={availableModels}
         chatMode={chatMode}
+        currentModel={currentModel}
+        currentProvider={currentProvider}
         customSystemPrompt={customSystemPrompt}
         isPullingModel={isPullingModel}
         pullProgress={pullProgress}
+        providerOptions={runtimeConfig?.providerOptions ?? (activeProviderOption ? [activeProviderOption] : [])}
         settingsOpen={settingsOpen}
         tools={systemPromptContext.tools}
         onCloseAddModels={() => setAddModelsOpen(false)}
         onCloseSettings={() => setSettingsOpen(false)}
         onPullModel={handlePullModel}
         onSaveSettings={(value) => {
-          setCustomSystemPrompt(value);
+          setCustomSystemPrompt(value.customPrompt);
+          setProvider(value.provider);
+          setCurrentModel(value.model);
           setSettingsOpen(false);
         }}
       />

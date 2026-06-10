@@ -1,4 +1,4 @@
-import { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
+import type { OllamaChatMessage, OllamaToolDefinition } from '../ollama-client';
 import { loadAiAttachmentContext } from '../../../lib/ai-attachments-storage';
 import { buildSystemPromptContent, SystemPromptContext } from '../system-prompt';
 import { buildAskUserToolResult } from '../ask-user';
@@ -15,6 +15,7 @@ function buildSystemMessage(promptContext: SystemPromptContext): OllamaChatMessa
 function buildAssistantTraceMessages(message: AssistantMessage) {
   const traceMessages: OllamaChatMessage[] = [];
   let pendingThinking: string[] = [];
+  let pendingToolCallId: string | undefined;
 
   const flushPendingAssistant = (content: string, toolCalls?: OllamaChatMessage['tool_calls']) => {
     const combinedThinking = pendingThinking.join('\n\n').trim();
@@ -36,12 +37,14 @@ function buildAssistantTraceMessages(message: AssistantMessage) {
     if (step.kind === 'tool-call') {
       flushPendingAssistant('', [
         {
+          id: step.invocation.toolCallId,
           function: {
             name: step.invocation.functionName,
             arguments: step.invocation.args,
           },
         },
       ]);
+      pendingToolCallId = step.invocation.toolCallId;
       continue;
     }
 
@@ -53,6 +56,7 @@ function buildAssistantTraceMessages(message: AssistantMessage) {
       traceMessages.push({
         role: 'tool',
         tool_name: 'ask_user',
+        tool_call_id: pendingToolCallId,
         content: formatToolResultContent(buildAskUserToolResult(step)),
       });
       continue;
@@ -61,6 +65,7 @@ function buildAssistantTraceMessages(message: AssistantMessage) {
     traceMessages.push({
       role: 'tool',
       tool_name: step.result.functionName,
+      tool_call_id: step.result.toolCallId ?? pendingToolCallId,
       content: formatToolResultContent(step.result),
     });
   }

@@ -1,4 +1,4 @@
-import { OllamaChatMessage } from '../../lib/ollama/runtime';
+import type { OllamaChatMessage } from '../../lib/ollama/runtime';
 
 export function buildDocsRewritePrompt(selectedText: string, instruction: string): OllamaChatMessage[] {
   const normalizedInstruction = instruction.trim() || 'Improve the grammar and clarity while keeping the original meaning.';

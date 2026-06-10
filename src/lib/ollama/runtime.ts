@@ -1,97 +1,51 @@
 import { chatWithModel, streamChatWithModel } from './chat-stream';
-import { normalizeOllamaError, OllamaClientError, OllamaModel, OLLAMA_BASE_URL } from './common';
-
-interface OllamaTagsResponse {
-  models?: Array<{
-    name: string;
-    modified_at: string;
-    size: number;
-    details?: {
-      family?: string;
-      parameter_size?: string;
-      quantization_level?: string;
-    };
-  }>;
-}
-
-const modelCapabilities = new Map<string, string[]>();
-
-function sortModels(models: OllamaModel[]) {
-  return [...models].sort((left, right) => Date.parse(right.modifiedAt) - Date.parse(left.modifiedAt));
-}
+import { normalizeOllamaError, OllamaClientError } from './common';
+import type { AiRuntimeConfig, ModelProvider, OllamaModel } from './common';
 
 async function readJson<T>(response: Response) {
   if (!response.ok) {
-    const rawBody = (await response.text()).trim();
-    let detail = rawBody;
-    if (!rawBody) {
-      throw new OllamaClientError(`Ollama request failed with ${response.status}.`, 'response');
-    }
-
-    try {
-      const payload = JSON.parse(rawBody) as { error?: string };
-      detail = typeof payload.error === 'string' ? payload.error.trim() : rawBody;
-    } catch {
-      detail = rawBody;
-    }
-
-    throw new OllamaClientError(
-      detail && !(detail === rawBody && (rawBody.startsWith('{') || rawBody.startsWith('[')))
-        ? `Ollama request failed with ${response.status}: ${detail}`
-        : `Ollama request failed with ${response.status}.`,
-      'response',
-    );
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new OllamaClientError(payload?.error?.trim() || `The local AI server failed with ${response.status}.`, 'response');
   }
 
   try {
     return (await response.json()) as T;
   } catch {
-    throw new OllamaClientError('Ollama returned invalid JSON.', 'response');
+    throw new OllamaClientError('The local AI server returned invalid JSON.', 'response');
   }
 }
 
-export async function listModels() {
+function sortModels(models: OllamaModel[]) {
+  return [...models].sort((left, right) => Date.parse(right.modifiedAt ?? '') - Date.parse(left.modifiedAt ?? ''));
+}
+
+export async function loadRuntimeConfig() {
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
-    const payload = await readJson<OllamaTagsResponse>(response);
-    return sortModels(
-      (payload.models ?? []).map((model) => ({
-        name: model.name,
-        modifiedAt: model.modified_at,
-        size: model.size,
-        family: model.details?.family,
-        parameterSize: model.details?.parameter_size,
-        quantizationLevel: model.details?.quantization_level,
-      })),
-    );
+    const response = await fetch('/api/ai/runtime-config');
+    return await readJson<AiRuntimeConfig>(response);
   } catch (error) {
-    throw normalizeOllamaError(error, 'Unable to reach local Ollama.');
+    throw normalizeOllamaError(error, 'Unable to reach the local AI server.');
   }
 }
 
-export async function getModelCapabilities(model: string) {
-  const cached = modelCapabilities.get(model);
-  if (cached) {
-    return cached;
-  }
+export async function listModels(provider: ModelProvider = 'ollama') {
+  const payload = await loadRuntimeConfig();
+  return sortModels(payload.modelOptions.filter((model) => model.provider === provider));
+}
 
+export async function getModelCapabilities(model: string, provider: ModelProvider = 'ollama') {
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/show`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, verbose: false }),
-    });
+    const response = await fetch(`/api/ai/model-capabilities?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`);
     const payload = await readJson<{ capabilities?: string[] }>(response);
-    const capabilities = Array.isArray(payload.capabilities) ? payload.capabilities : [];
-    modelCapabilities.set(model, capabilities);
-    return capabilities;
+    return Array.isArray(payload.capabilities) ? payload.capabilities : [];
   } catch (error) {
-    throw normalizeOllamaError(error, 'Unable to inspect the selected Ollama model.');
+    throw normalizeOllamaError(error, 'Unable to inspect the selected model.');
   }
 }
 
 export { chatWithModel, OllamaClientError, streamChatWithModel };
 export type {
+  ModelProvider,
   OllamaChatMessage,
   OllamaChatStreamEvent,
   OllamaChatToolCalls,

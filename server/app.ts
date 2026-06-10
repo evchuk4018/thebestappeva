@@ -32,6 +32,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { createAppViteConfig } from '../vite.shared';
+import {
+  handleGetAiModelCapabilities,
+  handleGetAiRuntimeConfig,
+  handlePostAiChatStream,
+} from './ai-runtime';
 import { handleGetAiPreferences, handleGetAiWorkspace, handlePutAiWorkspace } from './ai-workspace';
 import { serverConfig } from './config';
 import { getDatabase } from './db/database';
@@ -115,6 +120,9 @@ function registerApiRoutes(app: Express) {
   app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
   app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
   app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
+  app.get('/api/ai/runtime-config', (_req, res) => void handleGetAiRuntimeConfig(_req, res));
+  app.get('/api/ai/model-capabilities', (req, res) => void handleGetAiModelCapabilities(req, res));
+  app.post('/api/ai/chat/stream', (req, res) => void handlePostAiChatStream(req, res));
   app.get('/api/ai/chats/:chatId/artifacts', (req, res) => void handleListArtifacts(req, res));
   app.post('/api/ai/chats/:chatId/artifacts', (req, res) => void handleCreateArtifact(req, res));
   app.get('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleGetArtifact(req, res));

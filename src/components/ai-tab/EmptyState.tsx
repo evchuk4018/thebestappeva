@@ -1,12 +1,13 @@
 import { ChatComposer } from './ChatComposer';
 import { PromptSuggestions } from './PromptSuggestions';
-import { ChatMode, OllamaAvailability, OllamaModel } from './types';
-import { PendingAttachment } from './useAiAttachments';
+import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
+import type { PendingAttachment } from './useAiAttachments';
 
 interface EmptyStateProps {
   availability: OllamaAvailability;
   chatMode: ChatMode;
   currentModel: string | null;
+  currentProvider: ModelProvider;
   inputValue: string;
   isBusy: boolean;
   isModelDropdownOpen: boolean;
@@ -43,15 +44,20 @@ export function EmptyState(props: EmptyStateProps) {
         </div>
       </div>
 
-      <h1 className="mb-3 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">Local Ollama chat</h1>
+      <h1 className="mb-3 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">
+        {props.currentProvider === 'deepseek' ? 'DeepSeek BYOK chat' : 'Local Ollama chat'}
+      </h1>
       <p className="mb-8 max-w-xl text-sm leading-relaxed text-zinc-400">
-        Detect installed models, switch between them, and download new ones without leaving the app.
+        {props.currentProvider === 'deepseek'
+          ? 'Use the server-side DeepSeek API key from .env while keeping chat, tools, and streaming in the same workspace.'
+          : 'Detect installed models, switch between them, and download new ones without leaving the app.'}
       </p>
 
       <ChatComposer
         availability={props.availability}
         chatMode={props.chatMode}
         currentModel={props.currentModel}
+        currentProvider={props.currentProvider}
         inputValue={props.inputValue}
         isBusy={props.isBusy}
         isModelDropdownOpen={props.isModelDropdownOpen}

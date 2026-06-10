@@ -1,5 +1,6 @@
 import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachments-contract';
 import { ArtifactCardSummary, parseArtifactCardSummary } from './ai-artifacts-contract';
+import { ModelProvider, normalizeModelProvider } from './ai-runtime-contract';
 import {
   AssistantTraceStep,
   ToolInvocation,
@@ -66,12 +67,14 @@ export interface Chat {
 
 export interface AiWorkspaceSnapshot {
   chats: Chat[];
+  selectedProvider: ModelProvider;
   selectedModel: string | null;
   enabledTools: Record<string, boolean>;
   customSystemPrompt: string;
 }
 
 export interface AiPreferences {
+  selectedProvider: ModelProvider;
   selectedModel: string | null;
 }
 
@@ -195,6 +198,7 @@ function parseChat(value: unknown, field: string): Chat {
 export function createEmptyAiWorkspaceSnapshot(): AiWorkspaceSnapshot {
   return {
     chats: [],
+    selectedProvider: 'ollama',
     selectedModel: null,
     enabledTools: {},
     customSystemPrompt: '',
@@ -206,9 +210,13 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
   const chats = Array.isArray(record.chats)
     ? record.chats.map((chat, index) => parseChat(chat, `${field}.chats[${index}]`))
     : (() => {
-        throw new Error(`Invalid ${field}.chats. Expected an array.`);
-      })();
-  const selectedModel = record.selectedModel === null ? null : expectString(record.selectedModel, `${field}.selectedModel`);
+      throw new Error(`Invalid ${field}.chats. Expected an array.`);
+    })();
+  const selectedProvider = normalizeModelProvider(record.selectedProvider);
+  const selectedModel =
+    record.selectedModel === null || typeof record.selectedModel === 'undefined'
+      ? null
+      : expectString(record.selectedModel, `${field}.selectedModel`);
   const enabledTools = expectRecord(record.enabledTools, `${field}.enabledTools`);
   const normalizedEnabledTools = Object.fromEntries(
     Object.entries(enabledTools).map(([toolId, enabled]) => {
@@ -222,6 +230,7 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
 
   return {
     chats,
+    selectedProvider,
     selectedModel,
     enabledTools: normalizedEnabledTools,
     customSystemPrompt: expectString(record.customSystemPrompt, `${field}.customSystemPrompt`),
@@ -231,6 +240,10 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
 export function parseAiPreferences(value: unknown, field = 'AI preferences'): AiPreferences {
   const record = expectRecord(value, field);
   return {
-    selectedModel: record.selectedModel === null ? null : expectString(record.selectedModel, `${field}.selectedModel`),
+    selectedProvider: normalizeModelProvider(record.selectedProvider),
+    selectedModel:
+      record.selectedModel === null || typeof record.selectedModel === 'undefined'
+        ? null
+        : expectString(record.selectedModel, `${field}.selectedModel`),
   };
 }

@@ -1,25 +1,27 @@
 import { Bot, LoaderCircle, PackagePlus, ServerCrash } from 'lucide-react';
-import { OllamaAvailability } from './types';
+import type { ModelProvider, OllamaAvailability } from './types';
 
 interface RuntimePillProps {
   availability: OllamaAvailability;
+  currentProvider: ModelProvider;
   modelCount: number;
   onOpenAddModels: () => void;
 }
 
-export function RuntimePill({ availability, modelCount, onOpenAddModels }: RuntimePillProps) {
+export function RuntimePill({ availability, currentProvider, modelCount, onOpenAddModels }: RuntimePillProps) {
+  const providerLabel = currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama';
   const config = {
     connecting: {
       icon: LoaderCircle,
-      label: 'Scanning local Ollama',
-      detail: 'Looking for installed models',
+      label: `Checking ${providerLabel}`,
+      detail: currentProvider === 'deepseek' ? 'Reading server-side provider status' : 'Looking for installed models',
       action: null,
       iconClassName: 'animate-spin',
     },
     ready: {
       icon: Bot,
-      label: 'Local Ollama ready',
-      detail: `${modelCount} model${modelCount === 1 ? '' : 's'} detected`,
+      label: `${providerLabel} ready`,
+      detail: `${modelCount} model${modelCount === 1 ? '' : 's'} available`,
       action: null,
       iconClassName: '',
     },
@@ -32,7 +34,7 @@ export function RuntimePill({ availability, modelCount, onOpenAddModels }: Runti
     },
     unavailable: {
       icon: ServerCrash,
-      label: 'Ollama unavailable',
+      label: `${providerLabel} unavailable`,
       detail: 'Retrying in the background',
       action: null,
       iconClassName: '',

@@ -3,6 +3,7 @@ import { getDatabase } from './database';
 import { readJsonSetting, writeJsonSetting } from './app-settings-repository';
 
 const selectedModelKey = 'ai.selected-model';
+const selectedProviderKey = 'ai.selected-provider';
 const enabledToolsKey = 'ai.enabled-tools';
 const customSystemPromptKey = 'ai.custom-system-prompt';
 
@@ -27,6 +28,7 @@ function selectStoredChats(): Chat[] {
 export function loadAiWorkspace(): AiWorkspaceSnapshot {
   return {
     chats: selectStoredChats(),
+    selectedProvider: readJsonSetting(selectedProviderKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedProvider,
     selectedModel: readJsonSetting(selectedModelKey, parseAiPreferences, { selectedModel: null }).selectedModel,
     enabledTools: readJsonSetting(
       enabledToolsKey,
@@ -43,7 +45,8 @@ export function loadAiWorkspace(): AiWorkspaceSnapshot {
 
 export function loadAiPreferences(): AiPreferences {
   return {
-    selectedModel: readJsonSetting(selectedModelKey, parseAiPreferences, { selectedModel: null }).selectedModel,
+    selectedProvider: readJsonSetting(selectedProviderKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedProvider,
+    selectedModel: readJsonSetting(selectedModelKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedModel,
   };
 }
 
@@ -66,6 +69,7 @@ export function saveAiWorkspace(snapshot: AiWorkspaceSnapshot) {
       });
     }
 
+    writeJsonSetting(selectedProviderKey, { selectedProvider: nextSnapshot.selectedProvider });
     writeJsonSetting(selectedModelKey, { selectedModel: nextSnapshot.selectedModel });
     writeJsonSetting(enabledToolsKey, nextSnapshot.enabledTools);
     writeJsonSetting(customSystemPromptKey, nextSnapshot.customSystemPrompt);

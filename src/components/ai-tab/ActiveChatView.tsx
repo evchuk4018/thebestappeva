@@ -1,11 +1,12 @@
 import { AssistantMessageCard } from './AssistantMessageCard';
-import { AskUserResponse, Chat } from './types';
+import type { AskUserResponse, Chat, ModelProvider } from './types';
 import { UserMessageCard } from './UserMessageCard';
 
 interface ActiveChatViewProps {
   activeChat: Chat;
   activeAskUserStepId?: string | null;
   busy: boolean;
+  currentProvider: ModelProvider;
   currentModel: string | null;
   liveAssistantMessageId: string | null;
   showTypingIndicator: boolean;
@@ -22,6 +23,7 @@ export function ActiveChatView({
   activeChat,
   activeAskUserStepId = null,
   busy,
+  currentProvider,
   currentModel,
   liveAssistantMessageId,
   showTypingIndicator,
@@ -80,7 +82,7 @@ export function ActiveChatView({
         <div className="flex flex-col items-start">
           <div className="mb-1 flex items-center gap-2 text-[10px] font-medium text-zinc-500">
             <span className="text-[#e2875e]">*</span>
-            <span>{currentModel ? `${currentModel} is generating...` : 'Local model is generating...'}</span>
+            <span>{currentModel ? `${currentModel} is generating...` : `${currentProvider === 'deepseek' ? 'DeepSeek' : 'Local model'} is generating...`}</span>
           </div>
           <div className="flex items-center gap-1 rounded-2xl border border-transparent px-4 py-2">
             {[0, 0.15, 0.3].map((delay) => (

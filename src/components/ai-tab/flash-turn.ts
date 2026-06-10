@@ -3,20 +3,21 @@ import { createAssistantLiveUpdater } from './assistant-live-message';
 import { isAbortError } from './abort-utils';
 import { streamChatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
-import { SystemPromptContext } from './system-prompt';
-import { Chat } from './types';
+import type { SystemPromptContext } from './system-prompt';
+import type { Chat, ModelProvider } from './types';
 import { buildPlainModelMessages } from './tools/prompting';
 import { ResolvedTurn } from './thinking-turn';
 
 interface SendFlashTurnOptions {
   chat: Chat;
   model: string;
+  provider: ModelProvider;
   onProgress: (chat: Chat, assistantMessageId: string | null) => void;
   promptContext: SystemPromptContext;
   signal?: AbortSignal;
 }
 
-export async function sendFlashTurn({ chat, model, onProgress, promptContext, signal }: SendFlashTurnOptions): Promise<ResolvedTurn> {
+export async function sendFlashTurn({ chat, model, provider, onProgress, promptContext, signal }: SendFlashTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
   const liveAssistant = createAssistantLiveUpdater({
     chat,
@@ -29,6 +30,7 @@ export async function sendFlashTurn({ chat, model, onProgress, promptContext, si
 
   try {
     const reply = await streamChatWithModel(model, await buildPlainModelMessages(chat.messages, promptContext), {
+      provider,
       think: false,
       signal,
       onEvent: (event) => {

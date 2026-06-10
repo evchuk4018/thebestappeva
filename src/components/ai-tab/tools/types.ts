@@ -1,5 +1,6 @@
 import type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
 import type { AskUserPromptPayload } from '../ask-user';
+import type { ModelProvider } from '../types';
 
 export type { ToolInvocation, ToolResult } from '../../../../shared/ai-workspace-contract';
 
@@ -36,6 +37,7 @@ export interface ToolCallRequest {
 
 export interface ToolExecutionContext {
   model?: string;
+  provider?: ModelProvider;
   signal?: AbortSignal;
 }
 

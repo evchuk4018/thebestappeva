@@ -3,6 +3,7 @@ export interface ToolInvocation {
   functionName: string;
   args: Record<string, unknown>;
   createdAt: string;
+  toolCallId?: string;
 }
 
 export interface ToolResult {
@@ -12,6 +13,7 @@ export interface ToolResult {
   summary: string;
   data?: Record<string, unknown>;
   error?: string;
+  toolCallId?: string;
 }
 
 export interface AskUserChoice {
@@ -163,6 +165,7 @@ export function parseToolInvocation(value: unknown, field: string): ToolInvocati
     functionName: expectString(record.functionName, `${field}.functionName`),
     args: expectStringRecord(record.args, `${field}.args`),
     createdAt: expectString(record.createdAt, `${field}.createdAt`),
+    toolCallId: expectOptionalString(record.toolCallId, `${field}.toolCallId`),
   };
 }
 
@@ -178,6 +181,7 @@ export function parseToolResult(value: unknown, field: string): ToolResult {
     summary: expectString(record.summary, `${field}.summary`),
     data,
     error,
+    toolCallId: expectOptionalString(record.toolCallId, `${field}.toolCallId`),
   };
 }
 

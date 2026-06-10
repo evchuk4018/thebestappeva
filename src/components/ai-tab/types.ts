@@ -1,6 +1,9 @@
+import type { RuntimeModel } from '../../../shared/ai-runtime-contract';
+
 export type {
   AiMessage,
   AiAttachmentReference,
+  AiPreferences,
   AiWorkspaceSnapshot,
   AskUserChoice,
   AskUserPlacement,
@@ -22,15 +25,18 @@ export type {
 } from '../../../shared/ai-workspace-contract';
 export type { ArtifactCardSummary } from '../../../shared/ai-artifacts-contract';
 export type { AiAttachmentHealth, AiParsedAttachment } from '../../../shared/ai-attachments-contract';
+export type {
+  AiRuntimeConfig,
+  ModelChatMessage,
+  ModelChatStreamEvent,
+  ModelChatToolCalls,
+  ModelProvider,
+  ModelToolDefinition,
+  RuntimeModel,
+  RuntimeProviderOption,
+} from '../../../shared/ai-runtime-contract';
 
-export interface OllamaModel {
-  name: string;
-  modifiedAt: string;
-  size: number;
-  parameterSize?: string;
-  family?: string;
-  quantizationLevel?: string;
-}
+export type OllamaModel = RuntimeModel;
 
 export interface PullProgress {
   model: string;

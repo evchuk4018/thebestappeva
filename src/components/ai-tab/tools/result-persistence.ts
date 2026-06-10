@@ -11,5 +11,6 @@ export function toPersistedToolResult(result: ToolResult): ToolResult {
     ok: result.ok,
     summary: result.summary,
     error: result.error,
+    toolCallId: result.toolCallId,
   };
 }

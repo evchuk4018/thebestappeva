@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { chatWithModel, listModels } from '../../lib/ollama/runtime';
-import { loadStoredSelectedModel } from '../../lib/ollama/model-storage';
+import { loadAiPreferences } from '../../lib/ai-workspace-storage';
 import { buildDocsRewritePrompt } from './docs-rewrite-prompt';
 
 type RewriteStatus = 'idle' | 'loading' | 'preview' | 'error';
@@ -74,13 +74,16 @@ function restoreOriginalSelection(editor: Editor, pending: PendingRewrite) {
 }
 
 async function resolveRewriteModel() {
-  const models = await listModels();
+  const preferences = await loadAiPreferences();
+  const models = await listModels(preferences.selectedProvider);
   if (!models.length) {
-    throw new Error('No local Ollama models are installed.');
+    throw new Error(`No models are available for the ${preferences.selectedProvider} provider.`);
   }
 
-  const preferred = await loadStoredSelectedModel();
-  return models.find((model) => model.name === preferred)?.name ?? models[0].name;
+  return {
+    provider: preferences.selectedProvider,
+    model: models.find((model) => model.name === preferences.selectedModel)?.name ?? models[0].name,
+  };
 }
 
 export function useDocsRewrite(editor: Editor | null) {
@@ -164,14 +167,15 @@ export function useDocsRewrite(editor: Editor | null) {
     setStatus('loading');
 
     try {
-      const model = await resolveRewriteModel();
-      const reply = await chatWithModel(model, buildDocsRewritePrompt(baseSelection.text, nextPrompt), {
+      const runtime = await resolveRewriteModel();
+      const reply = await chatWithModel(runtime.model, buildDocsRewritePrompt(baseSelection.text, nextPrompt), {
+        provider: runtime.provider,
         signal: controller.signal,
         think: false,
       });
       const rewrittenText = reply.content.trim();
       if (!rewrittenText) {
-        throw new Error('Ollama returned an empty rewrite.');
+        throw new Error('The selected AI provider returned an empty rewrite.');
       }
 
       const previewRange = setHighlightedPreview(editor, baseSelection.from, baseSelection.to, rewrittenText);

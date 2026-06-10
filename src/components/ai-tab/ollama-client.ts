@@ -1,6 +1,6 @@
 import { PullProgress } from './types';
-export { chatWithModel, getModelCapabilities, listModels, OllamaClientError, streamChatWithModel } from '../../lib/ollama/runtime';
-export type { OllamaChatMessage, OllamaChatStreamEvent, OllamaModel, OllamaToolDefinition } from '../../lib/ollama/runtime';
+export { chatWithModel, getModelCapabilities, listModels, loadRuntimeConfig, OllamaClientError, streamChatWithModel } from '../../lib/ollama/runtime';
+export type { ModelProvider, OllamaChatMessage, OllamaChatStreamEvent, OllamaModel, OllamaToolDefinition } from '../../lib/ollama/runtime';
 
 function normalizeModelName(name: string) {
   return name.trim();

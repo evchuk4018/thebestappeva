@@ -71,6 +71,7 @@ test('pauses on inline ask_user and resumes the same assistant message after a c
   const initial = await resolveThinkingTurn({
     chat: createNewChat(createUserMessage('Help me decide.'), 'thinking'),
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [askUserTool],
     onProgress: () => {},
     promptContext: buildPromptContext(),
@@ -134,6 +135,7 @@ test('keeps end-of-response content visible while ask_user is pending', async ()
   const result = await resolveThinkingTurn({
     chat: createNewChat(createUserMessage('Continue.'), 'thinking'),
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [askUserTool],
     onProgress: () => {},
     promptContext: buildPromptContext(),
@@ -206,6 +208,7 @@ test('auto-skips ask_user after two skips in the same turn history', async () =>
   const result = await resolveThinkingTurn({
     chat,
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [askUserTool],
     onProgress: () => {},
     promptContext: buildPromptContext(),

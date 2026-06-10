@@ -24,7 +24,7 @@ export function updateChatArtifacts(
 
 export function buildTurnFailureMessage(error: OllamaClientError) {
   if (error.kind === 'connection') {
-    return 'I could not reach the local Ollama runtime for this turn. Check that Ollama is still running, then try again.';
+    return 'I could not reach the local AI runtime for this turn. Check that the selected provider is still available, then try again.';
   }
 
   return `I hit a local runtime error before I could finish this reply.\n\n${error.message}`;

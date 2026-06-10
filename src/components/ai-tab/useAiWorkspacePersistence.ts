@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useEffectEvent, useMemo, useRef, u
 import { createEmptyAiWorkspaceSnapshot } from '../../../shared/ai-workspace-contract';
 import { loadAiWorkspace, saveAiWorkspace } from '../../lib/ai-workspace-storage';
 import { normalizePendingAskUserChats } from './ask-user';
-import { AiWorkspaceSnapshot, Chat } from './types';
+import type { AiWorkspaceSnapshot, Chat } from './types';
 
 type HydrationStatus = 'loading' | 'ready' | 'error';
 
@@ -12,12 +12,14 @@ interface FlushWorkspaceOptions {
 
 interface AiWorkspacePersistenceState {
   chats: Chat[];
+  currentProvider: AiWorkspaceSnapshot['selectedProvider'];
   currentModel: string | null;
   customSystemPrompt: string;
   enabledTools: Record<string, boolean>;
   hydrationStatus: HydrationStatus;
   persistenceError: string | null;
   setChats: Dispatch<SetStateAction<Chat[]>>;
+  setCurrentProvider: Dispatch<SetStateAction<AiWorkspaceSnapshot['selectedProvider']>>;
   setCurrentModel: Dispatch<SetStateAction<string | null>>;
   setCustomSystemPrompt: Dispatch<SetStateAction<string>>;
   setEnabledTools: Dispatch<SetStateAction<Record<string, boolean>>>;
@@ -30,6 +32,7 @@ function toErrorMessage(error: unknown, fallback: string) {
 
 export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const [chats, setChats] = useState<Chat[]>([]);
+  const [currentProvider, setCurrentProvider] = useState<AiWorkspaceSnapshot['selectedProvider']>('ollama');
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
   const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>({});
@@ -40,10 +43,11 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
   const snapshot = useMemo<AiWorkspaceSnapshot>(() => ({
     chats,
+    selectedProvider: currentProvider,
     selectedModel: currentModel,
     enabledTools,
     customSystemPrompt,
-  }), [chats, currentModel, enabledTools, customSystemPrompt]);
+  }), [chats, currentProvider, currentModel, enabledTools, customSystemPrompt]);
   const serializedSnapshot = useMemo(() => JSON.stringify(snapshot), [snapshot]);
 
   const flushWorkspace = useEffectEvent(async (options: FlushWorkspaceOptions = {}) => {
@@ -76,6 +80,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
         hydratedRef.current = true;
         lastSavedSnapshotRef.current = JSON.stringify(loadedSnapshot);
         setChats(nextSnapshot.chats);
+        setCurrentProvider(nextSnapshot.selectedProvider);
         setCurrentModel(nextSnapshot.selectedModel);
         setEnabledTools(nextSnapshot.enabledTools);
         setCustomSystemPrompt(nextSnapshot.customSystemPrompt);
@@ -119,12 +124,14 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
   return {
     chats,
+    currentProvider,
     currentModel,
     customSystemPrompt,
     enabledTools,
     hydrationStatus,
     persistenceError,
     setChats,
+    setCurrentProvider,
     setCurrentModel,
     setCustomSystemPrompt,
     setEnabledTools,

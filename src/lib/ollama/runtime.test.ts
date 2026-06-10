@@ -21,15 +21,18 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test('streams thinking and content deltas in order', async () => {
+test('streams provider-neutral thinking and content deltas in order', async () => {
   const events: Array<{ type: string; value?: string }> = [];
   globalThis.fetch = async () => createStreamResponse([
-    JSON.stringify({ model: 'qwen', message: { thinking: 'Plan ' } }),
-    JSON.stringify({ model: 'qwen', message: { thinking: 'more', content: 'Hel' } }),
-    JSON.stringify({ model: 'qwen', message: { content: 'lo' }, done: true }),
+    JSON.stringify({ type: 'thinking', delta: 'Plan ', snapshot: 'Plan ', model: 'qwen' }),
+    JSON.stringify({ type: 'thinking', delta: 'more', snapshot: 'Plan more', model: 'qwen' }),
+    JSON.stringify({ type: 'content', delta: 'Hel', snapshot: 'Hel', model: 'qwen' }),
+    JSON.stringify({ type: 'content', delta: 'lo', snapshot: 'Hello', model: 'qwen' }),
+    JSON.stringify({ type: 'done', model: 'qwen' }),
   ]);
 
   const reply = await streamChatWithModel('qwen', [], {
+    provider: 'ollama',
     think: true,
     onEvent: (event) => {
       if (event.type === 'thinking' || event.type === 'content') {
@@ -52,14 +55,26 @@ test('streams thinking and content deltas in order', async () => {
   assert.equal(reply.content, 'Hello');
 });
 
+test('passes the selected provider to the local AI server', async () => {
+  let requestBody: { provider?: string } | null = null;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as { provider?: string };
+    return createStreamResponse([JSON.stringify({ type: 'done', model: 'deepseek-v4-flash' })]);
+  };
+
+  await streamChatWithModel('deepseek-v4-flash', [], { provider: 'deepseek' });
+  assert.equal(requestBody?.provider, 'deepseek');
+});
+
 test('surfaces streamed tool calls', async () => {
   const events: string[] = [];
   globalThis.fetch = async () => createStreamResponse([
     JSON.stringify({
+      type: 'tool-calls',
+      toolCalls: [{ id: 'tool-1', function: { name: 'get_weather', arguments: { city: 'Boston' } } }],
       model: 'qwen',
-      message: { tool_calls: [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }] },
-      done: true,
     }),
+    JSON.stringify({ type: 'done', model: 'qwen' }),
   ]);
 
   const reply = await streamChatWithModel('qwen', [], {
@@ -68,94 +83,25 @@ test('surfaces streamed tool calls', async () => {
   });
 
   assert.deepEqual(events, ['tool-calls', 'done']);
-  assert.deepEqual(reply.toolCalls, [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }]);
+  assert.deepEqual(reply.toolCalls, [{ id: 'tool-1', function: { name: 'get_weather', arguments: { city: 'Boston' } } }]);
   assert.equal(reply.content, '');
 });
 
-test('surfaces streamed Ollama error events verbatim', async () => {
+test('surfaces streamed local AI server error events verbatim', async () => {
   globalThis.fetch = async () => createStreamResponse([
-    JSON.stringify({ model: 'qwen', error: 'failed to parse JSON: unexpected end of JSON input', done: true }),
+    JSON.stringify({ type: 'error', error: 'DeepSeek provider selected but DEEPSEEK_API_KEY is not set.' }),
   ]);
 
   await assert.rejects(
-    () => streamChatWithModel('qwen', []),
-    /failed to parse JSON: unexpected end of JSON input/i,
+    () => streamChatWithModel('deepseek-v4-flash', [], { provider: 'deepseek' }),
+    /DEEPSEEK_API_KEY is not set/i,
   );
 });
 
-test('retries truncated streamed tool calls without streaming', async () => {
-  const requestStreams: boolean[] = [];
-  globalThis.fetch = async (_input, init) => {
-    const request = JSON.parse(String(init?.body)) as { stream: boolean };
-    requestStreams.push(request.stream);
-    if (request.stream) {
-      return createStreamResponse([
-        JSON.stringify({ model: 'qwen-tool-retry', message: { thinking: 'Drafting' } }),
-        JSON.stringify({ error: 'failed to parse JSON: unexpected end of JSON input' }),
-      ]);
-    }
-
-    return new Response(
-      JSON.stringify({
-        model: 'qwen-tool-retry',
-        message: {
-          thinking: 'Drafting',
-          tool_calls: [{
-            function: {
-              name: 'create_artifact',
-              arguments: { title: 'Story', type: 'story', content: 'Once upon a time.' },
-            },
-          }],
-        },
-        done: true,
-      }),
-      { headers: { 'Content-Type': 'application/json' } },
-    );
-  };
-
-  const reply = await streamChatWithModel('qwen-tool-retry', [], {
-    tools: [{
-      type: 'function',
-      function: {
-        name: 'create_artifact',
-        description: 'Create an artifact.',
-        parameters: { type: 'object', properties: {} },
-      },
-    }],
-  });
-
-  assert.deepEqual(requestStreams, [true, false]);
-  assert.equal(reply.toolCalls?.[0]?.function.name, 'create_artifact');
-  assert.equal(reply.toolCalls?.[0]?.function.arguments.content, 'Once upon a time.');
-});
-
-test('remembers models that require non-streamed tool calls', async () => {
-  let requestStream = true;
-  globalThis.fetch = async (_input, init) => {
-    requestStream = (JSON.parse(String(init?.body)) as { stream: boolean }).stream;
-    return createStreamResponse([
-      JSON.stringify({ model: 'qwen-tool-retry', message: { content: 'Finished' }, done: true }),
-    ]);
-  };
-
-  const reply = await streamChatWithModel('qwen-tool-retry', [], {
-    tools: [{
-      type: 'function',
-      function: {
-        name: 'create_artifact',
-        description: 'Create an artifact.',
-        parameters: { type: 'object', properties: {} },
-      },
-    }],
-  });
-
-  assert.equal(requestStream, false);
-  assert.equal(reply.content, 'Finished');
-});
-
-test('does not reclassify callback-thrown Ollama errors as invalid JSON', async () => {
+test('does not reclassify callback-thrown runtime errors as invalid JSON', async () => {
   globalThis.fetch = async () => createStreamResponse([
-    JSON.stringify({ model: 'qwen', message: { content: 'Hello' }, done: true }),
+    JSON.stringify({ type: 'content', delta: 'Hello', snapshot: 'Hello', model: 'qwen' }),
+    JSON.stringify({ type: 'done', model: 'qwen' }),
   ]);
 
   const callbackError = new OllamaClientError('Tool event callback failed.', 'response');

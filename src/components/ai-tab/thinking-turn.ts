@@ -2,10 +2,11 @@ import { PendingAskUserState } from './ask-user';
 import { appendMessage, createAssistantCancelledMessage, createAssistantErrorMessage } from './helpers';
 import { createAssistantLiveUpdater } from './assistant-live-message';
 import { isAbortError, throwIfAborted } from './abort-utils';
-import { OllamaChatMessage, streamChatWithModel } from './ollama-client';
+import { streamChatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
-import { SystemPromptContext } from './system-prompt';
-import { Chat, OllamaAvailability } from './types';
+import type { OllamaChatMessage } from './ollama-client';
+import type { SystemPromptContext } from './system-prompt';
+import type { Chat, ModelProvider, OllamaAvailability } from './types';
 import { MAX_CONSECUTIVE_TOOL_ERRORS, MAX_TOOL_CALLS_PER_TURN, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
 import { toPersistedToolResult } from './tools/result-persistence';
@@ -26,6 +27,7 @@ interface ResolveThinkingTurnOptions {
   assistantMessageId?: string | null;
   chat: Chat;
   model: string;
+  provider: ModelProvider;
   activeToolEntries: ToolRegistryEntry[];
   onProgress: (chat: Chat) => void;
   promptContext: SystemPromptContext;
@@ -37,6 +39,7 @@ export async function resolveThinkingTurn({
   assistantMessageId,
   chat,
   model,
+  provider,
   activeToolEntries,
   onProgress,
   promptContext,
@@ -72,7 +75,7 @@ export async function resolveThinkingTurn({
     while (true) {
       throwIfAborted(signal);
       let hasRoundToolCalls = false;
-      const reply = await streamThinkingRound(model, requestMessages, buildOllamaTools(activeToolEntries), liveAssistant, signal, {
+      const reply = await streamThinkingRound(model, provider, requestMessages, buildOllamaTools(activeToolEntries), liveAssistant, signal, {
         onToolCalls() {
           hasRoundToolCalls = true;
         },
@@ -97,10 +100,11 @@ export async function resolveThinkingTurn({
           functionName: toolCall.function.name,
           args: toolCall.function.arguments ?? {},
           createdAt: new Date().toISOString(),
+          toolCallId: toolCall.id,
         };
 
         const toolCallStep = liveAssistant.appendToolCall(invocation, reply.model);
-        const execution = await executeToolInvocation(invocation, activeToolEntries, { model, signal });
+        const execution = await executeToolInvocation(invocation, activeToolEntries, { model, provider, signal });
         if ('deferred' in execution) {
           const askUserResolution = resolveAskUserExecution({
             chat: liveAssistant.getChat(),
@@ -124,19 +128,21 @@ export async function resolveThinkingTurn({
             };
           }
 
-          const result = askUserResolution.result;
+          const result = invocation.toolCallId ? { ...askUserResolution.result, toolCallId: invocation.toolCallId } : askUserResolution.result;
           liveAssistant.appendToolResult(result, reply.model);
           toolCallCount += 1;
           consecutiveToolErrors = 0;
           roundToolMessages.push({
             role: 'tool',
             tool_name: invocation.functionName,
+            tool_call_id: invocation.toolCallId,
             content: formatToolResultContent(result),
           });
           continue;
         }
 
-        const { transientImages, ...result } = execution;
+        const { transientImages, ...baseResult } = execution;
+        const result = invocation.toolCallId ? { ...baseResult, toolCallId: invocation.toolCallId } : baseResult;
         throwIfAborted(signal);
         liveAssistant.appendToolResult(toPersistedToolResult(result), reply.model);
         toolCallCount += 1;
@@ -144,6 +150,7 @@ export async function resolveThinkingTurn({
         roundToolMessages.push({
           role: 'tool',
           tool_name: invocation.functionName,
+          tool_call_id: invocation.toolCallId,
           content: formatToolResultContent(result),
           images: transientImages,
         } satisfies OllamaChatMessage);
@@ -197,6 +204,7 @@ export async function resolveThinkingTurn({
 
 async function streamThinkingRound(
   model: string,
+  provider: ModelProvider,
   requestMessages: OllamaChatMessage[],
   availableTools: ReturnType<typeof buildOllamaTools>,
   liveAssistant: ReturnType<typeof createAssistantLiveUpdater>,
@@ -205,6 +213,7 @@ async function streamThinkingRound(
 ) {
   let hasRoundToolCalls = false;
   return streamChatWithModel(model, requestMessages, {
+    provider,
     think: true,
     tools: availableTools,
     signal,

@@ -149,7 +149,7 @@ export function getSuggestionPrompt(label: string) {
 }
 
 export function sortModels(models: OllamaModel[]) {
-  return [...models].sort((left, right) => Date.parse(right.modifiedAt) - Date.parse(left.modifiedAt));
+  return [...models].sort((left, right) => Date.parse(right.modifiedAt ?? '') - Date.parse(left.modifiedAt ?? ''));
 }
 
 export function formatBytes(bytes?: number) {
