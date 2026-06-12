@@ -59,8 +59,8 @@ export function AiStatusBanner({ availability, currentProvider, lastError, parse
     },
     'no-models': {
       icon: PackagePlus,
-      title: 'Ollama is running, but no models are installed',
-      description: 'Add a local model to enable the chat composer and start a conversation.',
+      title: 'No models are installed',
+      description: 'Add a model to enable the chat composer and start a conversation.',
       action: 'Add models',
     },
     unavailable: {

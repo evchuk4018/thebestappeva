@@ -12,10 +12,9 @@ import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactSt
 import type { AiAttachmentReference, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
 import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
-import type { ToolRegistryEntry } from './tools/types';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
-import { resolveThinkingTurn, ResolvedTurn } from './thinking-turn';
+import { sendThinkingReply } from './chat-turn-helpers';
 
 const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
 
@@ -99,44 +98,13 @@ export function useOllamaChat() {
     setDraftMode(mode);
   }
 
-  function setProvider(provider: ModelProvider) {
+  function setProvider(provider: ModelProvider, preferredModel?: string | null) {
     setCurrentProvider(provider);
-    void refreshModels(provider);
+    void refreshModels(provider, preferredModel);
   }
 
   function toggleChatMode() {
     setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
-  }
-
-  function resolveToolId(functionName: string, entries: ToolRegistryEntry[]) {
-    return entries.find(({ definition }) => definition.functions.some((candidate) => candidate.name === functionName))?.definition.id ?? functionName;
-  }
-
-  function findLatestAssistantMessageId(chat: Chat) {
-    return [...chat.messages].reverse().find((message) => message.kind === 'assistant')?.id ?? null;
-  }
-
-  async function sendThinkingReply(
-    chat: Chat,
-    provider: ModelProvider,
-    model: string,
-    promptContext: SystemPromptContext,
-    entries: ToolRegistryEntry[],
-    onProgress: (nextChat: Chat, assistantMessageId: string | null) => void,
-    assistantMessageId?: string | null,
-    signal?: AbortSignal,
-  ): Promise<ResolvedTurn> {
-    return resolveThinkingTurn({
-      assistantMessageId,
-      chat,
-      model,
-      provider,
-      activeToolEntries: entries,
-      onProgress: (nextChat) => onProgress(nextChat, findLatestAssistantMessageId(nextChat)),
-      promptContext,
-      resolveToolId: (functionName) => resolveToolId(functionName, entries),
-      signal,
-    });
   }
 
   async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {

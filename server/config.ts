@@ -32,8 +32,6 @@ export const serverConfig = {
   modelLabel: readStringEnv('MODEL_LABEL', 'Qwen 3.5 9B'),
   deepseekBaseUrl: readStringEnv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com').replace(/\/+$/, ''),
   deepseekApiKey: process.env.DEEPSEEK_API_KEY?.trim() || '',
-  deepseekModel: readStringEnv('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
-  deepseekModelLabel: readStringEnv('DEEPSEEK_MODEL_LABEL', 'DeepSeek V4 Flash'),
   localDbPath: path.resolve(process.cwd(), readStringEnv('LOCAL_DB_PATH', '.local-data/thebestappeva.sqlite')),
   aiAttachmentStoragePath: path.resolve(process.cwd(), readStringEnv('AI_ATTACHMENT_STORAGE_PATH', '.local-data/ai-attachments')),
   aiAttachmentMaxUploadBytes: readNumberEnv('AI_ATTACHMENT_MAX_UPLOAD_BYTES', 20 * 1024 * 1024),

@@ -32,17 +32,17 @@ interface ChatComposerProps {
   onToggleModelDropdown: () => void;
 }
 
-function getPlaceholder(availability: OllamaAvailability, currentModel: string | null, currentProvider: ModelProvider) {
+function getPlaceholder(availability: OllamaAvailability, currentModel: string | null) {
   if (availability === 'connecting') {
-    return `Checking ${currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama'}...`;
+    return 'Checking models...';
   }
 
   if (availability === 'no-models') {
-    return 'Install an Ollama model to start chatting.';
+    return 'Install a model to start chatting.';
   }
 
   if (availability === 'unavailable') {
-    return `Waiting for ${currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama'} to become available...`;
+    return 'Waiting for the selected model to become available...';
   }
 
   return currentModel ? `Message ${currentModel}...` : 'Select a model to start chatting.';
@@ -78,7 +78,7 @@ export function ChatComposer({
   const runtimeUnavailable = availability !== 'ready';
   const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isBusy || !currentModel || isUploadingAttachments || runtimeUnavailable;
   const isInputDisabled = isBusy || !currentModel || runtimeUnavailable;
-  const placeholder = getPlaceholder(availability, currentModel, currentProvider);
+  const placeholder = getPlaceholder(availability, currentModel);
   const handlePickFiles = () => fileInputRef.current?.click();
 
   if (compact) {

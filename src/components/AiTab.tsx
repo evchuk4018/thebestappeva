@@ -9,12 +9,12 @@ import { AiStatusBanner } from './ai-tab/AiStatusBanner';
 import { AiWorkspaceLoadingState } from './ai-tab/AiWorkspaceLoadingState';
 import { copyTextToClipboard } from './ai-tab/clipboard';
 import { EmptyState } from './ai-tab/EmptyState';
-import { getSuggestionPrompt } from './ai-tab/helpers';
 import { MobileHeader } from './ai-tab/MobileHeader';
 import { pullModel } from './ai-tab/ollama-client';
 import { RuntimePill } from './ai-tab/RuntimePill';
 import { Sidebar } from './ai-tab/Sidebar';
 import { AiArtifactsWorkspace } from './ai-tab/AiArtifactsWorkspace';
+import { createHandleCopyMessage, createHandleDeleteChat, createHandleEditUserMessage, createHandleKeyDown, createHandleNewChat, createHandlePullModel, createHandleSelectModel, createHandleSend, createSuggestionHandler } from './ai-tab/ai-tab-actions';
 import { PullProgress } from './ai-tab/types';
 import { useAiAttachments } from './ai-tab/useAiAttachments';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
@@ -94,72 +94,28 @@ export default function AiTab() {
   }, [activeChat, isTyping, selectedChatId]);
 
   const isModelLoading = availability === 'connecting';
+  const handleSend = createHandleSend({ clearReadyAttachments, currentModel, inputValue, isTyping, readyAttachmentRefs, sendMessage, setInputValue });
+  const handleSelectModel = createHandleSelectModel({ runtimeConfig, setCurrentModel, setModelDropdownOpen, setProvider });
+  const handleCopyMessage = createHandleCopyMessage({ activeChat, copyTextToClipboard });
+  const handleDeleteChat = createHandleDeleteChat({ deleteChat });
+  const handleEditUserMessage = createHandleEditUserMessage({ editAndResendMessage, setInputValue });
+  const handleNewChat = createHandleNewChat({ isMobile, selectChat, setActivePanel, setSidebarOpen });
+  const handleSuggestionClick = createSuggestionHandler(setInputValue);
+  const handlePullModel = createHandlePullModel({
+    currentProvider,
+    pullModel,
+    refreshModels,
+    setCurrentModel,
+    setIsPullingModel,
+    setPullProgress,
+  });
+  const handleKeyDown = createHandleKeyDown(handleSend);
   const openAddModels = () => {
     if (currentProvider !== 'ollama') {
       return;
     }
     setModelDropdownOpen(false);
     setAddModelsOpen(true);
-  };
-  const handleSelectModel = (model: string) => { setCurrentModel(model); setModelDropdownOpen(false); };
-  const handleSuggestionClick = (label: string) => setInputValue(getSuggestionPrompt(label));
-  const handleDeleteChat = (chatId: string, event: React.MouseEvent) => { event.stopPropagation(); deleteChat(chatId); };
-  const handleCopyMessage = async (messageId: string, kind: 'assistant' | 'user') => {
-    const message = activeChat?.messages.find((candidate) => candidate.id === messageId);
-    if (!message || message.kind !== kind) return;
-    await copyTextToClipboard(message.content);
-  };
-  const handleEditUserMessage = async (messageId: string, nextContent: string) => {
-    setInputValue('');
-    await editAndResendMessage(messageId, nextContent);
-  };
-  const handleNewChat = () => {
-    setActivePanel('chats');
-    selectChat(null);
-    if (isMobile) setSidebarOpen(false);
-  };
-  const handleSend = async () => {
-    const nextMessage = inputValue.trim();
-    if ((!nextMessage && !readyAttachmentRefs.length) || isTyping || !currentModel) return;
-    setInputValue('');
-    await sendMessage(nextMessage, readyAttachmentRefs);
-    clearReadyAttachments();
-  };
-
-  const handlePullModel = async (modelName: string) => {
-    setIsPullingModel(true);
-    setPullProgress({
-      model: modelName,
-      status: 'Preparing local download...',
-      done: false,
-    });
-
-    try {
-      await pullModel(modelName, (progress) => setPullProgress(progress));
-      await refreshModels(currentProvider, modelName);
-      setCurrentModel(modelName);
-      setPullProgress({
-        model: modelName,
-        status: 'Model installed successfully.',
-        done: true,
-      });
-    } catch (error) {
-      setPullProgress({
-        model: modelName,
-        status: error instanceof Error ? error.message : 'Model download failed.',
-        done: true,
-        error: error instanceof Error ? error.message : 'Model download failed.',
-      });
-    } finally {
-      setIsPullingModel(false);
-    }
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void handleSend();
-    }
   };
   const composerProps = {
     availability,
@@ -305,8 +261,7 @@ export default function AiTab() {
         onPullModel={handlePullModel}
         onSaveSettings={(value) => {
           setCustomSystemPrompt(value.customPrompt);
-          setProvider(value.provider);
-          setCurrentModel(value.model);
+          setProvider(value.provider, value.model);
           setSettingsOpen(false);
         }}
       />

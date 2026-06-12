@@ -2,6 +2,7 @@ import { ChevronDown, Download, LoaderCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatModelMeta } from './helpers';
 import type { ModelProvider, OllamaModel } from './types';
+import { groupModelsByProvider, sortModelsForDisplay } from './model-selection';
 
 interface ModelPickerProps {
   currentModel: string | null;
@@ -17,8 +18,12 @@ interface ModelPickerProps {
 }
 
 export function ModelPicker({ currentModel, currentProvider, disabled = false, isLoading, isOpen, models, onAddModels, onClose, onSelect, onToggle }: ModelPickerProps) {
-  const providerLabel = currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama';
-  const buttonLabel = currentModel ?? (isLoading ? `Checking ${providerLabel}...` : 'No models');
+  const groupedModels = groupModelsByProvider(sortModelsForDisplay(models));
+  const buttonLabel = currentModel ?? (isLoading ? 'Checking models...' : 'Select a model');
+  const providerSections = [
+    { provider: 'ollama' as const, label: 'Ollama', models: groupedModels.ollama },
+    { provider: 'deepseek' as const, label: 'DeepSeek BYOK', models: groupedModels.deepseek },
+  ].filter((section) => section.models.length);
 
   return (
     <div className="relative">
@@ -41,33 +46,45 @@ export function ModelPicker({ currentModel, currentProvider, disabled = false, i
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 5 }}
-              className="absolute bottom-full right-0 z-50 mb-1.5 flex w-72 flex-col rounded-xl border border-[#2f2f2b] bg-[#1a1a18] p-1.5 text-left shadow-xl"
-            >
-              <div className="mb-1 border-b border-[#292925] px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
-                {providerLabel} Models
-              </div>
-              {models.map((model) => {
-                const meta = formatModelMeta(model);
-                return (
-                  <button
-                    key={model.name}
-                    type="button"
-                    onClick={() => onSelect(model.name)}
-                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left ${
-                      currentModel === model.name ? 'bg-zinc-800 font-medium text-white' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-xs">{model.label ?? model.name}</div>
-                      {(meta || model.name !== model.label) && <div className="truncate text-[10px] text-zinc-500">{meta || model.name}</div>}
-                    </div>
-                    {currentModel === model.name && <span className="h-1.5 w-1.5 rounded-full bg-[#e2875e]" />}
-                  </button>
-                );
-              })}
-              {!models.length && (
+            className="absolute bottom-full right-0 z-50 mb-1.5 flex w-72 flex-col rounded-xl border border-[#2f2f2b] bg-[#1a1a18] p-1.5 text-left shadow-xl"
+          >
+              {providerSections.map((section) => (
+                <div key={section.provider} className="mb-1">
+                  <div className="border-b border-[#292925] px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                    {section.label}
+                  </div>
+                  <div className="pt-1">
+                    {section.models.map((model) => {
+                      const meta = formatModelMeta(model);
+                      const providerName = model.provider === 'deepseek' ? 'BYOK' : 'Local';
+                      return (
+                        <button
+                          key={model.name}
+                          type="button"
+                          onClick={() => onSelect(model.name)}
+                          className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left ${
+                            currentModel === model.name ? 'bg-zinc-800 font-medium text-white' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="truncate text-xs">{model.label ?? model.name}</div>
+                              <span className="rounded-full border border-[#2f2f2b] bg-[#11110f] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.16em] text-zinc-500">
+                                {providerName}
+                              </span>
+                            </div>
+                            {(meta || model.name !== model.label) && <div className="truncate text-[10px] text-zinc-500">{meta || model.name}</div>}
+                          </div>
+                          {currentModel === model.name && <span className="h-1.5 w-1.5 rounded-full bg-[#e2875e]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {!providerSections.length && (
                 <div className="rounded-lg px-2 py-3 text-xs text-zinc-500">
-                  {isLoading ? `Checking ${providerLabel}...` : `No ${providerLabel} models found.`}
+                  {isLoading ? 'Checking models...' : 'No models found.'}
                 </div>
               )}
               {currentProvider === 'ollama' && (

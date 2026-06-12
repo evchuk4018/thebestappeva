@@ -92,7 +92,7 @@ Implementation notes:
 
 ## AI workspace
 
-The app now includes a `/ai` module backed by the local Ollama runtime:
+The app now includes a `/ai` module backed by the local Ollama runtime with optional DeepSeek BYOK support:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
 - chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
@@ -126,17 +126,19 @@ The app now includes a `/ai` module backed by the local Ollama runtime:
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
 - the AI sidebar footer now opens a settings modal where custom system instructions persist in the local SQLite workspace, while the selected AI provider/model persist in browser localStorage and the built-in Markdown and tool guidance stay visible as read-only runtime context
+- DeepSeek BYOK models are discovered from the server-side `GET /models` API and appear in the same model picker as local Ollama models
 
 Implementation notes:
 
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
+- DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`
-- Model discovery: `GET /api/tags`
+- Model discovery: `GET /api/tags` for Ollama and `GET /models` for DeepSeek BYOK
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
 - Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU

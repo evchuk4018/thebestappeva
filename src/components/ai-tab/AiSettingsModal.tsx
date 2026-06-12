@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Settings, X } from 'lucide-react';
 import type { ChatMode, ModelProvider, OllamaModel, RuntimeProviderOption } from './types';
 import type { SystemPromptSection } from './system-prompt';
+import { groupModelsByProvider, sortModelsForDisplay } from './model-selection';
 
 interface AiSettingsModalProps {
   availableModels: OllamaModel[];
@@ -49,25 +50,25 @@ export function AiSettingsModal({
     () => providerOptions.find((option) => option.value === draftProvider) ?? providerOptions[0] ?? null,
     [draftProvider, providerOptions],
   );
-  const providerModels = useMemo(
-    () => availableModels.filter((model) => model.provider === draftProvider),
-    [availableModels, draftProvider],
-  );
+  const sortedModels = useMemo(() => sortModelsForDisplay(availableModels), [availableModels]);
+  const groupedModels = useMemo(() => groupModelsByProvider(sortedModels), [sortedModels]);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    if (!providerModels.length) {
-      setDraftModel(activeProvider?.defaultModel ?? null);
+    if (!sortedModels.length) {
+      if (draftModel) {
+        setDraftModel(null);
+      }
       return;
     }
 
-    if (!draftModel || !providerModels.some((model) => model.name === draftModel)) {
-      setDraftModel(providerModels[0].name);
+    if (!draftModel || !sortedModels.some((model) => model.name === draftModel)) {
+      setDraftModel(activeProvider?.defaultModel ?? sortedModels[0].name);
     }
-  }, [activeProvider, draftModel, isOpen, providerModels]);
+  }, [activeProvider, draftModel, isOpen, sortedModels]);
 
   if (!isOpen) {
     return null;
@@ -120,15 +121,30 @@ export function AiSettingsModal({
                     onChange={(event) => setDraftModel(event.target.value || null)}
                     className="rounded-xl border border-[#33332d] bg-[#11110f] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#e2875e]/50"
                   >
-                    {(providerModels.length ? providerModels : [{
-                      name: activeProvider?.defaultModel ?? '',
-                      provider: draftProvider,
-                      label: activeProvider?.defaultModelLabel ?? undefined,
-                    }]).filter((model) => model.name).map((model) => (
-                      <option key={model.name} value={model.name}>
-                        {model.label ?? model.name}
-                      </option>
-                    ))}
+                    {groupedModels.ollama.length || groupedModels.deepseek.length ? (
+                      <>
+                        {groupedModels.ollama.length > 0 && (
+                          <optgroup label="Ollama">
+                            {groupedModels.ollama.map((model) => (
+                              <option key={model.name} value={model.name}>
+                                {model.label ?? model.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {groupedModels.deepseek.length > 0 && (
+                          <optgroup label="DeepSeek BYOK">
+                            {groupedModels.deepseek.map((model) => (
+                              <option key={model.name} value={model.name}>
+                                {model.label ?? model.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </>
+                    ) : activeProvider?.defaultModel ? (
+                      <option value={activeProvider.defaultModel}>{activeProvider.defaultModelLabel ?? activeProvider.defaultModel}</option>
+                    ) : null}
                   </select>
                 </label>
               </div>

@@ -27,7 +27,7 @@ export function RuntimePill({ availability, currentProvider, modelCount, onOpenA
     },
     'no-models': {
       icon: PackagePlus,
-      label: 'No local models yet',
+      label: 'No models yet',
       detail: 'Install one to start chatting',
       action: 'Add models',
       iconClassName: '',

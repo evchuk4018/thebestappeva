@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { loadRuntimeConfig } from '../../lib/ollama/runtime';
 import type { AiRuntimeConfig, ModelProvider, OllamaAvailability, OllamaModel, RuntimeProviderOption } from './types';
+import { resolveModelSelection } from './model-selection';
 
 interface UseOllamaModelStateOptions {
   currentModel: string | null;
@@ -18,10 +19,10 @@ function resolveAvailability(option: RuntimeProviderOption | null, models: Ollam
   if (!option) {
     return 'connecting' as OllamaAvailability;
   }
-  if (option.status === 'unavailable' || option.status === 'missing-env') {
+  if ((option.status === 'unavailable' || option.status === 'missing-env') && !models.length) {
     return 'unavailable' as OllamaAvailability;
   }
-  if (option.value === 'ollama' && models.length === 0) {
+  if (models.length === 0) {
     return 'no-models' as OllamaAvailability;
   }
   return 'ready' as OllamaAvailability;
@@ -43,10 +44,7 @@ export function useOllamaModelState({
     currentModelRef.current = currentModel;
   }, [currentModel]);
 
-  const availableModels = useMemo(
-    () => runtimeConfig?.modelOptions.filter((model) => model.provider === currentProvider) ?? [],
-    [currentProvider, runtimeConfig],
-  );
+  const availableModels = useMemo(() => runtimeConfig?.modelOptions ?? [], [runtimeConfig]);
   const activeProviderOption = useMemo(() => findProviderOption(runtimeConfig, currentProvider), [currentProvider, runtimeConfig]);
 
   async function refreshModels(preferredProvider = currentProvider, preferredModel?: string | null) {
@@ -55,20 +53,16 @@ export function useOllamaModelState({
       setRuntimeConfig(config);
 
       const nextProvider = config.providerOptions.some((option) => option.value === preferredProvider) ? preferredProvider : config.defaultProvider;
-      const nextModels = config.modelOptions.filter((model) => model.provider === nextProvider);
-      const option = findProviderOption(config, nextProvider);
-      setCurrentProvider(nextProvider);
-      setAvailability(resolveAvailability(option, nextModels));
+      const { provider: resolvedProvider, model: resolvedModel } = resolveModelSelection(
+        config.modelOptions,
+        nextProvider,
+        preferredModel ?? currentModelRef.current,
+      );
+      const option = findProviderOption(config, resolvedProvider);
+      setCurrentProvider(resolvedProvider);
+      setAvailability(resolveAvailability(option, config.modelOptions));
       setLastError(option && option.status !== 'ready' ? option.detail : null);
-
-      if (!nextModels.length) {
-        setCurrentModel(nextProvider === 'deepseek' ? option?.defaultModel ?? null : null);
-        return config;
-      }
-
-      const preferred = preferredModel ?? currentModelRef.current ?? option?.defaultModel ?? null;
-      const nextModel = nextModels.some((model) => model.name === preferred) ? preferred : nextModels[0].name;
-      setCurrentModel(nextModel);
+      setCurrentModel(resolvedModel);
       return config;
     } catch (error) {
       setAvailability('unavailable');
@@ -105,24 +99,13 @@ export function useOllamaModelState({
       return;
     }
 
-    const option = activeProviderOption;
+    const nextSelection = resolveModelSelection(availableModels, currentProvider, currentModel);
+    const option = findProviderOption(runtimeConfig, nextSelection.provider);
+    setCurrentProvider(nextSelection.provider);
+    setCurrentModel(nextSelection.model);
     setAvailability(resolveAvailability(option, availableModels));
     setLastError(option && option.status !== 'ready' ? option.detail : null);
-
-    if (!availableModels.length) {
-      if (currentProvider === 'deepseek' && option?.defaultModel && currentModel !== option.defaultModel) {
-        setCurrentModel(option.defaultModel);
-      }
-      if (currentProvider === 'ollama' && currentModel !== null) {
-        setCurrentModel(null);
-      }
-      return;
-    }
-
-    if (!currentModel || !availableModels.some((model) => model.name === currentModel)) {
-      setCurrentModel(availableModels[0].name);
-    }
-  }, [activeProviderOption, availableModels, currentModel, currentProvider, hydrationStatus, runtimeConfig, setCurrentModel]);
+  }, [availableModels, currentModel, currentProvider, hydrationStatus, runtimeConfig, setCurrentModel, setCurrentProvider]);
 
   return {
     activeProviderOption,
