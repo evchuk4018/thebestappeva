@@ -6,5 +6,6 @@ coverage/
 .local-data/
 .DS_Store
 *.log
+.env
 .env*
 !.env.example
