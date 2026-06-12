@@ -22,6 +22,11 @@ interface PendingRewrite {
 const PREVIEW_COLOR = '#a855f7';
 const INTERNAL_META_KEY = 'docs-rewrite-internal';
 
+type RewriteModelDependencies = {
+  listAvailableModels?: typeof listModels;
+  loadPreferences?: typeof loadAiPreferences;
+};
+
 function readSelectionSnapshot(editor: Editor) {
   const { from, to, empty } = editor.state.selection;
   if (empty) {
@@ -73,9 +78,9 @@ function restoreOriginalSelection(editor: Editor, pending: PendingRewrite) {
   return { from: pending.from, to: nextTo, text: pending.originalText } satisfies SelectionSnapshot;
 }
 
-async function resolveRewriteModel() {
-  const preferences = await loadAiPreferences();
-  const models = await listModels(preferences.selectedProvider);
+export async function resolveRewriteModel(dependencies: RewriteModelDependencies = {}) {
+  const preferences = await (dependencies.loadPreferences ?? loadAiPreferences)();
+  const models = await (dependencies.listAvailableModels ?? listModels)(preferences.selectedProvider);
   if (!models.length) {
     throw new Error(`No models are available for the ${preferences.selectedProvider} provider.`);
   }

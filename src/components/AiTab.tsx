@@ -136,7 +136,7 @@ export default function AiTab() {
 
     try {
       await pullModel(modelName, (progress) => setPullProgress(progress));
-      await refreshModels(modelName);
+      await refreshModels(currentProvider, modelName);
       setCurrentModel(modelName);
       setPullProgress({
         model: modelName,

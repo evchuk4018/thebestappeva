@@ -93,6 +93,7 @@ test('pauses on inline ask_user and resumes the same assistant message after a c
     assistantMessageId: initial.pendingAskUser.assistantMessageId,
     chat: resumedChat,
     model: 'qwen',
+    provider: 'ollama',
     activeToolEntries: [askUserTool],
     onProgress: () => {},
     promptContext: buildPromptContext(),

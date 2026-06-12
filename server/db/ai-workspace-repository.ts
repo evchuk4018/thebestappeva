@@ -29,7 +29,7 @@ export function loadAiWorkspace(): AiWorkspaceSnapshot {
   return {
     chats: selectStoredChats(),
     selectedProvider: readJsonSetting(selectedProviderKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedProvider,
-    selectedModel: readJsonSetting(selectedModelKey, parseAiPreferences, { selectedModel: null }).selectedModel,
+    selectedModel: readJsonSetting(selectedModelKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedModel,
     enabledTools: readJsonSetting(
       enabledToolsKey,
       (value, field) => parseAiWorkspaceSnapshot({ ...createEmptyAiWorkspaceSnapshot(), enabledTools: value }, field).enabledTools,

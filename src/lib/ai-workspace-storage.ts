@@ -1,4 +1,5 @@
 import { AiPreferences, AiWorkspaceSnapshot, parseAiPreferences, parseAiWorkspaceSnapshot } from '../../shared/ai-workspace-contract';
+import { loadAiPreferencesWithStorage } from './ai-preferences-storage';
 
 interface SaveWorkspaceOptions {
   keepalive?: boolean;
@@ -15,9 +16,20 @@ async function readJsonResponse(response: Response) {
   return payload;
 }
 
+async function fetchAiPreferencesFromServer(): Promise<AiPreferences> {
+  const response = await fetch('/api/ai/preferences');
+  return parseAiPreferences(await readJsonResponse(response));
+}
+
 export async function loadAiWorkspace() {
   const response = await fetch('/api/ai/workspace');
-  return parseAiWorkspaceSnapshot(await readJsonResponse(response));
+  const workspace = parseAiWorkspaceSnapshot(await readJsonResponse(response));
+  const preferences = await loadAiPreferences();
+  return {
+    ...workspace,
+    selectedProvider: preferences.selectedProvider,
+    selectedModel: preferences.selectedModel,
+  };
 }
 
 export async function saveAiWorkspace(snapshot: AiWorkspaceSnapshot, options: SaveWorkspaceOptions = {}) {
@@ -33,6 +45,5 @@ export async function saveAiWorkspace(snapshot: AiWorkspaceSnapshot, options: Sa
 }
 
 export async function loadAiPreferences(): Promise<AiPreferences> {
-  const response = await fetch('/api/ai/preferences');
-  return parseAiPreferences(await readJsonResponse(response));
+  return loadAiPreferencesWithStorage(fetchAiPreferencesFromServer);
 }

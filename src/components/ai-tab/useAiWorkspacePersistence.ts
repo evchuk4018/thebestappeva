@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { createEmptyAiWorkspaceSnapshot } from '../../../shared/ai-workspace-contract';
+import { saveAiPreferencesToLocalStorage } from '../../lib/ai-preferences-storage';
 import { loadAiWorkspace, saveAiWorkspace } from '../../lib/ai-workspace-storage';
 import { normalizePendingAskUserChats } from './ask-user';
 import type { AiWorkspaceSnapshot, Chat } from './types';
@@ -112,6 +113,21 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     }, 500);
     return () => window.clearTimeout(timeoutId);
   }, [flushWorkspace, hydrationStatus, serializedSnapshot]);
+
+  useEffect(() => {
+    if (hydrationStatus !== 'ready') {
+      return;
+    }
+
+    try {
+      saveAiPreferencesToLocalStorage({
+        selectedProvider: currentProvider,
+        selectedModel: currentModel,
+      });
+    } catch (error) {
+      setPersistenceError(toErrorMessage(error, 'Unable to save the local AI preferences.'));
+    }
+  }, [currentModel, currentProvider, hydrationStatus]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
