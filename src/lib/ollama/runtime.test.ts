@@ -66,6 +66,20 @@ test('passes the selected provider to the local AI server', async () => {
   assert.equal(requestBody?.provider, 'deepseek');
 });
 
+test('forwards runtime options to the local AI server', async () => {
+  let requestBody: { runtimeOptions?: { maxOutputTokens?: number } } | null = null;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as { runtimeOptions?: { maxOutputTokens?: number } };
+    return createStreamResponse([JSON.stringify({ type: 'done', model: 'qwen' })]);
+  };
+
+  await streamChatWithModel('qwen', [], {
+    runtimeOptions: { maxOutputTokens: 24 },
+  });
+
+  assert.equal(requestBody?.runtimeOptions?.maxOutputTokens, 24);
+});
+
 test('surfaces streamed tool calls', async () => {
   const events: string[] = [];
   globalThis.fetch = async () => createStreamResponse([

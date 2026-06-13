@@ -54,10 +54,12 @@ export interface AssistantMessage {
 
 export type AiMessage = UserMessage | AssistantMessage;
 export type ChatMode = 'thinking' | 'flash';
+export type ChatTitleStatus = 'pending' | 'generated' | 'finalized';
 
 export interface Chat {
   id: string;
   title: string;
+  titleStatus: ChatTitleStatus;
   messages: AiMessage[];
   activeArtifactId: string | null;
   includedArtifactIds: string[];
@@ -96,6 +98,19 @@ function expectOptionalString(value: unknown, field: string) {
   }
 
   return expectString(value, field);
+}
+
+function parseChatTitleStatus(value: unknown, field: string): ChatTitleStatus {
+  if (typeof value === 'undefined') {
+    return 'finalized';
+  }
+
+  const status = expectString(value, field);
+  if (status !== 'pending' && status !== 'generated' && status !== 'finalized') {
+    throw new Error(`Invalid ${field}. Expected "pending", "generated", or "finalized".`);
+  }
+
+  return status;
 }
 
 function expectRecord(value: unknown, field: string) {
@@ -183,6 +198,7 @@ function parseChat(value: unknown, field: string): Chat {
   return {
     id: expectString(record.id, `${field}.id`),
     title: expectString(record.title, `${field}.title`),
+    titleStatus: parseChatTitleStatus(record.titleStatus, `${field}.titleStatus`),
     messages,
     activeArtifactId: record.activeArtifactId === null || typeof record.activeArtifactId === 'undefined'
       ? null

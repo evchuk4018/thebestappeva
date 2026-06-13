@@ -44,7 +44,7 @@ function saveVisibleBranch(message: UserMessage, messagesAfter: AiMessage[]) {
 }
 
 function updateChatTitle(chat: Chat, messageIndex: number, content: string) {
-  return messageIndex === 0 ? createChatTitle(content) : chat.title;
+  return messageIndex === 0 && chat.titleStatus === 'pending' ? createChatTitle(content) : chat.title;
 }
 
 export function getUserMessageVersionInfo(message: UserMessage) {

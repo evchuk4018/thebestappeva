@@ -6,6 +6,7 @@ import type {
   ModelProvider,
   ModelToolDefinition as OllamaToolDefinition,
   RuntimeModel as OllamaModel,
+  RuntimeOptions,
 } from '../../../shared/ai-runtime-contract';
 
 export type {
@@ -16,6 +17,7 @@ export type {
   OllamaChatToolCalls,
   OllamaModel,
   OllamaToolDefinition,
+  RuntimeOptions,
 };
 
 export class OllamaClientError extends Error {

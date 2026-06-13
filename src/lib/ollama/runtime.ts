@@ -51,4 +51,5 @@ export type {
   OllamaChatToolCalls,
   OllamaModel,
   OllamaToolDefinition,
+  RuntimeOptions,
 } from './common';

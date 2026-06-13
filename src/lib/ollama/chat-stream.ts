@@ -1,6 +1,7 @@
 import { normalizeOllamaError, OllamaClientError } from './common';
 import type { OllamaChatMessage, OllamaChatStreamEvent, OllamaChatToolCalls, OllamaToolDefinition } from './common';
 import type { ModelProvider } from '../../../shared/ai-runtime-contract';
+import type { RuntimeOptions } from './common';
 
 function parseJsonLine<T>(value: string) {
   try {
@@ -54,6 +55,7 @@ export async function streamChatWithModel(
     provider?: ModelProvider;
     think?: boolean;
     tools?: OllamaToolDefinition[];
+    runtimeOptions?: RuntimeOptions;
     signal?: AbortSignal;
     onEvent?: (event: OllamaChatStreamEvent) => void;
   } = {},
@@ -69,6 +71,7 @@ export async function streamChatWithModel(
         think: options.think,
         messages,
         tools: options.tools?.length ? options.tools : undefined,
+        runtimeOptions: options.runtimeOptions,
       }),
     });
 
@@ -109,7 +112,7 @@ export async function streamChatWithModel(
 export async function chatWithModel(
   model: string,
   messages: OllamaChatMessage[],
-  options: { provider?: ModelProvider; think?: boolean; tools?: OllamaToolDefinition[]; signal?: AbortSignal } = {},
+  options: { provider?: ModelProvider; think?: boolean; tools?: OllamaToolDefinition[]; runtimeOptions?: RuntimeOptions; signal?: AbortSignal } = {},
 ) {
   return streamChatWithModel(model, messages, options);
 }

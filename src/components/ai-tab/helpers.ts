@@ -116,6 +116,7 @@ export function createNewChat(message: UserMessage, mode: ChatMode): Chat {
   return {
     id: `chat-${Date.now()}`,
     title: createChatTitle(message.content),
+    titleStatus: 'pending',
     messages: [message],
     activeArtifactId: null,
     includedArtifactIds: [],

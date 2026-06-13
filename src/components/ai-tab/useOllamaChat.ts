@@ -14,6 +14,7 @@ import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
+import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
 
 const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
@@ -50,6 +51,7 @@ export function useOllamaChat() {
     setAvailability,
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
+  useChatTitleGeneration({ availableModels, chats, setChats });
 
   const toolRegistryEntries = getToolRegistryEntries();
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
