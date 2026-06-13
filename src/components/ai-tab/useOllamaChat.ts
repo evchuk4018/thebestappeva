@@ -9,15 +9,35 @@ import { SystemPromptContext } from './system-prompt';
 import { buildArtifactContext } from '../../lib/ai-artifact-context';
 import { findPendingAskUserState, updateAskUserStepInChat } from './ask-user';
 import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
-import type { AiAttachmentReference, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
+import type { AiAttachmentReference, AiWorkspaceSnapshot, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
 import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
+import { mergeMemoryRefreshIntoChats, shouldRefreshMemoryAfterTurn } from './memory-refresh';
+import { refreshAiChatMemory } from '../../lib/ai-memory-storage';
 
 const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
+
+function buildWorkspaceSnapshot(
+  chats: Chat[],
+  generatedUserMemory: string,
+  currentProvider: ModelProvider,
+  currentModel: string | null,
+  enabledTools: Record<string, boolean>,
+  customSystemPrompt: string,
+): AiWorkspaceSnapshot {
+  return {
+    chats,
+    generatedUserMemory,
+    selectedProvider: currentProvider,
+    selectedModel: currentModel,
+    enabledTools,
+    customSystemPrompt,
+  };
+}
 
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
@@ -28,6 +48,7 @@ export function useOllamaChat() {
   const activeTurnControllerRef = useRef<AbortController | null>(null);
   const {
     chats,
+    generatedUserMemory,
     currentProvider,
     currentModel,
     customSystemPrompt,
@@ -35,6 +56,7 @@ export function useOllamaChat() {
     hydrationStatus,
     persistenceError,
     setChats,
+    setGeneratedUserMemory,
     setCurrentProvider,
     setCurrentModel,
     setCustomSystemPrompt,
@@ -62,6 +84,7 @@ export function useOllamaChat() {
   const chatMode = selectedChat?.mode ?? draftMode;
   const isBusy = isTyping || Boolean(pendingAskUserTurn);
   const systemPromptContext: SystemPromptContext = {
+    generatedUserMemory,
     customPrompt: customSystemPrompt,
     mode: chatMode,
     tools: activeToolEntries.map(({ definition }) => definition),
@@ -125,6 +148,7 @@ export function useOllamaChat() {
       const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools) : [];
       const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
       const promptContext = {
+        generatedUserMemory,
         customPrompt: customSystemPrompt,
         mode: effectiveMode,
         tools: turnToolEntries.map(({ definition }) => definition),
@@ -150,10 +174,41 @@ export function useOllamaChat() {
               assistantMessageId,
               controller.signal,
             );
-      setChats((currentChats) => replaceChat(currentChats, resolvedTurn.chat));
+      let nextChats = replaceChat(chats, resolvedTurn.chat);
+      setChats(nextChats);
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
       setPendingAskUserTurn(resolvedTurn.status === 'paused' ? resolvedTurn.pendingAskUser : null);
+      if (shouldRefreshMemoryAfterTurn(resolvedTurn)) {
+        await flushWorkspace({
+          snapshot: buildWorkspaceSnapshot(
+            nextChats,
+            generatedUserMemory,
+            currentProvider,
+            currentModel,
+            enabledTools,
+            customSystemPrompt,
+          ),
+        });
+        try {
+          const refreshed = await refreshAiChatMemory(resolvedTurn.chat.id);
+          nextChats = mergeMemoryRefreshIntoChats(nextChats, refreshed);
+          setGeneratedUserMemory(refreshed.generatedUserMemory);
+          setChats(nextChats);
+          await flushWorkspace({
+            snapshot: buildWorkspaceSnapshot(
+              nextChats,
+              refreshed.generatedUserMemory,
+              currentProvider,
+              currentModel,
+              enabledTools,
+              customSystemPrompt,
+            ),
+          });
+        } catch {
+          // Keep the completed turn even if background memory refresh fails.
+        }
+      }
     } finally {
       if (activeTurnControllerRef.current === controller) {
         activeTurnControllerRef.current = null;
@@ -256,6 +311,7 @@ export function useOllamaChat() {
     availability,
     chatMode,
     chats,
+    generatedUserMemory,
     currentProvider,
     currentModel,
     customSystemPrompt,

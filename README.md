@@ -96,7 +96,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
 - chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
-- new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b`; if that model is unavailable, the heuristic title remains
+- new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b-q8_0`; if that model is unavailable, the heuristic title remains
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels
 - each chat has a mode toggle beside the model picker:

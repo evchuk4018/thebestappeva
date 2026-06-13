@@ -2,7 +2,7 @@ import { createChatTitle } from './helpers';
 import { streamChatWithModel } from './ollama-client';
 import type { Chat, OllamaModel } from './types';
 
-export const CHAT_TITLE_MODEL = 'qwen3.5:0.8b';
+export const CHAT_TITLE_MODEL = 'qwen3.5:0.8b-q8_0';
 export const CHAT_TITLE_MAX_CHARS = 48;
 export const CHAT_TITLE_MAX_OUTPUT_TOKENS = 24;
 

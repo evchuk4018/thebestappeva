@@ -61,6 +61,8 @@ export interface Chat {
   title: string;
   titleStatus: ChatTitleStatus;
   messages: AiMessage[];
+  summary?: string;
+  summaryUpdatedAt?: string;
   activeArtifactId: string | null;
   includedArtifactIds: string[];
   mode: ChatMode;
@@ -69,6 +71,7 @@ export interface Chat {
 
 export interface AiWorkspaceSnapshot {
   chats: Chat[];
+  generatedUserMemory: string;
   selectedProvider: ModelProvider;
   selectedModel: string | null;
   enabledTools: Record<string, boolean>;
@@ -200,6 +203,8 @@ function parseChat(value: unknown, field: string): Chat {
     title: expectString(record.title, `${field}.title`),
     titleStatus: parseChatTitleStatus(record.titleStatus, `${field}.titleStatus`),
     messages,
+    summary: expectOptionalString(record.summary, `${field}.summary`),
+    summaryUpdatedAt: expectOptionalString(record.summaryUpdatedAt, `${field}.summaryUpdatedAt`),
     activeArtifactId: record.activeArtifactId === null || typeof record.activeArtifactId === 'undefined'
       ? null
       : expectString(record.activeArtifactId, `${field}.activeArtifactId`),
@@ -214,6 +219,7 @@ function parseChat(value: unknown, field: string): Chat {
 export function createEmptyAiWorkspaceSnapshot(): AiWorkspaceSnapshot {
   return {
     chats: [],
+    generatedUserMemory: '',
     selectedProvider: 'ollama',
     selectedModel: null,
     enabledTools: {},
@@ -246,6 +252,7 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
 
   return {
     chats,
+    generatedUserMemory: expectOptionalString(record.generatedUserMemory, `${field}.generatedUserMemory`) ?? '',
     selectedProvider,
     selectedModel,
     enabledTools: normalizedEnabledTools,

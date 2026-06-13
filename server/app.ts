@@ -37,6 +37,7 @@ import {
   handleGetAiRuntimeConfig,
   handlePostAiChatStream,
 } from './ai-runtime';
+import { handlePostAiMemoryRefresh } from './ai-memory';
 import { handleGetAiPreferences, handleGetAiWorkspace, handlePutAiWorkspace } from './ai-workspace';
 import { serverConfig } from './config';
 import { getDatabase } from './db/database';
@@ -123,6 +124,7 @@ function registerApiRoutes(app: Express) {
   app.get('/api/ai/runtime-config', (_req, res) => void handleGetAiRuntimeConfig(_req, res));
   app.get('/api/ai/model-capabilities', (req, res) => void handleGetAiModelCapabilities(req, res));
   app.post('/api/ai/chat/stream', (req, res) => void handlePostAiChatStream(req, res));
+  app.post('/api/ai/chats/:chatId/memory-refresh', (req, res) => void handlePostAiMemoryRefresh(req, res));
   app.get('/api/ai/chats/:chatId/artifacts', (req, res) => void handleListArtifacts(req, res));
   app.post('/api/ai/chats/:chatId/artifacts', (req, res) => void handleCreateArtifact(req, res));
   app.get('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleGetArtifact(req, res));

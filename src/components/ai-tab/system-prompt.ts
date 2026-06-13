@@ -2,6 +2,7 @@ import { ChatMode } from './types';
 import { ToolDefinition } from './tools/types';
 
 export interface SystemPromptContext {
+  generatedUserMemory: string;
   customPrompt: string;
   mode: ChatMode;
   tools: ToolDefinition[];
@@ -9,7 +10,7 @@ export interface SystemPromptContext {
 }
 
 export interface SystemPromptSection {
-  id: 'custom' | 'formatting' | 'workflow' | 'tools' | 'artifacts';
+  id: 'memory' | 'custom' | 'formatting' | 'workflow' | 'tools' | 'artifacts';
   title: string;
   content: string;
   readOnly: boolean;
@@ -81,10 +82,20 @@ function buildArtifactPromptContent(context: string | undefined) {
 }
 
 export function buildSystemPromptSections(context: SystemPromptContext) {
+  const generatedUserMemory = context.generatedUserMemory.trim();
   const customPrompt = context.customPrompt.trim();
   const sections: SystemPromptSection[] = [];
   const workflowPrompt = buildWorkflowPromptContent(context.mode);
   const artifactPrompt = buildArtifactPromptContent(context.artifactContext);
+
+  if (generatedUserMemory) {
+    sections.push({
+      id: 'memory',
+      title: 'Generated memory',
+      content: generatedUserMemory,
+      readOnly: true,
+    });
+  }
 
   if (customPrompt) {
     sections.push({

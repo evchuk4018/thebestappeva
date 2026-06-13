@@ -57,6 +57,7 @@ test('loads chats from the workspace API while hydrating provider preferences fr
         mode: 'thinking',
         updatedAt: '2026-06-12T00:00:00.000Z',
       }],
+      generatedUserMemory: 'Prefers concise replies.',
       selectedProvider: 'ollama',
       selectedModel: 'qwen3.5:9b-q4_K_M',
       enabledTools: { web_search: true },
@@ -71,6 +72,7 @@ test('loads chats from the workspace API while hydrating provider preferences fr
 
   assert.equal(workspace.chats.length, 1);
   assert.equal(workspace.chats[0]?.id, 'chat-1');
+  assert.equal(workspace.generatedUserMemory, 'Prefers concise replies.');
   assert.deepEqual(workspace.enabledTools, { web_search: true });
   assert.equal(workspace.customSystemPrompt, 'Keep it tight.');
   assert.equal(workspace.selectedProvider, 'deepseek');

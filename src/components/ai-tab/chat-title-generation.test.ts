@@ -97,6 +97,6 @@ test('editing the first prompt after a generated title keeps the original title'
 });
 
 test('detects whether the dedicated title model is installed', () => {
-  assert.equal(hasChatTitleModel([{ name: 'qwen3.5:0.8b', provider: 'ollama' }]), true);
+  assert.equal(hasChatTitleModel([{ name: 'qwen3.5:0.8b-q8_0', provider: 'ollama' }]), true);
   assert.equal(hasChatTitleModel([{ name: 'qwen3.5:9b', provider: 'ollama' }]), false);
 });

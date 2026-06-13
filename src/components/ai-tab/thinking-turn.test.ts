@@ -77,6 +77,7 @@ test('streams thinking traces, tool steps, and the final answer', async () => {
       progressSnapshots.push(assistant?.content ?? '');
     },
     promptContext: {
+      generatedUserMemory: '',
       customPrompt: '',
       mode: 'thinking',
       tools: [toolEntry.definition],
@@ -148,6 +149,7 @@ test('preserves staged thinking blocks around tool work during long turns', asyn
     activeToolEntries: [toolEntry],
     onProgress: () => {},
     promptContext: {
+      generatedUserMemory: '',
       customPrompt: '',
       mode: 'thinking',
       tools: [toolEntry.definition],

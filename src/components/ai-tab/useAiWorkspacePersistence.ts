@@ -9,10 +9,12 @@ type HydrationStatus = 'loading' | 'ready' | 'error';
 
 interface FlushWorkspaceOptions {
   keepalive?: boolean;
+  snapshot?: AiWorkspaceSnapshot;
 }
 
 interface AiWorkspacePersistenceState {
   chats: Chat[];
+  generatedUserMemory: string;
   currentProvider: AiWorkspaceSnapshot['selectedProvider'];
   currentModel: string | null;
   customSystemPrompt: string;
@@ -20,6 +22,7 @@ interface AiWorkspacePersistenceState {
   hydrationStatus: HydrationStatus;
   persistenceError: string | null;
   setChats: Dispatch<SetStateAction<Chat[]>>;
+  setGeneratedUserMemory: Dispatch<SetStateAction<string>>;
   setCurrentProvider: Dispatch<SetStateAction<AiWorkspaceSnapshot['selectedProvider']>>;
   setCurrentModel: Dispatch<SetStateAction<string | null>>;
   setCustomSystemPrompt: Dispatch<SetStateAction<string>>;
@@ -33,6 +36,7 @@ function toErrorMessage(error: unknown, fallback: string) {
 
 export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const [chats, setChats] = useState<Chat[]>([]);
+  const [generatedUserMemory, setGeneratedUserMemory] = useState('');
   const [currentProvider, setCurrentProvider] = useState<AiWorkspaceSnapshot['selectedProvider']>('ollama');
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
@@ -44,20 +48,23 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
   const snapshot = useMemo<AiWorkspaceSnapshot>(() => ({
     chats,
+    generatedUserMemory,
     selectedProvider: currentProvider,
     selectedModel: currentModel,
     enabledTools,
     customSystemPrompt,
-  }), [chats, currentProvider, currentModel, enabledTools, customSystemPrompt]);
+  }), [chats, generatedUserMemory, currentProvider, currentModel, enabledTools, customSystemPrompt]);
   const serializedSnapshot = useMemo(() => JSON.stringify(snapshot), [snapshot]);
 
   const flushWorkspace = useEffectEvent(async (options: FlushWorkspaceOptions = {}) => {
-    if (!hydratedRef.current || serializedSnapshot === lastSavedSnapshotRef.current) {
+    const nextSnapshot = options.snapshot ?? snapshot;
+    const nextSerializedSnapshot = JSON.stringify(nextSnapshot);
+    if (!hydratedRef.current || nextSerializedSnapshot === lastSavedSnapshotRef.current) {
       return;
     }
 
     try {
-      const savedSnapshot = await saveAiWorkspace(snapshot, { keepalive: options.keepalive });
+      const savedSnapshot = await saveAiWorkspace(nextSnapshot, { keepalive: options.keepalive });
       lastSavedSnapshotRef.current = JSON.stringify(savedSnapshot);
       setPersistenceError(null);
     } catch (error) {
@@ -81,6 +88,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
         hydratedRef.current = true;
         lastSavedSnapshotRef.current = JSON.stringify(loadedSnapshot);
         setChats(nextSnapshot.chats);
+        setGeneratedUserMemory(nextSnapshot.generatedUserMemory);
         setCurrentProvider(nextSnapshot.selectedProvider);
         setCurrentModel(nextSnapshot.selectedModel);
         setEnabledTools(nextSnapshot.enabledTools);
@@ -140,6 +148,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
   return {
     chats,
+    generatedUserMemory,
     currentProvider,
     currentModel,
     customSystemPrompt,
@@ -147,6 +156,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     hydrationStatus,
     persistenceError,
     setChats,
+    setGeneratedUserMemory,
     setCurrentProvider,
     setCurrentModel,
     setCustomSystemPrompt,

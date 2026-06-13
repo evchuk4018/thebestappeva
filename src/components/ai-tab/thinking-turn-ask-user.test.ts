@@ -26,6 +26,7 @@ function resolveToolId() {
 
 function buildPromptContext() {
   return {
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'thinking' as const,
     tools: [askUserTool.definition],

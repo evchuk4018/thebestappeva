@@ -43,6 +43,7 @@ export function AiTabOverlays({
   onSaveSettings,
 }: AiTabOverlaysProps) {
   const sections = buildSystemPromptSections({
+    generatedUserMemory: '',
     customPrompt: customSystemPrompt,
     mode: chatMode,
     tools,

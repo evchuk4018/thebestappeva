@@ -10,7 +10,7 @@ export const suggestionPrompts: Record<string, string> = {
 
 export const curatedModelCatalog: CatalogModel[] = [
   {
-    name: 'qwen3.5:0.8b',
+    name: 'qwen3.5:0.8b-q8_0',
     title: 'Qwen 3.5 0.8B',
     description: 'A very small local model for fast experiments and lightweight chats.',
     tags: ['fast', 'small', 'general'],

@@ -13,11 +13,13 @@ const weatherTool = {
 
 test('thinking mode includes workflow guidance alongside tool guidance', () => {
   const sections = buildSystemPromptSections({
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
   });
   const content = buildSystemPromptContent({
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
@@ -36,11 +38,13 @@ test('thinking mode includes workflow guidance alongside tool guidance', () => {
 
 test('flash mode excludes thinking workflow guidance', () => {
   const sections = buildSystemPromptSections({
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'flash',
     tools: [weatherTool],
   });
   const content = buildSystemPromptContent({
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'flash',
     tools: [weatherTool],
@@ -54,10 +58,23 @@ test('flash mode excludes thinking workflow guidance', () => {
 
 test('artifact guidance requires create_artifact for content requested in an artifact', () => {
   const content = buildSystemPromptContent({
+    generatedUserMemory: '',
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
   });
 
   assert.match(content, /When the user asks for content in an artifact, call create_artifact/i);
+});
+
+test('generated memory is injected before custom prompt content', () => {
+  const sections = buildSystemPromptSections({
+    generatedUserMemory: 'Prefers concise answers.',
+    customPrompt: 'Call out tradeoffs.',
+    mode: 'thinking',
+    tools: [weatherTool],
+  });
+
+  assert.equal(sections[0]?.id, 'memory');
+  assert.equal(sections[1]?.id, 'custom');
 });
