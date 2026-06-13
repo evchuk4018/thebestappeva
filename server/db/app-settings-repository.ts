@@ -13,16 +13,18 @@ function upsertSettingStatement(database: BetterSqlite3.Database) {
   `);
 }
 
+export function readJsonSetting<T>(key: string, parse: (value: unknown, field?: string) => T, fallback: T): T;
+export function readJsonSetting<T>(database: BetterSqlite3.Database, key: string, parse: (value: unknown, field?: string) => T, fallback: T): T;
 export function readJsonSetting<T>(
-  database: BetterSqlite3.Database | string,
+  databaseOrKey: BetterSqlite3.Database | string,
   keyOrParse: string | ((value: unknown, field?: string) => T),
   parseOrFallback: ((value: unknown, field?: string) => T) | T,
   fallbackMaybe?: T,
 ) {
-  const databaseHandle = typeof database === 'string' ? getDatabase() : database;
-  const key = typeof database === 'string' ? database : (keyOrParse as string);
-  const parse = (typeof database === 'string' ? keyOrParse : parseOrFallback) as (value: unknown, field?: string) => T;
-  const fallback = (typeof database === 'string' ? parseOrFallback : fallbackMaybe) as T;
+  const databaseHandle = typeof databaseOrKey === 'string' ? getDatabase() : databaseOrKey;
+  const key = typeof databaseOrKey === 'string' ? databaseOrKey : (keyOrParse as string);
+  const parse = (typeof databaseOrKey === 'string' ? keyOrParse : parseOrFallback) as (value: unknown, field?: string) => T;
+  const fallback = (typeof databaseOrKey === 'string' ? parseOrFallback : fallbackMaybe) as T;
   const row = selectSettingStatement(databaseHandle).get(key) as { value_json: string } | undefined;
   if (!row) {
     return fallback;
@@ -31,9 +33,11 @@ export function readJsonSetting<T>(
   return parse(JSON.parse(row.value_json), `Stored setting "${key}"`);
 }
 
-export function writeJsonSetting(database: BetterSqlite3.Database | string, keyOrValue: string | unknown, maybeValue?: unknown) {
-  const databaseHandle = typeof database === 'string' ? getDatabase() : database;
-  const key = typeof database === 'string' ? database : (keyOrValue as string);
-  const value = typeof database === 'string' ? keyOrValue : maybeValue;
+export function writeJsonSetting(key: string, value: unknown): void;
+export function writeJsonSetting(database: BetterSqlite3.Database, key: string, value: unknown): void;
+export function writeJsonSetting(databaseOrKey: BetterSqlite3.Database | string, keyOrValue: string | unknown, maybeValue?: unknown) {
+  const databaseHandle = typeof databaseOrKey === 'string' ? getDatabase() : databaseOrKey;
+  const key = typeof databaseOrKey === 'string' ? databaseOrKey : (keyOrValue as string);
+  const value = typeof databaseOrKey === 'string' ? keyOrValue : maybeValue;
   upsertSettingStatement(databaseHandle).run(key, JSON.stringify(value));
 }

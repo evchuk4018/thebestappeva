@@ -1,5 +1,6 @@
 import type { AiMemoryRefreshResponse } from '../shared/ai-memory-contract';
-import type { AssistantMessage, Chat, ModelChatMessage, UserMessage } from '../shared/ai-workspace-contract';
+import type { ModelChatMessage } from '../shared/ai-runtime-contract';
+import type { AssistantMessage, Chat, UserMessage } from '../shared/ai-workspace-contract';
 import { HttpError } from './http';
 import { createAiWorkspaceRepository } from './db/ai-workspace-repository';
 import { createOllamaProvider } from './model-providers/ollama';

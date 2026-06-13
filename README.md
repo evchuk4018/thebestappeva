@@ -96,6 +96,8 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
 - chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
+- the server also maintains a hidden generated user-memory note, capped at two paragraphs, for durable preferences, life facts, and ongoing projects; this note is injected into live prompts but is not user-editable in the UI
+- each chat now keeps a rolling generated summary, capped at three paragraphs, which is refreshed after normally completed assistant turns and stored against that chat for future retrieval work
 - new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b-q8_0`; if that model is unavailable, the heuristic title remains
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels
@@ -135,6 +137,7 @@ Implementation notes:
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
+- Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
 - Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`

@@ -9,36 +9,15 @@ import { SystemPromptContext } from './system-prompt';
 import { buildArtifactContext } from '../../lib/ai-artifact-context';
 import { findPendingAskUserState, updateAskUserStepInChat } from './ask-user';
 import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
-import type { AiAttachmentReference, AiWorkspaceSnapshot, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
+import type { AiAttachmentReference, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
 import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
-import { mergeMemoryRefreshIntoChats, shouldRefreshMemoryAfterTurn } from './memory-refresh';
-import { refreshAiChatMemory } from '../../lib/ai-memory-storage';
-
+import { refreshCompletedTurnMemory } from './use-ollama-chat-persistence';
 const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
-
-function buildWorkspaceSnapshot(
-  chats: Chat[],
-  generatedUserMemory: string,
-  currentProvider: ModelProvider,
-  currentModel: string | null,
-  enabledTools: Record<string, boolean>,
-  customSystemPrompt: string,
-): AiWorkspaceSnapshot {
-  return {
-    chats,
-    generatedUserMemory,
-    selectedProvider: currentProvider,
-    selectedModel: currentModel,
-    enabledTools,
-    customSystemPrompt,
-  };
-}
-
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -74,7 +53,6 @@ export function useOllamaChat() {
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
   useChatTitleGeneration({ availableModels, chats, setChats });
-
   const toolRegistryEntries = getToolRegistryEntries();
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
@@ -90,7 +68,6 @@ export function useOllamaChat() {
     tools: activeToolEntries.map(({ definition }) => definition),
     artifactContext: undefined,
   };
-
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
   useEffect(() => {
     if (!isTyping) {
@@ -101,7 +78,6 @@ export function useOllamaChat() {
     if (pendingAskUserTurn || !persistedSelectedChat) {
       return;
     }
-
     const pendingPrompt = selectedChat ? findPendingAskUserState(selectedChat) : null;
     if (pendingPrompt) {
       setPendingAskUserTurn(pendingPrompt);
@@ -127,11 +103,7 @@ export function useOllamaChat() {
     setCurrentProvider(provider);
     void refreshModels(provider, preferredModel);
   }
-
-  function toggleChatMode() {
-    setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking');
-  }
-
+  function toggleChatMode() { setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking'); }
   async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {
     if (!currentModel || activeTurnControllerRef.current) return;
     const effectiveMode = collectLongPdfAttachments(baseChat.messages).length ? 'thinking' : nextChatMode;
@@ -143,7 +115,6 @@ export function useOllamaChat() {
     setLastError(null);
     const controller = new AbortController();
     activeTurnControllerRef.current = controller;
-
     try {
       const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools) : [];
       const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
@@ -179,41 +150,22 @@ export function useOllamaChat() {
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
       setPendingAskUserTurn(resolvedTurn.status === 'paused' ? resolvedTurn.pendingAskUser : null);
-      if (shouldRefreshMemoryAfterTurn(resolvedTurn)) {
-        await flushWorkspace({
-          snapshot: buildWorkspaceSnapshot(
-            nextChats,
-            generatedUserMemory,
-            currentProvider,
-            currentModel,
-            enabledTools,
-            customSystemPrompt,
-          ),
-        });
-        try {
-          const refreshed = await refreshAiChatMemory(resolvedTurn.chat.id);
-          nextChats = mergeMemoryRefreshIntoChats(nextChats, refreshed);
-          setGeneratedUserMemory(refreshed.generatedUserMemory);
-          setChats(nextChats);
-          await flushWorkspace({
-            snapshot: buildWorkspaceSnapshot(
-              nextChats,
-              refreshed.generatedUserMemory,
-              currentProvider,
-              currentModel,
-              enabledTools,
-              customSystemPrompt,
-            ),
-          });
-        } catch {
-          // Keep the completed turn even if background memory refresh fails.
-        }
-      }
+      nextChats = await refreshCompletedTurnMemory({
+        resolvedTurn,
+        chats: nextChats,
+        generatedUserMemory,
+        currentProvider,
+        currentModel,
+        enabledTools,
+        customSystemPrompt,
+        flushWorkspace,
+        setGeneratedUserMemory,
+        setChats,
+      });
     } finally {
       if (activeTurnControllerRef.current === controller) {
         activeTurnControllerRef.current = null;
       }
-
       setLiveChat(null);
       setIsTyping(false);
     }
@@ -226,7 +178,6 @@ export function useOllamaChat() {
     const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
     const nextChatMode = collectLongPdfAttachments(appendedChat.messages).length ? 'thinking' : chatMode;
     const baseChat = { ...appendedChat, mode: nextChatMode };
-
     if (!selectedChat) {
       setSelectedChatId(baseChat.id);
       setDraftMode('thinking');
@@ -258,10 +209,7 @@ export function useOllamaChat() {
     });
   }
 
-  function stopMessage() {
-    activeTurnControllerRef.current?.abort(new TurnAbortedError());
-  }
-
+  function stopMessage() { activeTurnControllerRef.current?.abort(new TurnAbortedError()); }
   function deleteChat(chatId: string) {
     setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
     if (liveChat?.chatId === chatId) {
@@ -278,7 +226,6 @@ export function useOllamaChat() {
   function toggleTool(toolId: string, enabled: boolean) {
     setEnabledTools((current) => ({ ...current, [toolId]: enabled }));
   }
-
   function setActiveArtifact(artifactId: string | null) {
     if (!selectedChatId) return;
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatActiveArtifactState(chat, artifactId) : chat));
@@ -293,7 +240,6 @@ export function useOllamaChat() {
     if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) {
       return;
     }
-
     const targetChat = chats.find((chat) => chat.id === pendingAskUserTurn.chatId);
     if (!targetChat) {
       setPendingAskUserTurn(null);
