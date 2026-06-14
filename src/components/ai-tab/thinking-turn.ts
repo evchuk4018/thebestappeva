@@ -10,6 +10,7 @@ import type { Chat, ModelProvider, OllamaAvailability } from './types';
 import { MAX_CONSECUTIVE_TOOL_ERRORS, MAX_TOOL_CALLS_PER_TURN, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
 import { toPersistedToolResult } from './tools/result-persistence';
+import { toPersistedToolInvocation } from './tools/trace-persistence';
 import { ToolRegistryEntry } from './tools/types';
 import { resolveAskUserExecution } from './thinking-turn-ask-user';
 
@@ -103,7 +104,7 @@ export async function resolveThinkingTurn({
           toolCallId: toolCall.id,
         };
 
-        const toolCallStep = liveAssistant.appendToolCall(invocation, reply.model);
+        const toolCallStep = liveAssistant.appendToolCall(toPersistedToolInvocation(invocation), reply.model);
         const execution = await executeToolInvocation(invocation, activeToolEntries, { model, provider, signal });
         if ('deferred' in execution) {
           const askUserResolution = resolveAskUserExecution({

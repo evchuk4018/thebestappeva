@@ -1,5 +1,7 @@
 import { AskUserCard } from './AskUserCard';
+import { PythonTraceViewer } from './PythonTraceViewer';
 import { shouldHideToolCallStep } from './ask-user';
+import { buildPythonTraceInspection } from './python-trace';
 import { AskUserResponse, AssistantAskUserTraceStep, AssistantTraceStep } from './types';
 
 interface AssistantTracePanelProps {
@@ -25,7 +27,13 @@ function formatArgs(args: Record<string, unknown>) {
   return entries.map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`).join(' • ');
 }
 
-function ToolCallStep({ step }: { step: Extract<AssistantTraceStep, { kind: 'tool-call' }> }) {
+function ToolCallStep({ inspectionIndex, step, steps }: {
+  inspectionIndex: number;
+  step: Extract<AssistantTraceStep, { kind: 'tool-call' }>;
+  steps: AssistantTraceStep[];
+}) {
+  const inspection = buildPythonTraceInspection(steps, inspectionIndex);
+
   return (
     <div className="rounded-xl border border-[#2b3946] bg-[#16202a] px-3 py-2.5">
       <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em] text-[#7da8c7]">
@@ -33,12 +41,18 @@ function ToolCallStep({ step }: { step: Extract<AssistantTraceStep, { kind: 'too
         <span>{step.invocation.toolId}</span>
       </div>
       <p className="mt-1 text-sm font-medium text-white">{step.invocation.functionName}</p>
-      <p className="mt-1.5 text-xs leading-relaxed text-[#9ab4c8]">{formatArgs(step.invocation.args)}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-[#9ab4c8]">{formatArgs(step.invocation.displayArgs ?? step.invocation.args)}</p>
+      {inspection && <PythonTraceViewer inspection={inspection} />}
     </div>
   );
 }
 
-function ToolResultStep({ step }: { step: Extract<AssistantTraceStep, { kind: 'tool-result' }> }) {
+function ToolResultStep({ inspectionIndex, step, steps }: {
+  inspectionIndex: number;
+  step: Extract<AssistantTraceStep, { kind: 'tool-result' }>;
+  steps: AssistantTraceStep[];
+}) {
+  const inspection = buildPythonTraceInspection(steps, inspectionIndex);
   const stateClassName = step.result.ok
     ? 'border-[#234033] bg-[#11251b] text-[#dcf4e5]'
     : 'border-[#4a2525] bg-[#271515] text-[#ffd8d8]';
@@ -51,6 +65,7 @@ function ToolResultStep({ step }: { step: Extract<AssistantTraceStep, { kind: 't
       </div>
       <p className="mt-1 text-sm font-medium text-white">{step.result.functionName}</p>
       <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed">{step.result.summary}</p>
+      {inspection && <PythonTraceViewer inspection={inspection} />}
     </div>
   );
 }
@@ -108,10 +123,10 @@ export function AssistantTracePanel({ activeAskUserStepId = null, disabled = fal
           if (shouldHideToolCallStep(steps, index)) {
             return null;
           }
-          return <ToolCallStep key={step.id} step={step} />;
+          return <ToolCallStep key={step.id} inspectionIndex={index} step={step} steps={steps} />;
         }
 
-        return <ToolResultStep key={step.id} step={step} />;
+        return <ToolResultStep key={step.id} inspectionIndex={index} step={step} steps={steps} />;
       })}
     </div>
   );

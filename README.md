@@ -19,13 +19,13 @@ If you want the `/ai` tab to work, run Ollama locally and keep its API available
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. If Docker is missing or the container stays unhealthy, the app still starts and only the web-search tools remain unavailable.
 If you want local web search and page fetching in `/ai`, keep Docker available or start SearXNG manually at `http://127.0.0.1:8888`, or override `SEARXNG_BASE_URL`.
 If you want a single AI-ready startup command, run `npm run ai:dev`. It ensures Ollama is reachable at `http://127.0.0.1:11434`, installs `qwen3.5:9b` if needed, requires Docker-backed SearXNG readiness, and then starts the app server. This command fails fast with instructions when Ollama or Docker is unavailable.
-If you want local PDF, DOCX, and XLSX uploads in `/ai`, install Python 3 plus Docling locally:
+If you want local PDF, DOCX, and XLSX uploads in `/ai`, plus the local `python.exec` analysis tool, install Python 3 plus Docling locally:
 
 ```bash
 python -m pip install -r python/requirements-docling.txt
 ```
 
-On Windows, the app defaults to the `py -3` launcher for the parser sidecar. Override `AI_PARSER_PYTHON_COMMAND` or `AI_PARSER_PYTHON_ARGS` in `.env` if your local Python command differs.
+On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS` or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
 PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
@@ -105,11 +105,12 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
   - `Thinking` enables Ollama thinking, streams a collapsible `Thinking Progress` trace live, nudges long turns into explicit task/progress blocks, and keeps the final answer in the main reply bubble
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
-- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
+- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
+- `python.exec` stages up to a few repo-relative files into a temp `inputs/` directory, runs private Python code in writable `work/`, keeps raw code/stdout/stderr out of the default visible trace, and exposes a collapsible `View Python` inspector when you want the full details
 - recent chat context tools are split so the model can independently list past chat titles, search those recent titles, and pull one stored or freshly generated chat summary
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - `Thinking` mode now includes a first-party internal `ask_user` tool that can pause a turn, show a multiple-choice follow-up inline in the thinking trace or below the assistant reply, and then resume the same turn after the user explicitly sends an answer or skips
@@ -147,8 +148,9 @@ Implementation notes:
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
 - Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
+- Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
-- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools
+- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
 - Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
 - Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
 - PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback

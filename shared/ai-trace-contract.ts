@@ -2,6 +2,7 @@ export interface ToolInvocation {
   toolId: string;
   functionName: string;
   args: Record<string, unknown>;
+  displayArgs?: Record<string, unknown>;
   createdAt: string;
   toolCallId?: string;
 }
@@ -164,6 +165,9 @@ export function parseToolInvocation(value: unknown, field: string): ToolInvocati
     toolId: expectString(record.toolId, `${field}.toolId`),
     functionName: expectString(record.functionName, `${field}.functionName`),
     args: expectStringRecord(record.args, `${field}.args`),
+    displayArgs: typeof record.displayArgs === 'undefined'
+      ? undefined
+      : expectStringRecord(record.displayArgs, `${field}.displayArgs`),
     createdAt: expectString(record.createdAt, `${field}.createdAt`),
     toolCallId: expectOptionalString(record.toolCallId, `${field}.toolCallId`),
   };

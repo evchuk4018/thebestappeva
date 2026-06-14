@@ -42,6 +42,7 @@ import { handleGetAiPreferences, handleGetAiWorkspace, handlePutAiWorkspace } fr
 import { serverConfig } from './config';
 import { getDatabase } from './db/database';
 import { handleUrlFetch } from './url-fetch';
+import { handlePythonExec } from './python-exec';
 import { handleWebSearch } from './web-search';
 import {
   handleCreateDoc,
@@ -170,6 +171,7 @@ function registerApiRoutes(app: Express) {
   app.delete('/api/ai/attachments/:attachmentId', (req, res) => void handleDeleteAiAttachment(req, res));
   app.get('/api/web-search', (req, res) => void handleWebSearch(req, res));
   app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
+  app.post('/api/python-exec', (req, res) => void handlePythonExec(req, res));
 }
 
 function registerErrorHandler(app: Express) {
