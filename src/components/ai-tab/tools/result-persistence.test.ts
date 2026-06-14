@@ -14,13 +14,13 @@ test('removes PDF page payloads before chat persistence', () => {
     },
   });
 
-  assert.deepEqual(persisted, {
-    toolId: 'pdf-reader',
-    functionName: 'view_pdf_page',
-    ok: true,
-    summary: 'Rendered page 4.',
-    error: undefined,
-  });
+  assert.equal(persisted.toolId, 'pdf-reader');
+  assert.equal(persisted.functionName, 'view_pdf_page');
+  assert.equal(persisted.ok, true);
+  assert.equal(persisted.summary, 'Rendered page 4.');
+  assert.equal(persisted.error, undefined);
+  assert.equal('toolCallId' in persisted, false);
+  assert.equal('data' in persisted, false);
 });
 
 test('keeps ordinary tool result payloads', () => {

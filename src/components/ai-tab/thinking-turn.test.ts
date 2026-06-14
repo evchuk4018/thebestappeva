@@ -19,6 +19,22 @@ function createStreamResponse(lines: string[]) {
   return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson' } });
 }
 
+function createThinkingEvent(delta: string, snapshot: string, model = 'qwen') {
+  return JSON.stringify({ type: 'thinking', delta, snapshot, model });
+}
+
+function createContentEvent(delta: string, snapshot: string, model = 'qwen') {
+  return JSON.stringify({ type: 'content', delta, snapshot, model });
+}
+
+function createToolCallsEvent(toolCalls: Array<{ id: string; function: { name: string; arguments: Record<string, unknown> } }>, model = 'qwen') {
+  return JSON.stringify({ type: 'tool-calls', toolCalls, model });
+}
+
+function createDoneEvent(model = 'qwen') {
+  return JSON.stringify({ type: 'done', model });
+}
+
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -29,22 +45,17 @@ test('streams thinking traces, tool steps, and the final answer', async () => {
     requestCount += 1;
     if (requestCount === 1) {
       return createStreamResponse([
-        JSON.stringify({
-          model: 'qwen',
-          message: {
-            thinking: 'Inspect ',
-            content: 'draft',
-            tool_calls: [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }],
-          },
-          done: true,
-        }),
+        createThinkingEvent('Inspect ', 'Inspect '),
+        createToolCallsEvent([{ id: 'tool-1', function: { name: 'get_weather', arguments: { city: 'Boston' } } }]),
+        createDoneEvent(),
       ]);
     }
 
     return createStreamResponse([
-      JSON.stringify({ model: 'qwen', message: { thinking: 'Summarize ' } }),
-      JSON.stringify({ model: 'qwen', message: { content: 'Final ' } }),
-      JSON.stringify({ model: 'qwen', message: { content: 'answer' }, done: true }),
+      createThinkingEvent('Summarize ', 'Summarize '),
+      createContentEvent('Final ', 'Final '),
+      createContentEvent('answer', 'Final answer'),
+      createDoneEvent(),
     ]);
   };
 
@@ -106,21 +117,22 @@ test('preserves staged thinking blocks around tool work during long turns', asyn
     requestCount += 1;
     if (requestCount === 1) {
       return createStreamResponse([
-        JSON.stringify({
-          model: 'qwen',
-          message: {
-            thinking: 'Tasks:\n1. Inspect the request.\n2. Gather the weather.\n3. Summarize the result.',
-            content: '',
-            tool_calls: [{ function: { name: 'get_weather', arguments: { city: 'Boston' } } }],
-          },
-          done: true,
-        }),
+        createThinkingEvent(
+          'Tasks:\n1. Inspect the request.\n2. Gather the weather.\n3. Summarize the result.',
+          'Tasks:\n1. Inspect the request.\n2. Gather the weather.\n3. Summarize the result.',
+        ),
+        createToolCallsEvent([{ id: 'tool-1', function: { name: 'get_weather', arguments: { city: 'Boston' } } }]),
+        createDoneEvent(),
       ]);
     }
 
     return createStreamResponse([
-      JSON.stringify({ model: 'qwen', message: { thinking: 'Task 2 complete.\nWeather retrieved.\nNext: summarize for the user.' } }),
-      JSON.stringify({ model: 'qwen', message: { content: 'Boston is 72F and sunny.' }, done: true }),
+      createThinkingEvent(
+        'Task 2 complete.\nWeather retrieved.\nNext: summarize for the user.',
+        'Task 2 complete.\nWeather retrieved.\nNext: summarize for the user.',
+      ),
+      createContentEvent('Boston is 72F and sunny.', 'Boston is 72F and sunny.'),
+      createDoneEvent(),
     ]);
   };
 

@@ -20,6 +20,22 @@ function createStreamResponse(lines: string[]) {
   return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson' } });
 }
 
+function createThinkingEvent(delta: string, snapshot: string, model = 'qwen') {
+  return JSON.stringify({ type: 'thinking', delta, snapshot, model });
+}
+
+function createContentEvent(delta: string, snapshot: string, model = 'qwen') {
+  return JSON.stringify({ type: 'content', delta, snapshot, model });
+}
+
+function createToolCallsEvent(toolCalls: Array<{ id: string; function: { name: string; arguments: Record<string, unknown> } }>, model = 'qwen') {
+  return JSON.stringify({ type: 'tool-calls', toolCalls, model });
+}
+
+function createDoneEvent(model = 'qwen') {
+  return JSON.stringify({ type: 'done', model });
+}
+
 function resolveToolId() {
   return ASK_USER_TOOL_ID;
 }
@@ -43,30 +59,28 @@ test('pauses on inline ask_user and resumes the same assistant message after a c
     requestCount += 1;
     return requestCount === 1
       ? createStreamResponse([
-          JSON.stringify({
-            model: 'qwen',
-            message: {
-              thinking: 'Need one clarification.',
-              content: '',
-              tool_calls: [
-                {
-                  function: {
-                    name: 'ask_user',
-                    arguments: {
-                      question: 'What would help most?',
-                      choices: [
-                        { id: 'code', label: 'Coding help' },
-                        { id: 'research', label: 'Research' },
-                      ],
-                    },
-                  },
+          createThinkingEvent('Need one clarification.', 'Need one clarification.'),
+          createToolCallsEvent([
+            {
+              id: 'tool-1',
+              function: {
+                name: 'ask_user',
+                arguments: {
+                  question: 'What would help most?',
+                  choices: [
+                    { id: 'code', label: 'Coding help' },
+                    { id: 'research', label: 'Research' },
+                  ],
                 },
-              ],
+              },
             },
-            done: true,
-          }),
+          ]),
+          createDoneEvent(),
         ])
-      : createStreamResponse([JSON.stringify({ model: 'qwen', message: { content: 'Final answer after the follow-up.' }, done: true })]);
+      : createStreamResponse([
+          createContentEvent('Final answer after the follow-up.', 'Final answer after the follow-up.'),
+          createDoneEvent(),
+        ]);
   };
 
   const initial = await resolveThinkingTurn({
@@ -113,25 +127,24 @@ test('pauses on inline ask_user and resumes the same assistant message after a c
 test('keeps end-of-response content visible while ask_user is pending', async () => {
   globalThis.fetch = async () =>
     createStreamResponse([
-      JSON.stringify({
-        model: 'qwen',
-        message: {
-          content: 'I can tailor this better once you choose a direction.',
-          tool_calls: [
-            {
-              function: {
-                name: 'ask_user',
-                arguments: {
-                  question: 'Which direction should I take?',
-                  placement: 'end_of_response',
-                  choices: [{ id: 'write', label: 'Writing' }],
-                },
-              },
+      createContentEvent(
+        'I can tailor this better once you choose a direction.',
+        'I can tailor this better once you choose a direction.',
+      ),
+      createToolCallsEvent([
+        {
+          id: 'tool-1',
+          function: {
+            name: 'ask_user',
+            arguments: {
+              question: 'Which direction should I take?',
+              placement: 'end_of_response',
+              choices: [{ id: 'write', label: 'Writing' }],
             },
-          ],
+          },
         },
-        done: true,
-      }),
+      ]),
+      createDoneEvent(),
     ]);
 
   const result = await resolveThinkingTurn({
@@ -157,25 +170,24 @@ test('auto-skips ask_user after two skips in the same turn history', async () =>
     requestCount += 1;
     return requestCount === 1
       ? createStreamResponse([
-          JSON.stringify({
-            model: 'qwen',
-            message: {
-              tool_calls: [
-                {
-                  function: {
-                    name: 'ask_user',
-                    arguments: {
-                      question: 'One more question?',
-                      choices: [{ id: 'yes', label: 'Yes' }],
-                    },
-                  },
+          createToolCallsEvent([
+            {
+              id: 'tool-1',
+              function: {
+                name: 'ask_user',
+                arguments: {
+                  question: 'One more question?',
+                  choices: [{ id: 'yes', label: 'Yes' }],
                 },
-              ],
+              },
             },
-            done: true,
-          }),
+          ]),
+          createDoneEvent(),
         ])
-      : createStreamResponse([JSON.stringify({ model: 'qwen', message: { content: 'Continuing without another prompt.' }, done: true })]);
+      : createStreamResponse([
+          createContentEvent('Continuing without another prompt.', 'Continuing without another prompt.'),
+          createDoneEvent(),
+        ]);
   };
 
   const firstUser = createUserMessage('Start.');
