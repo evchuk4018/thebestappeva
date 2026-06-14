@@ -10,6 +10,7 @@ import { buildArtifactContext } from '../../lib/ai-artifact-context';
 import { findPendingAskUserState, updateAskUserStepInChat } from './ask-user';
 import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
 import type { AiAttachmentReference, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
+import { createChatContextToolEntries } from './tools/chat-context-tools';
 import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
@@ -53,7 +54,21 @@ export function useOllamaChat() {
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
   useChatTitleGeneration({ availableModels, chats, setChats });
-  const toolRegistryEntries = getToolRegistryEntries();
+  const toolRegistryEntries = [
+    ...getToolRegistryEntries(),
+    ...createChatContextToolEntries({
+      chats,
+      activeChatId: selectedChatId,
+      generatedUserMemory,
+      currentProvider,
+      currentModel,
+      enabledTools,
+      customSystemPrompt,
+      flushWorkspace,
+      setGeneratedUserMemory,
+      setChats,
+    }),
+  ];
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
   const selectedChat = resolveActiveChat(persistedSelectedChat, selectedLiveChat);
@@ -83,14 +98,12 @@ export function useOllamaChat() {
       setPendingAskUserTurn(pendingPrompt);
     }
   }, [pendingAskUserTurn, persistedSelectedChat, selectedChat]);
-
   function selectChat(chatId: string | null) {
     setSelectedChatId(chatId);
     if (!chatId) {
       setDraftMode('thinking');
     }
   }
-
   function setChatMode(mode: ChatMode) {
     if (selectedChatId) {
       setChats((currentChats) => updateChatMode(currentChats, selectedChatId, mode));
@@ -98,7 +111,6 @@ export function useOllamaChat() {
     }
     setDraftMode(mode);
   }
-
   function setProvider(provider: ModelProvider, preferredModel?: string | null) {
     setCurrentProvider(provider);
     void refreshModels(provider, preferredModel);
@@ -170,7 +182,6 @@ export function useOllamaChat() {
       setIsTyping(false);
     }
   }
-
   async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
     const normalizedContent = content.trim() || (attachments.length ? DEFAULT_ATTACHMENT_PROMPT : '');
     if (!currentModel || activeTurnControllerRef.current || pendingAskUserTurn || !normalizedContent) return;
@@ -184,21 +195,18 @@ export function useOllamaChat() {
     }
     await runModelTurn(baseChat, nextChatMode);
   }
-
   async function editAndResendMessage(messageId: string, nextContent: string) {
     if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = editUserMessageBranch(persistedSelectedChat, messageId, nextContent);
     if (!baseChat) return;
     await runModelTurn(baseChat, selectedChat.mode);
   }
-
   async function regenerateAssistantMessage(messageId: string) {
     if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = regenerateAssistantBranch(persistedSelectedChat, messageId);
     if (!baseChat) return;
     await runModelTurn(baseChat, selectedChat.mode);
   }
-
   function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
     if (!selectedChatId || activeTurnControllerRef.current || pendingAskUserTurn) {
       return;
@@ -208,7 +216,6 @@ export function useOllamaChat() {
       return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
     });
   }
-
   function stopMessage() { activeTurnControllerRef.current?.abort(new TurnAbortedError()); }
   function deleteChat(chatId: string) {
     setChats((currentChats) => currentChats.filter((chat) => chat.id !== chatId));
@@ -222,7 +229,6 @@ export function useOllamaChat() {
       selectChat(null);
     }
   }
-
   function toggleTool(toolId: string, enabled: boolean) {
     setEnabledTools((current) => ({ ...current, [toolId]: enabled }));
   }
@@ -230,12 +236,10 @@ export function useOllamaChat() {
     if (!selectedChatId) return;
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatActiveArtifactState(chat, artifactId) : chat));
   }
-
   function setArtifactIncluded(artifactId: string, included: boolean) {
     if (!selectedChatId) return;
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatIncludedArtifactState(chat, artifactId, included) : chat));
   }
-
   async function submitAskUserResponse(messageId: string, stepId: string, response: AskUserResponse) {
     if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) {
       return;
@@ -250,7 +254,6 @@ export function useOllamaChat() {
     setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: messageId });
     await runModelTurn(nextChat, nextChat.mode, messageId);
   }
-
   return {
     activeProviderOption,
     availableModels,

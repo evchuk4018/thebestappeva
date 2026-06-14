@@ -105,11 +105,12 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
   - `Thinking` enables Ollama thinking, streams a collapsible `Thinking Progress` trace live, nudges long turns into explicit task/progress blocks, and keeps the final answer in the main reply bubble
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
-- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, and `/web-search`
+- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
+- recent chat context tools are split so the model can independently list past chat titles, search those recent titles, and pull one stored or freshly generated chat summary
 - tool calls are automatic in `Thinking` mode: the app sends enabled tools through Ollama's native tool-calling API, executes returned tool calls in the browser, and renders task maps, progress checkpoints, tool calls, tool results, and follow-up reasoning inside the same visible thinking trace before the final assistant reply
 - `Thinking` mode now includes a first-party internal `ask_user` tool that can pause a turn, show a multiple-choice follow-up inline in the thinking trace or below the assistant reply, and then resume the same turn after the user explicitly sends an answer or skips
 - answered and skipped `ask_user` prompts persist inside the assistant transcript, while prompts that were still pending during a page reload are normalized to skipped instead of trying to resume a dead turn
