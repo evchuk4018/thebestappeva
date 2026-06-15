@@ -14,11 +14,12 @@ npm run dev
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
 The Node host runs through `tsx watch`, so backend and shared-code changes restart it automatically. Generated data under `.local-data`, `dist`, and `node_modules` is excluded from restart watching.
 The local Node host also creates a SQLite database for server-owned app persistence at `.local-data/thebestappeva.sqlite`. Override that path with `LOCAL_DB_PATH` when needed.
+On Windows, `npm run dev` now also ensures a repo-local Ollama install under `.local-bin/ollama`, starts `ollama serve` if needed, and then continues booting the app. If the Ollama bootstrap fails, the app still starts but local AI features may be unavailable.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
 `npm run dev` now attempts to start the repo-owned SearXNG container automatically when Docker is available. On Windows, if the Docker CLI is installed but the daemon is down, the bootstrap tries to launch Docker Desktop first, waits for it to come up, and then starts SearXNG. The first cold start can add up to about a minute before the app server starts.
 If Docker is missing, Docker Desktop cannot be launched, or the container stays unhealthy, `npm run dev` still starts and only the web-search tools remain unavailable. You can also keep SearXNG available manually at `http://127.0.0.1:8888`, or override `SEARXNG_BASE_URL`.
-If you want a single AI-ready startup command, run `npm run ai:dev`. It ensures Ollama is reachable at `http://127.0.0.1:11434`, installs `qwen3.5:9b` if needed, uses the same Docker Desktop auto-start path for SearXNG, and then starts the app server. This command still fails fast with instructions when Ollama or Docker readiness cannot be achieved.
+If you want a single AI-ready startup command, run `npm run ai:dev`. It uses the same repo-local Ollama install path, ensures Ollama is reachable at `http://127.0.0.1:11434`, installs `qwen3.5:9b` if needed, uses the same Docker Desktop auto-start path for SearXNG, and then starts the app server. This command still fails fast with instructions when Ollama or Docker readiness cannot be achieved.
 If you want local PDF, DOCX, and XLSX uploads in `/ai`, plus the local `python.exec` analysis tool, install Python 3 plus Docling locally:
 
 ```bash

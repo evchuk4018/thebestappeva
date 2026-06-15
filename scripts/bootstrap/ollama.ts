@@ -1,9 +1,6 @@
 import type { BootstrapLogger } from './log';
-import {
-  isCommandAvailable,
-  runStreamingCommand,
-  spawnDetachedCommand,
-} from './process';
+import { runStreamingCommand, spawnDetachedCommand } from './process';
+import { ensureOllamaCommand } from './ollama-cli';
 import { waitForCondition } from './wait';
 
 const ollamaBaseUrl = 'http://127.0.0.1:11434';
@@ -41,10 +38,6 @@ async function listInstalledModels() {
   );
 }
 
-function buildMissingOllamaMessage() {
-  return `Ollama is unavailable. Install Ollama, or start \`ollama serve\` manually so ${ollamaBaseUrl} is reachable.`;
-}
-
 async function waitForOllama() {
   return waitForCondition(isOllamaReady, {
     timeoutMs: ollamaStartupTimeoutMs,
@@ -52,23 +45,25 @@ async function waitForOllama() {
   });
 }
 
-export async function ensureOllamaModel(logger: BootstrapLogger, modelName: string) {
+export async function ensureOllamaRuntime(logger: BootstrapLogger) {
+  const ollamaCommand = await ensureOllamaCommand(logger);
   logger.step(`Checking Ollama at ${ollamaBaseUrl}...`);
 
   if (!(await isOllamaReady().catch(() => false))) {
     logger.step('Ollama is not running. Attempting to start `ollama serve`...');
 
-    if (!(await isCommandAvailable('ollama'))) {
-      throw new Error(buildMissingOllamaMessage());
-    }
-
-    await spawnDetachedCommand('ollama', ['serve']);
+    await spawnDetachedCommand(ollamaCommand, ['serve']);
     if (!(await waitForOllama())) {
       throw new Error(`Ollama did not become ready within ${ollamaStartupTimeoutMs}ms at ${ollamaBaseUrl}.`);
     }
   }
 
   logger.step('Ollama is ready.');
+  return ollamaCommand;
+}
+
+export async function ensureOllamaModel(logger: BootstrapLogger, modelName: string) {
+  const ollamaCommand = await ensureOllamaRuntime(logger);
   const installedModels = await listInstalledModels();
   if (installedModels.has(modelName)) {
     logger.step(`${modelName} is already installed.`);
@@ -76,10 +71,6 @@ export async function ensureOllamaModel(logger: BootstrapLogger, modelName: stri
   }
 
   logger.step(`Pulling ${modelName} from Ollama...`);
-  if (!(await isCommandAvailable('ollama'))) {
-    throw new Error(`The ${modelName} model is missing and the Ollama CLI is unavailable. ${buildMissingOllamaMessage()}`);
-  }
-
-  await runStreamingCommand('ollama', ['pull', modelName]);
+  await runStreamingCommand(ollamaCommand, ['pull', modelName]);
   logger.step(`${modelName} is installed.`);
 }
