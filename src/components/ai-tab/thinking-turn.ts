@@ -5,9 +5,10 @@ import { isAbortError, throwIfAborted } from './abort-utils';
 import { streamChatWithModel } from './ollama-client';
 import { buildTurnCancelledMessage, buildTurnFailureMessage, normalizeTurnError } from './chat-helpers';
 import type { OllamaChatMessage } from './ollama-client';
-import type { SystemPromptContext } from './system-prompt';
+import { buildSystemPromptContent, type SystemPromptContext } from './system-prompt';
+import { buildDisabledToolResult, createTurnToolState, filterTurnToolEntries, getTurnPromptContext, recordTurnToolResult, resetTurnToolFailureStreak } from './tool-turn-state';
 import type { Chat, ModelProvider, OllamaAvailability } from './types';
-import { MAX_CONSECUTIVE_TOOL_ERRORS, MAX_TOOL_CALLS_PER_TURN, executeToolInvocation } from './tools/executor';
+import { MAX_TOOL_CALLS_PER_TURN, executeToolInvocation } from './tools/executor';
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
 import { toPersistedToolResult } from './tools/result-persistence';
 import { toPersistedToolInvocation } from './tools/trace-persistence';
@@ -48,9 +49,10 @@ export async function resolveThinkingTurn({
   signal,
 }: ResolveThinkingTurnOptions): Promise<ResolvedTurn> {
   let workingChat = chat;
-  let consecutiveToolErrors = 0;
+  let turnWarning: string | null = null;
   let toolCallCount = 0;
-  let requestMessages = await buildModelMessages(chat.messages, promptContext);
+  const turnToolState = createTurnToolState();
+  let requestMessages = await buildModelMessages(chat.messages, getTurnPromptContext(promptContext, activeToolEntries));
   const liveAssistant = createAssistantLiveUpdater({
     assistantMessageId,
     chat,
@@ -75,8 +77,10 @@ export async function resolveThinkingTurn({
   try {
     while (true) {
       throwIfAborted(signal);
+      const roundToolEntries = filterTurnToolEntries(activeToolEntries, turnToolState.disabledToolIds);
+      requestMessages[0] = { role: 'system', content: buildSystemPromptContent(getTurnPromptContext(promptContext, roundToolEntries)) };
       let hasRoundToolCalls = false;
-      const reply = await streamThinkingRound(model, provider, requestMessages, buildOllamaTools(activeToolEntries), liveAssistant, signal, {
+      const reply = await streamThinkingRound(model, provider, requestMessages, buildOllamaTools(roundToolEntries), liveAssistant, signal, {
         onToolCalls() {
           hasRoundToolCalls = true;
         },
@@ -85,7 +89,7 @@ export async function resolveThinkingTurn({
 
       if (!reply.toolCalls?.length) {
         liveAssistant.finalize(reply.content, reply.model);
-        return { chat: workingChat, availability: 'ready', lastError: null, status: 'completed' };
+        return { chat: workingChat, availability: 'ready', lastError: turnWarning, status: 'completed' };
       }
 
       if (toolCallCount + reply.toolCalls.length > MAX_TOOL_CALLS_PER_TURN) {
@@ -105,7 +109,9 @@ export async function resolveThinkingTurn({
         };
 
         const toolCallStep = liveAssistant.appendToolCall(toPersistedToolInvocation(invocation), reply.model);
-        const execution = await executeToolInvocation(invocation, activeToolEntries, { model, provider, signal });
+        const execution = turnToolState.disabledToolIds.has(invocation.toolId)
+          ? buildDisabledToolResult(invocation)
+          : await executeToolInvocation(invocation, roundToolEntries, { model, provider, signal });
         if ('deferred' in execution) {
           const askUserResolution = resolveAskUserExecution({
             chat: liveAssistant.getChat(),
@@ -123,7 +129,7 @@ export async function resolveThinkingTurn({
             return {
               chat: liveAssistant.getChat(),
               availability: 'ready',
-              lastError: null,
+              lastError: turnWarning,
               status: 'paused',
               pendingAskUser: askUserResolution.pending,
             };
@@ -132,7 +138,7 @@ export async function resolveThinkingTurn({
           const result = invocation.toolCallId ? { ...askUserResolution.result, toolCallId: invocation.toolCallId } : askUserResolution.result;
           liveAssistant.appendToolResult(result, reply.model);
           toolCallCount += 1;
-          consecutiveToolErrors = 0;
+          resetTurnToolFailureStreak(turnToolState);
           roundToolMessages.push({
             role: 'tool',
             tool_name: invocation.functionName,
@@ -143,11 +149,16 @@ export async function resolveThinkingTurn({
         }
 
         const { transientImages, ...baseResult } = execution;
-        const result = invocation.toolCallId ? { ...baseResult, toolCallId: invocation.toolCallId } : baseResult;
+        const recorded = turnToolState.disabledToolIds.has(invocation.toolId)
+          ? { result: baseResult, warningMessage: turnWarning }
+          : recordTurnToolResult(turnToolState, baseResult);
+        if (recorded.warningMessage) {
+          turnWarning = recorded.warningMessage;
+        }
+        const result = invocation.toolCallId ? { ...recorded.result, toolCallId: invocation.toolCallId } : recorded.result;
         throwIfAborted(signal);
         liveAssistant.appendToolResult(toPersistedToolResult(result), reply.model);
         toolCallCount += 1;
-        consecutiveToolErrors = result.ok ? 0 : consecutiveToolErrors + 1;
         roundToolMessages.push({
           role: 'tool',
           tool_name: invocation.functionName,
@@ -155,20 +166,6 @@ export async function resolveThinkingTurn({
           content: formatToolResultContent(result),
           images: transientImages,
         } satisfies OllamaChatMessage);
-
-        if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
-          liveAssistant.finalize(
-            'I stopped after three consecutive local tool errors. Restart the development server if its API routes changed, then try again.',
-            reply.model,
-            'error',
-          );
-          return {
-            chat: workingChat,
-            availability: 'ready',
-            lastError: 'Three consecutive tool errors stopped this turn.',
-            status: 'completed',
-          };
-        }
       }
 
       liveAssistant.syncContent(assistantRoundContent, reply.model);
