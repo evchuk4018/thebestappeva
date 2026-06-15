@@ -1,7 +1,7 @@
 import { HttpError } from '../http';
 import { ModelChatToolCalls } from '../../shared/ai-runtime-contract';
 
-interface DeepSeekToolCallDelta {
+export interface DeepSeekToolCallDelta {
   index?: number;
   id?: string;
   function?: {
@@ -158,16 +158,46 @@ export function applyDeepSeekToolCallDeltas(current: DeepSeekToolCallDelta[], de
   return current;
 }
 
-export function finalizeDeepSeekToolCalls(toolCalls: DeepSeekToolCallDelta[]) {
-  return normalizeToolCalls(
-    toolCalls.map((toolCall) => ({
+function parseDeepSeekToolArguments(value: string | undefined, strict: boolean) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    if (strict) {
+      throw new HttpError(502, 'DeepSeek returned invalid tool arguments.');
+    }
+    return null;
+  }
+}
+
+function finalizeDeepSeekToolCallsInternal(toolCalls: DeepSeekToolCallDelta[], strict: boolean) {
+  const normalized = [];
+  for (const toolCall of toolCalls) {
+    const argumentsValue = parseDeepSeekToolArguments(toolCall.function?.arguments, strict);
+    if (!argumentsValue) {
+      return undefined;
+    }
+
+    normalized.push({
       id: toolCall.id,
       function: {
         name: toolCall.function?.name,
-        arguments: toolCall.function?.arguments?.trim()
-          ? parseJson<Record<string, unknown>>(toolCall.function.arguments, 'DeepSeek returned invalid tool arguments.')
-          : {},
+        arguments: argumentsValue,
       },
-    })),
-  );
+    });
+  }
+
+  return normalizeToolCalls(normalized);
+}
+
+export function tryFinalizeDeepSeekToolCalls(toolCalls: DeepSeekToolCallDelta[]) {
+  return finalizeDeepSeekToolCallsInternal(toolCalls, false);
+}
+
+export function finalizeDeepSeekToolCalls(toolCalls: DeepSeekToolCallDelta[]) {
+  return finalizeDeepSeekToolCallsInternal(toolCalls, true);
 }

@@ -117,6 +117,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - answered and skipped `ask_user` prompts persist inside the assistant transcript, while prompts that were still pending during a page reload are normalized to skipped instead of trying to resume a dead turn
 - streamed Ollama error events are surfaced to the user with the runtime's exact message instead of being collapsed into a generic invalid-JSON failure
 - malformed streamed tool calls that end with Ollama's `unexpected end of JSON input` error are retried once without streaming; affected models then use non-streamed tool rounds for the rest of the browser session
+- malformed streamed DeepSeek tool arguments now wait for valid accumulated JSON before surfacing tool calls, and final invalid streamed tool rounds retry once without streaming before that model is pinned to non-streamed tool rounds for the rest of the browser session
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
 - in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
 - artifact bodies are stored outside chat payload JSON; chat persistence keeps only lightweight artifact metadata such as active and included artifact IDs plus assistant artifact cards
