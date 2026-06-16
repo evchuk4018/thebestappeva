@@ -146,6 +146,7 @@ async function buildStoredImageRecord(args: {
     summary,
     summaryModel: model,
     summaryStatus: 'ready',
+    analysisStatus: 'idle',
   };
 
   return {

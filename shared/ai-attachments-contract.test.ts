@@ -15,11 +15,15 @@ test('parses an image attachment record', () => {
     summary: 'A labeled road map with a highlighted route.',
     summaryModel: 'qwen2.5vl:7b',
     summaryStatus: 'ready',
+    analysisStatus: 'ready',
+    analysisVersion: 'scene-graph-v1',
+    analysisUpdatedAt: '2026-06-15T01:00:00.000Z',
   });
 
   assert.equal(payload.kind, 'image');
   assert.equal(payload.id, 'image_abc123');
   assert.equal(payload.summaryModel, 'qwen2.5vl:7b');
+  assert.equal(payload.analysisStatus, 'ready');
 });
 
 test('document context payload rejects image attachments', () => {

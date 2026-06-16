@@ -13,12 +13,27 @@ const attachment = {
   summaryStatus: 'ready' as const,
 };
 
-test('ask_image_model proxies the focused image question to the server route', async () => {
+const sceneGraph = {
+  canvas: { width: 640, height: 480, background: '#ffffff' },
+  objects: [{ id: 'obj_1', type: 'rectangle', bbox: [0, 0, 100, 100], dominantColors: ['#ff0000'], crops: ['full', 'left'], confidence: 0.9 }],
+  text: [],
+  relationships: [],
+  uncertain: [],
+  diagnostics: {
+    analysisVersion: 'scene-graph-v1',
+    generatedAt: '2026-06-15T00:00:00.000Z',
+    ocrEngine: 'rapidocr-onnxruntime',
+    vlmModel: 'qwen2.5vl:7b',
+    passes: ['full'],
+  },
+};
+
+test('extract_image_scene proxies the structured analysis route', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({
     attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
-    answer: 'Yes, the image is a labeled street map.',
-    question: 'Is this image a map?',
+    sceneGraph,
+    cached: true,
     model: 'qwen2.5vl:7b',
   }), { headers: { 'Content-Type': 'application/json' } });
 
@@ -26,32 +41,51 @@ test('ask_image_model proxies the focused image question to the server route', a
     const tool = createImageBridgeTool([attachment]);
     const result = await tool.execute({
       toolId: 'image-bridge',
-      functionName: 'ask_image_model',
-      args: { imageId: attachment.id, question: 'Is this image a map?' },
+      functionName: 'extract_image_scene',
+      args: { imageId: attachment.id },
       createdAt: '2026-06-15T00:00:00.000Z',
     }, {});
-
     if ('deferred' in result) {
       assert.fail('Expected an immediate tool result.');
     }
-
     assert.equal(result.ok, true);
     assert.equal(result.data?.imageId, attachment.id);
-    assert.equal(result.data?.model, 'qwen2.5vl:7b');
+    assert.equal((result.data?.sceneGraph as { objects: unknown[] }).objects.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('ask_image_model rejects image ids that are not attached to the chat', async () => {
-  const tool = createImageBridgeTool([attachment]);
-  await assert.rejects(
-    () => tool.execute({
+test('compare_generated_image proxies structured SVG comparison', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
+    cached: false,
+    comparison: {
+      format: 'svg',
+      source: sceneGraph,
+      target: sceneGraph,
+      pixelSimilarity: 0.91,
+      issues: [],
+      recommendedPatches: [],
+      iterationBudget: { current: 1, max: 3, shouldContinue: false },
+    },
+  }), { headers: { 'Content-Type': 'application/json' } });
+
+  try {
+    const tool = createImageBridgeTool([attachment]);
+    const result = await tool.execute({
       toolId: 'image-bridge',
-      functionName: 'ask_image_model',
-      args: { imageId: 'doc-1', question: 'What is this?' },
+      functionName: 'compare_generated_image',
+      args: { imageId: attachment.id, content: '<svg />' },
       createdAt: '2026-06-15T00:00:00.000Z',
-    }, {}),
-    /not available in this chat/,
-  );
+    }, {});
+    if ('deferred' in result) {
+      assert.fail('Expected an immediate tool result.');
+    }
+    assert.equal(result.ok, true);
+    assert.equal((result.data?.comparison as { format: string }).format, 'svg');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

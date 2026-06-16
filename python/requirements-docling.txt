@@ -1,2 +1,6 @@
 docling
 pypdfium2
+numpy
+opencv-python-headless
+Pillow
+rapidocr-onnxruntime

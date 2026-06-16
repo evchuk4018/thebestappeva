@@ -20,8 +20,10 @@ const defaultParserArgs = process.platform === 'win32' ? ['-3'] : [];
 
 function readStringListEnv(name: string) {
   const value = process.env[name]?.trim();
-  return value ? value.split(/\s+/).filter(Boolean) : [];
+  return value ? value.split(/[\s,]+/).filter(Boolean) : [];
 }
+
+const defaultVisionModels = ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b', 'qwen3vl:2b', 'internvl3:2b'];
 
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),
@@ -42,6 +44,12 @@ export const serverConfig = {
   aiParserTimeoutMs: readNumberEnv('AI_PARSER_TIMEOUT_MS', 120000),
   aiParserPythonCommand: readStringEnv('AI_PARSER_PYTHON_COMMAND', defaultParserCommand),
   aiParserPythonArgs: readStringListEnv('AI_PARSER_PYTHON_ARGS').length ? readStringListEnv('AI_PARSER_PYTHON_ARGS') : defaultParserArgs,
+  aiImageAnalysisTimeoutMs: readNumberEnv('AI_IMAGE_ANALYSIS_TIMEOUT_MS', 120000),
+  aiImageAnalysisPythonCommand: readStringEnv('AI_IMAGE_ANALYSIS_PYTHON_COMMAND', defaultParserCommand),
+  aiImageAnalysisPythonArgs: readStringListEnv('AI_IMAGE_ANALYSIS_PYTHON_ARGS').length
+    ? readStringListEnv('AI_IMAGE_ANALYSIS_PYTHON_ARGS')
+    : defaultParserArgs,
+  aiVisionModels: readStringListEnv('AI_VISION_MODELS').length ? readStringListEnv('AI_VISION_MODELS') : defaultVisionModels,
   aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserCommand),
   aiPythonExecArgs: readStringListEnv('AI_PYTHON_EXEC_ARGS').length ? readStringListEnv('AI_PYTHON_EXEC_ARGS') : defaultParserArgs,
   aiPythonExecTimeoutMs: readNumberEnv('AI_PYTHON_EXEC_TIMEOUT_MS', 20000),

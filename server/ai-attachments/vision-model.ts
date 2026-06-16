@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { HttpError } from '../http';
 import { serverConfig } from '../config';
 
-const preferredVisionModels = ['openbmb/minicpm-v4.5:8b', 'qwen2.5vl:7b'] as const;
-
 interface OllamaTagsResponse {
   models?: Array<{ name?: string }>;
 }
@@ -24,7 +22,6 @@ async function readJson<T>(response: Response, fallback: string) {
     const message = (await response.text()).trim() || fallback;
     throw new HttpError(response.status >= 500 ? 502 : response.status, message);
   }
-
   try {
     return (await response.json()) as T;
   } catch {
@@ -35,11 +32,7 @@ async function readJson<T>(response: Response, fallback: string) {
 async function listInstalledModels() {
   const response = await fetch(`${serverConfig.ollamaHost}/api/tags`);
   const payload = await readJson<OllamaTagsResponse>(response, 'Unable to inspect local Ollama models.');
-  return new Set(
-    (payload.models ?? [])
-      .map((model) => model.name?.trim())
-      .filter((name): name is string => Boolean(name)),
-  );
+  return new Set((payload.models ?? []).map((model) => model.name?.trim()).filter((name): name is string => Boolean(name)));
 }
 
 async function pullModel(model: string) {
@@ -48,58 +41,24 @@ async function pullModel(model: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: model }),
   });
-
   if (!response.ok) {
     const message = (await response.text()).trim() || `Unable to pull ${model}.`;
     throw new HttpError(response.status >= 500 ? 502 : response.status, message);
   }
+}
 
-  if (!response.body) {
-    throw new HttpError(502, `Ollama did not return pull progress for ${model}.`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const payload = JSON.parse(trimmed) as { error?: string };
-      if (payload.error?.trim()) {
-        throw new HttpError(502, payload.error.trim());
-      }
-    }
-  }
-
-  if (buffer.trim()) {
-    const payload = JSON.parse(buffer.trim()) as { error?: string };
-    if (payload.error?.trim()) {
-      throw new HttpError(502, payload.error.trim());
-    }
-  }
+export function getPreferredVisionModels() {
+  return [...serverConfig.aiVisionModels];
 }
 
 export async function ensureVisionModelReady() {
   try {
     const installedModels = await listInstalledModels();
-    const installedPreferred = preferredVisionModels.find((model) => installedModels.has(model));
+    const installedPreferred = getPreferredVisionModels().find((model) => installedModels.has(model));
     if (installedPreferred) {
       return installedPreferred;
     }
-
-    const modelToPull = preferredVisionModels[0];
+    const modelToPull = getPreferredVisionModels()[0];
     await pullModel(modelToPull);
     return modelToPull;
   } catch (error) {
@@ -130,12 +89,10 @@ async function requestVisionChat(model: string, imageBase64: string, prompt: str
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(buildVisionChatBody(model, imageBase64, prompt, forceCpu)),
   });
-
   const payload = await readJson<OllamaChatResponse>(response, 'Unable to complete the local vision request.');
   if (payload.error?.trim()) {
     throw new HttpError(502, payload.error.trim());
   }
-
   const content = payload.message?.content?.trim();
   if (!content) {
     throw new HttpError(502, 'The local vision model returned an empty response.');
@@ -147,17 +104,39 @@ async function askVisionModel(model: string, imageBase64: string, prompt: string
   if (preferCpuVisionRequests) {
     return requestVisionChat(model, imageBase64, prompt, true);
   }
-
   try {
     return await requestVisionChat(model, imageBase64, prompt, false);
   } catch (error) {
     if (!(error instanceof HttpError) || !isGpuKernelFailure(error.message)) {
       throw error;
     }
-
     preferCpuVisionRequests = true;
     return requestVisionChat(model, imageBase64, prompt, true);
   }
+}
+
+function buildJsonPrompt(instructions: string[], attempt: number) {
+  return [
+    ...instructions,
+    'Respond with JSON only. Do not include Markdown fences, prose, or commentary.',
+    attempt > 0 ? 'Your previous response was not valid JSON. Return one valid JSON object only.' : null,
+    `Request ID: ${randomUUID()}`,
+  ].filter(Boolean).join('\n');
+}
+
+export async function queryVisionModelJson<T>(imageBase64: string, instructions: string[], parser: (value: unknown) => T) {
+  const model = await ensureVisionModelReady();
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await askVisionModel(model, imageBase64, buildJsonPrompt(instructions, attempt));
+    try {
+      return { model, value: parser(JSON.parse(raw) as unknown) };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const message = lastError instanceof Error ? lastError.message : 'The local vision model returned invalid JSON.';
+  throw new HttpError(502, message);
 }
 
 export async function generateImageSummary(imageBase64: string) {
@@ -171,7 +150,6 @@ export async function generateImageSummary(imageBase64: string) {
       'Do not speculate beyond what is visible.',
     ].join(' '),
   );
-
   return { model, summary };
 }
 
@@ -187,7 +165,6 @@ export async function queryImageModel(imageBase64: string, question: string) {
       `Request ID: ${randomUUID()}`,
     ].join('\n'),
   );
-
   return { answer, model };
 }
 

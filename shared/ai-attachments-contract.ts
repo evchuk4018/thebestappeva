@@ -1,6 +1,7 @@
 export type AiAttachmentKind = 'document' | 'image';
 export type AiAttachmentParser = 'docling';
 export type AiImageSummaryStatus = 'ready';
+export type AiImageAnalysisStatus = 'idle' | 'ready';
 
 export interface AiAttachmentStats {
   pageCount: number | null;
@@ -33,6 +34,9 @@ export interface AiImageAttachmentReference extends AiAttachmentBase {
   summary: string;
   summaryModel: string;
   summaryStatus: AiImageSummaryStatus;
+  analysisStatus?: AiImageAnalysisStatus;
+  analysisVersion?: string;
+  analysisUpdatedAt?: string;
 }
 
 export type AiAttachmentReference = AiDocumentAttachmentReference | AiImageAttachmentReference;
@@ -112,6 +116,17 @@ function parseOptionalPdfReaderMode(value: unknown, field: string) {
   return value;
 }
 
+function parseOptionalAnalysisStatus(value: unknown, field: string) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  const status = expectString(value, field);
+  if (status !== 'idle' && status !== 'ready') {
+    throw new Error(`Invalid ${field}. Expected "idle" or "ready".`);
+  }
+  return status;
+}
+
 function parseStats(value: unknown, field: string): AiAttachmentStats {
   const record = expectRecord(value, field);
   return {
@@ -153,6 +168,9 @@ export function parseAiAttachmentReference(value: unknown, field = 'AI attachmen
       summary: expectString(record.summary, `${field}.summary`),
       summaryModel: expectString(record.summaryModel, `${field}.summaryModel`),
       summaryStatus,
+      analysisStatus: parseOptionalAnalysisStatus(record.analysisStatus, `${field}.analysisStatus`),
+      analysisVersion: expectOptionalString(record.analysisVersion, `${field}.analysisVersion`),
+      analysisUpdatedAt: expectOptionalString(record.analysisUpdatedAt, `${field}.analysisUpdatedAt`),
     };
   }
 

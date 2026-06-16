@@ -17,6 +17,10 @@ function getPageCacheDir(id: string) {
   return path.join(serverConfig.aiAttachmentStoragePath, `${id}-pages`);
 }
 
+function getImageAnalysisCacheDir(id: string) {
+  return path.join(serverConfig.aiAttachmentStoragePath, `${id}-image-analysis`);
+}
+
 function getPageImagePath(id: string, pageNumber: number) {
   return path.join(getPageCacheDir(id), `${pageNumber}.png`);
 }
@@ -59,6 +63,7 @@ export async function deleteAttachmentRecord(id: string, sourceExtension: string
     fs.unlink(getRecordPath(id)),
     fs.unlink(getSourcePath(id, sourceExtension)),
     fs.rm(getPageCacheDir(id), { recursive: true, force: true }),
+    fs.rm(getImageAnalysisCacheDir(id), { recursive: true, force: true }),
   ]);
 }
 

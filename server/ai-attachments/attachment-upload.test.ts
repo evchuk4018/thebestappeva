@@ -45,7 +45,8 @@ test('image uploads get image_* ids and an immediate summary', async () => {
     assert.match(record.attachment.id, /^image_[a-z0-9]{12}$/);
     assert.equal(record.attachment.summary, 'A street map with route labels.');
     assert.equal(record.attachment.width, 640);
-    assert.match(requests[1]?.body ?? '', /openbmb\/minicpm-v4\.5:8b/);
+    assert.equal(record.attachment.analysisStatus, 'idle');
+    assert.match(requests[1]?.body ?? '', /qwen3vl:8b/);
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.json`)));
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.png`)));
   } finally {

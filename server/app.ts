@@ -25,7 +25,7 @@ import {
   handleGetAiPdfPageImage,
   handleSearchAiPdf,
 } from './ai-attachments/pdf-routes';
-import { handlePostAiImageQuestion } from './ai-attachments/image-routes';
+import { handlePostAiImageAnalysis, handlePostAiImageCompare, handlePostAiImageQuestion } from './ai-attachments/image-routes';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import type { Server } from 'node:http';
 import fs from 'node:fs/promises';
@@ -165,6 +165,8 @@ function registerApiRoutes(app: Express) {
   app.delete('/api/docs/:docId/citations/:citationId', (req, res) => void handleDeleteDocCitation(req, res));
   app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
   app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
+  app.post('/api/ai/attachments/:attachmentId/image-analysis', (req, res) => void handlePostAiImageAnalysis(req, res));
+  app.post('/api/ai/attachments/:attachmentId/image-compare', (req, res) => void handlePostAiImageCompare(req, res));
   app.post('/api/ai/attachments/:attachmentId/image-query', (req, res) => void handlePostAiImageQuestion(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/search', (req, res) => void handleSearchAiPdf(req, res));
   app.get('/api/ai/attachments/:attachmentId/pdf/pages', (req, res) => void handleGetAiPdfPages(req, res));

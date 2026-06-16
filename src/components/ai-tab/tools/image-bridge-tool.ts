@@ -1,4 +1,4 @@
-import { askAiImageQuestion } from '../../../lib/ai-attachments-storage';
+import { analyzeAiImage, compareAiGeneratedImage } from '../../../lib/ai-attachments-storage';
 import { AiAttachmentReference, AiMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
@@ -8,9 +8,17 @@ function isImageAttachment(attachment: AiAttachmentReference): attachment is Ext
 
 function requireString(value: unknown, name: string) {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new Error(`ask_image_model requires a non-empty \`${name}\` argument.`);
+    throw new Error(`image-bridge requires a non-empty \`${name}\` argument.`);
   }
   return value.trim();
+}
+
+function requireBoolean(value: unknown, fallback = false) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function requireNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function requireImageAttachment(attachments: Extract<AiAttachmentReference, { kind: 'image' }>[], imageId: unknown) {
@@ -33,34 +41,65 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
       id: 'image-bridge',
       label: 'Image Bridge',
       alias: '/image-bridge',
-      description: 'Inspects uploaded images through a local vision model when the active model cannot see them directly.',
+      description: 'Builds structured scene graphs for uploaded images and compares generated SVG output against the source.',
       enabledByDefault: false,
       automatic: true,
       functions: [
         {
-          name: 'ask_image_model',
-          description: 'Ask a focused visual question about one uploaded image by its imageId.',
+          name: 'extract_image_scene',
+          description: 'Extract a structured scene graph for one uploaded image.',
           parameters: [
             { name: 'imageId', type: 'string', description: 'Image attachment ID, such as image_abc123.', required: true },
-            { name: 'question', type: 'string', description: 'Specific visual question to answer from the image.', required: true },
+            { name: 'refresh', type: 'boolean', description: 'Recompute the scene graph instead of reusing cached analysis.' },
+          ],
+        },
+        {
+          name: 'compare_generated_image',
+          description: 'Render generated SVG content and compare it to the source image using scene graphs and OCR.',
+          parameters: [
+            { name: 'imageId', type: 'string', description: 'Image attachment ID, such as image_abc123.', required: true },
+            { name: 'content', type: 'string', description: 'Generated SVG markup to render and compare.', required: true },
+            { name: 'refresh', type: 'boolean', description: 'Refresh the cached source scene graph before comparing.' },
+            { name: 'iteration', type: 'number', description: 'Current repair-loop iteration number.' },
+            { name: 'maxIterations', type: 'number', description: 'Maximum repair-loop iterations allowed.' },
           ],
         },
       ],
     },
     async execute(invocation) {
       const attachment = requireImageAttachment(attachments, invocation.args.imageId);
-      const question = requireString(invocation.args.question, 'question');
-      const payload = await askAiImageQuestion(attachment.id, question);
+      if (invocation.functionName === 'extract_image_scene') {
+        const payload = await analyzeAiImage(attachment.id, requireBoolean(invocation.args.refresh));
+        return {
+          toolId: invocation.toolId,
+          functionName: invocation.functionName,
+          ok: true,
+          summary: `Extracted a structured scene graph for ${attachment.id}.`,
+          data: {
+            imageId: attachment.id,
+            model: payload.model,
+            cached: payload.cached,
+            sceneGraph: payload.sceneGraph,
+          },
+        };
+      }
+
+      const payload = await compareAiGeneratedImage(
+        attachment.id,
+        requireString(invocation.args.content, 'content'),
+        requireBoolean(invocation.args.refresh),
+        requireNumber(invocation.args.iteration),
+        requireNumber(invocation.args.maxIterations),
+      );
       return {
         toolId: invocation.toolId,
         functionName: invocation.functionName,
         ok: true,
-        summary: `Answered image question for ${attachment.id}.`,
+        summary: `Compared generated SVG output against ${attachment.id}.`,
         data: {
           imageId: attachment.id,
-          question,
-          answer: payload.answer,
-          model: payload.model,
+          cached: payload.cached,
+          comparison: payload.comparison,
         },
       };
     },

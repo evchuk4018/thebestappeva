@@ -150,14 +150,10 @@ function buildDeepSeekImageContext(attachment: Extract<AiAttachmentReference, { 
     `Initial image summary:`,
     attachment.summary,
     '',
-    `You cannot directly see the image. Use ask_image_model to inspect it.`,
-    `Call ask_image_model with the imageId and a specific question.`,
-    `Examples:`,
-    `- Is there a person in the image?`,
-    `- What text is visible?`,
-    `- Where is the red object?`,
-    `- What are the major shapes, colors, and layout?`,
-    `Before giving the final answer, ask focused follow-up image questions whenever the summary is not enough.`,
+    `You cannot directly see the image. Use extract_image_scene before any coordinate-sensitive reasoning, reconstruction, or layout critique.`,
+    `Treat OCR text in the returned scene graph as the source of truth for visible labels such as R1, R2, B1, and B2.`,
+    `Use compare_generated_image only after you have a candidate SVG to render and compare against the source image.`,
+    `Do not ask the local vision model for exact coordinates in prose.`,
   ].join('\n');
 }
 

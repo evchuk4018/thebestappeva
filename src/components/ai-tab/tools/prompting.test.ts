@@ -31,7 +31,7 @@ const promptContext = {
   tools: [],
 };
 
-test('deepseek image prompts include bridge instructions for each image', async () => {
+test('deepseek image prompts include structured scene extraction guidance for each image', async () => {
   const messages = await buildPlainModelMessages([{
     id: 'msg-1',
     kind: 'user',
@@ -43,7 +43,9 @@ test('deepseek image prompts include bridge instructions for each image', async 
   const userMessage = messages[1]?.content ?? '';
   assert.match(userMessage, /User uploaded image image_map123/);
   assert.match(userMessage, /User uploaded image image_chart456/);
-  assert.match(userMessage, /Use ask_image_model to inspect it/);
+  assert.match(userMessage, /Use extract_image_scene before any coordinate-sensitive reasoning/);
+  assert.match(userMessage, /Use compare_generated_image only after you have a candidate SVG/);
+  assert.doesNotMatch(userMessage, /ask_image_model/);
 });
 
 test('non-deepseek image prompts keep the local summary without bridge instructions', async () => {

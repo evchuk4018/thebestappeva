@@ -1,0 +1,197 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import type { AiImageSceneGraph } from '../../shared/ai-image-bridge-contract';
+import { getAttachmentSourcePath, readAttachmentRecord, saveAttachmentRecord } from './storage';
+import { isStoredImageAttachmentRecord } from './record-guards';
+import { analyzeImageWithSidecar } from './image-analysis-sidecar';
+import { readCachedSceneGraph, saveCachedSceneGraph, saveDebugImages } from './image-analysis-cache';
+import { queryVisionModelJson } from './vision-model';
+import { HttpError } from '../http';
+
+const analysisVersion = 'scene-graph-v1';
+type VisionLabel = { id: string; label: string; type?: string; confidence: number };
+
+let testHooks: Partial<{
+  analyzeFile: typeof analyzeImageWithSidecar;
+  queryJson: typeof queryVisionModelJson<VisionLabel[]>;
+}> = {};
+
+function parseVisionLabels(value: unknown) {
+  if (!Array.isArray(value)) {
+    throw new Error('Vision labels must be an array.');
+  }
+  return value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`Invalid vision label ${index}.`);
+    }
+    const record = item as Record<string, unknown>;
+    return {
+      id: typeof record.id === 'string' ? record.id : (() => { throw new Error('Vision label id missing.'); })(),
+      label: typeof record.label === 'string' ? record.label : (() => { throw new Error('Vision label missing text.'); })(),
+      type: typeof record.type === 'string' ? record.type : undefined,
+      confidence: typeof record.confidence === 'number' ? record.confidence : 0.5,
+    } satisfies VisionLabel;
+  });
+}
+
+function getBBoxArea([left, top, right, bottom]: [number, number, number, number]) {
+  return Math.max(0, right - left) * Math.max(0, bottom - top);
+}
+
+function intersectBBoxes(left: [number, number, number, number], right: [number, number, number, number]) {
+  const intersectWidth = Math.max(0, Math.min(left[2], right[2]) - Math.max(left[0], right[0]));
+  const intersectHeight = Math.max(0, Math.min(left[3], right[3]) - Math.max(left[1], right[1]));
+  return intersectWidth * intersectHeight;
+}
+
+function buildRelationships(sceneGraph: AiImageSceneGraph) {
+  const relationships = [...sceneGraph.relationships];
+  for (const text of sceneGraph.text) {
+    if (text.objectId) {
+      relationships.push({ type: 'label-for', from: text.value, to: text.objectId, confidence: text.confidence });
+    }
+  }
+  for (let index = 0; index < sceneGraph.objects.length; index += 1) {
+    const left = sceneGraph.objects[index];
+    for (let rightIndex = index + 1; rightIndex < sceneGraph.objects.length; rightIndex += 1) {
+      const right = sceneGraph.objects[rightIndex];
+      const overlapArea = intersectBBoxes(left.bbox, right.bbox);
+      if (!overlapArea) {
+        continue;
+      }
+      const minArea = Math.max(1, Math.min(getBBoxArea(left.bbox), getBBoxArea(right.bbox)));
+      const overlapRatio = overlapArea / minArea;
+      if (overlapRatio > 0.85) {
+        relationships.push({ type: 'contains', from: getBBoxArea(left.bbox) >= getBBoxArea(right.bbox) ? left.id : right.id, to: getBBoxArea(left.bbox) >= getBBoxArea(right.bbox) ? right.id : left.id, confidence: overlapRatio });
+      } else if (overlapRatio > 0.2) {
+        relationships.push({ type: 'overlaps', from: left.id, to: right.id, confidence: overlapRatio });
+      }
+    }
+  }
+  return relationships;
+}
+
+function buildLabelPrompt(sceneGraph: AiImageSceneGraph, passName: string) {
+  const objects = sceneGraph.objects
+    .filter((object) => object.crops.includes(passName))
+    .map(({ id, type, dominantColors }) => ({ id, type, dominantColors }));
+  const text = sceneGraph.text.filter((item) => !item.objectId || objects.some((object) => object.id === item.objectId)).map(({ value, objectId }) => ({ value, objectId }));
+  return [
+    `You are labeling detected visual objects for the ${passName} crop of one image.`,
+    'Each visible object already has a stable id. Do not invent coordinates or bounding boxes.',
+    'Use the OCR text when it helps identify labels such as R1, R2, B1, or B2.',
+    `Objects: ${JSON.stringify(objects)}`,
+    `OCR text: ${JSON.stringify(text)}`,
+    'Return a JSON array of { "id": string, "label": string, "type"?: string, "confidence": number } for visible objects only.',
+  ];
+}
+
+async function applySemanticLabels(sceneGraph: AiImageSceneGraph, debugImages: Record<string, Buffer>) {
+  const labels = new Map<string, VisionLabel>();
+  let model = 'geometry-only';
+  for (const passName of ['full', 'left', 'center', 'right']) {
+    const image = debugImages[passName];
+    const passObjects = sceneGraph.objects.filter((object) => object.crops.includes(passName));
+    if (!image || !passObjects.length) {
+      continue;
+    }
+    const response = await (testHooks.queryJson ?? queryVisionModelJson<VisionLabel[]>)(
+      image.toString('base64'),
+      buildLabelPrompt(sceneGraph, passName),
+      parseVisionLabels,
+    );
+    model = response.model;
+    response.value.forEach((label) => {
+      const current = labels.get(label.id);
+      if (!current || label.confidence >= current.confidence) {
+        labels.set(label.id, label);
+      }
+    });
+  }
+  return {
+    model,
+    objects: sceneGraph.objects.map((object) => {
+      const label = labels.get(object.id);
+      return label ? { ...object, label: label.label, type: label.type || object.type, confidence: Math.max(object.confidence, label.confidence) } : object;
+    }),
+    uncertain: sceneGraph.uncertain.concat(
+      sceneGraph.objects.filter((object) => !labels.has(object.id)).map((object) => ({
+        kind: 'semantic-label' as const,
+        message: `No semantic label was returned for ${object.id}.`,
+        objectId: object.id,
+      })),
+    ),
+  };
+}
+
+async function analyzePath(filePath: string) {
+  return (testHooks.analyzeFile ?? analyzeImageWithSidecar)(filePath);
+}
+
+async function analyzeImageFromPath(filePath: string) {
+  const base = await analyzePath(filePath);
+  const labeled = await applySemanticLabels(base.sceneGraph, base.debugImages);
+  return {
+    debugImages: base.debugImages,
+    sceneGraph: {
+      ...base.sceneGraph,
+      objects: labeled.objects,
+      relationships: buildRelationships(base.sceneGraph),
+      uncertain: labeled.uncertain,
+      diagnostics: {
+        ...base.sceneGraph.diagnostics,
+        analysisVersion,
+        generatedAt: new Date().toISOString(),
+        vlmModel: labeled.model,
+      },
+    } satisfies AiImageSceneGraph,
+    model: labeled.model,
+  };
+}
+
+async function withTempImageFile(buffer: Buffer, extension: string, action: (filePath: string) => Promise<AiImageSceneGraph>) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-analysis-'));
+  const filePath = path.join(tempDir, `image${extension}`);
+  try {
+    await fs.writeFile(filePath, buffer);
+    return await action(filePath);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+export async function analyzeImageBuffer(buffer: Buffer, extension = '.png') {
+  return withTempImageFile(buffer, extension, async (filePath) => (await analyzeImageFromPath(filePath)).sceneGraph);
+}
+
+export async function analyzeStoredImage(attachmentId: string, refresh = false) {
+  const record = await readAttachmentRecord(attachmentId);
+  if (!isStoredImageAttachmentRecord(record)) {
+    throw new HttpError(415, `"${attachmentId}" is not an image attachment.`);
+  }
+  if (!refresh) {
+    const cached = await readCachedSceneGraph(attachmentId);
+    if (cached) {
+      return { attachment: record.attachment, cached: true, model: cached.sceneGraph.diagnostics.vlmModel, sceneGraph: cached.sceneGraph };
+    }
+  }
+  const sourcePath = getAttachmentSourcePath(attachmentId, record.sourceExtension);
+  const analyzed = await analyzeImageFromPath(sourcePath);
+  await saveCachedSceneGraph(attachmentId, { sceneGraph: analyzed.sceneGraph });
+  if (Object.keys(analyzed.debugImages).length) {
+    await saveDebugImages(attachmentId, analyzed.debugImages);
+  }
+  const attachment = {
+    ...record.attachment,
+    analysisStatus: 'ready' as const,
+    analysisVersion,
+    analysisUpdatedAt: analyzed.sceneGraph.diagnostics.generatedAt,
+  };
+  await saveAttachmentRecord({ ...record, attachment });
+  return { attachment, cached: false, model: analyzed.model, sceneGraph: analyzed.sceneGraph };
+}
+
+export function setImageAnalysisTestHooksForTests(hooks: typeof testHooks) {
+  testHooks = hooks;
+}

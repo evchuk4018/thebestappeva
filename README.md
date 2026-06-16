@@ -26,7 +26,8 @@ If you want local PDF, DOCX, and XLSX uploads in `/ai`, plus the local `python.e
 python -m pip install -r python/requirements-docling.txt
 ```
 
-On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS` or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
+On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS`, `AI_IMAGE_ANALYSIS_PYTHON_COMMAND` / `AI_IMAGE_ANALYSIS_PYTHON_ARGS`, or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
+The same requirements file now also installs the local image-analysis stack used by `image-bridge`: OpenCV, Pillow, NumPy, and RapidOCR ONNX.
 PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
@@ -108,8 +109,10 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
-- pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids and an immediate local vision summary
-- DeepSeek chats with uploaded images automatically switch into `Thinking`, receive the stored image summary plus bridge instructions, and can call `ask_image_model` for targeted follow-up questions through a local Ollama vision model
+- pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids, an immediate local vision summary, and on-demand structured scene-graph analysis
+- DeepSeek chats with uploaded images automatically switch into `Thinking`, receive the stored image summary plus scene-graph instructions, and can call `extract_image_scene` before layout-sensitive reasoning or SVG reconstruction
+- OCR for image labels is handled separately from semantic labeling, so labels like `R1`, `R2`, `B1`, and `B2` come from the structured scene graph instead of prose follow-up guesses
+- generated SVG candidates can be rendered back to PNG with `compare_generated_image`, which returns structured layout/color/text diffs and patch guidance for iterative repair loops
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
@@ -143,17 +146,17 @@ Implementation notes:
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
-- Image bridge vision models: prefers local `openbmb/minicpm-v4.5:8b`, then `qwen2.5vl:7b`, and auto-pulls the top preferred model on first image use when needed
+- Image bridge vision models: prefers local `qwen3vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3vl` and `internvl3` fallbacks; override the order with `AI_VISION_MODELS`
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
-- Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
+- Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`
 - Model discovery: `GET /api/tags` for Ollama and `GET /models` for DeepSeek BYOK
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
-- Attachment parser sidecar: `python/docling_sidecar.py`, using Docling standard parsing locally on CPU
+- Attachment parser sidecars: `python/docling_sidecar.py` for documents and `python/image_analysis_sidecar.py` for structured image geometry/OCR extraction
 - Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`

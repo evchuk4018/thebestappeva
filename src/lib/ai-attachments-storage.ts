@@ -3,7 +3,11 @@ import {
   parseAiAttachmentHealth,
   parseAiParsedAttachment,
 } from '../../shared/ai-attachments-contract';
-import { parseAiImageQueryPayload } from '../../shared/ai-image-bridge-contract';
+import {
+  parseAiImageAnalysisPayload,
+  parseAiImageComparePayload,
+  parseAiImageQueryPayload,
+} from '../../shared/ai-image-bridge-contract';
 import {
   parseAiPdfPageImagePayload,
   parseAiPdfPagePayload,
@@ -122,6 +126,30 @@ export async function askAiImageQuestion(attachmentId: string, question: string)
   });
 
   return parseAiImageQueryPayload(await readJsonResponse(response));
+}
+
+export async function analyzeAiImage(attachmentId: string, refresh = false) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
+  return parseAiImageAnalysisPayload(await readJsonResponse(response));
+}
+
+export async function compareAiGeneratedImage(
+  attachmentId: string,
+  content: string,
+  refresh = false,
+  iteration?: number,
+  maxIterations?: number,
+) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ format: 'svg', content, refresh, iteration, maxIterations }),
+  });
+  return parseAiImageComparePayload(await readJsonResponse(response));
 }
 
 export async function loadAiAttachmentHealth() {
