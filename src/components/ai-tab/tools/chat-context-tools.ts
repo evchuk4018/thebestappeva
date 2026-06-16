@@ -84,7 +84,7 @@ function createRecentChatsTool(options: ChatContextToolOptions): ToolRegistryEnt
     },
     async execute(invocation) {
       const limit = normalizeLimit(invocation.args.limit, RECENT_CHAT_LIMIT);
-      const chats = buildRecentChatPool(options.chats, options.activeChatId).slice(0, limit).map(toRecentChatRecord);
+      const chats = buildRecentChatPool(options.getChats(), options.activeChatId).slice(0, limit).map(toRecentChatRecord);
       return {
         toolId: invocation.toolId,
         functionName: invocation.functionName,
@@ -120,7 +120,7 @@ function createChatTitleSearchTool(options: ChatContextToolOptions): ToolRegistr
         const query = requireString(invocation.args.query, 'search_chat_titles requires a non-empty `query` argument.');
         const limit = normalizeLimit(invocation.args.limit, DEFAULT_SEARCH_LIMIT);
         const normalizedQuery = normalizeText(query);
-        const chats = buildRecentChatPool(options.chats, options.activeChatId)
+        const chats = buildRecentChatPool(options.getChats(), options.activeChatId)
           .filter((chat) => normalizeText(chat.title).includes(normalizedQuery))
           .slice(0, limit)
           .map(toRecentChatRecord);
@@ -161,7 +161,7 @@ function createChatSummaryTool(options: ChatContextToolOptions): ToolRegistryEnt
     async execute(invocation) {
       try {
         const chatId = requireString(invocation.args.chatId, 'get_chat_summary requires a non-empty `chatId` argument.');
-        const chat = options.chats.find((candidate) => candidate.id === chatId);
+        const chat = options.getChats().find((candidate) => candidate.id === chatId);
         if (!chat) {
           return buildError(invocation.toolId, invocation.functionName, `Chat "${chatId}" was not found.`);
         }

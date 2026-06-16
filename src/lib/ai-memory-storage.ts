@@ -10,9 +10,10 @@ async function readJsonResponse(response: Response) {
   return payload;
 }
 
-export async function refreshAiChatMemory(chatId: string) {
+export async function refreshAiChatMemory(chatId: string, options: { signal?: AbortSignal } = {}) {
   const response = await fetch(`/api/ai/chats/${encodeURIComponent(chatId)}/memory-refresh`, {
     method: 'POST',
+    signal: options.signal,
   });
   return parseAiMemoryRefreshResponse(await readJsonResponse(response));
 }

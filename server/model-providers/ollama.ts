@@ -182,6 +182,9 @@ export function createOllamaProvider(): ModelProviderDefinition {
           return await requestChat(options, false);
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw error;
+        }
         throw error instanceof HttpError ? error : new HttpError(502, 'Unable to reach local Ollama.');
       }
     },

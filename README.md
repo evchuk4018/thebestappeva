@@ -100,6 +100,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
 - the server also maintains a hidden generated user-memory note, capped at two paragraphs, for durable preferences, life facts, and ongoing projects; this note is injected into live prompts but is not user-editable in the UI
 - each chat now keeps a rolling generated summary, capped at three paragraphs, which is refreshed after normally completed assistant turns and stored against that chat for future retrieval work
+- automatic post-turn memory refresh now runs as a background queue instead of part of the visible reply flow, so completed assistant answers settle immediately; text-only turns can overlap with that queue, while image-bearing turns pause and abort queued background refresh work until the foreground turn finishes
 - new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b-q8_0`; if that model is unavailable, the heuristic title remains
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
 - the left sidebar now has `Chats` and `Tools` panels

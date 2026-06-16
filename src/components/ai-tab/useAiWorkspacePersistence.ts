@@ -27,6 +27,9 @@ interface AiWorkspacePersistenceState {
   setCurrentModel: Dispatch<SetStateAction<string | null>>;
   setCustomSystemPrompt: Dispatch<SetStateAction<string>>;
   setEnabledTools: Dispatch<SetStateAction<Record<string, boolean>>>;
+  getChats: () => Chat[];
+  getGeneratedUserMemory: () => string;
+  getWorkspaceSnapshot: (overrides?: Partial<AiWorkspaceSnapshot>) => AiWorkspaceSnapshot;
   flushWorkspace: (options?: FlushWorkspaceOptions) => Promise<void>;
 }
 
@@ -34,9 +37,27 @@ function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function buildSnapshot(
+  chats: Chat[],
+  generatedUserMemory: string,
+  currentProvider: AiWorkspaceSnapshot['selectedProvider'],
+  currentModel: string | null,
+  enabledTools: Record<string, boolean>,
+  customSystemPrompt: string,
+): AiWorkspaceSnapshot {
+  return {
+    chats,
+    generatedUserMemory,
+    selectedProvider: currentProvider,
+    selectedModel: currentModel,
+    enabledTools,
+    customSystemPrompt,
+  };
+}
+
 export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [generatedUserMemory, setGeneratedUserMemory] = useState('');
+  const [chats, setChatsState] = useState<Chat[]>([]);
+  const [generatedUserMemory, setGeneratedUserMemoryState] = useState('');
   const [currentProvider, setCurrentProvider] = useState<AiWorkspaceSnapshot['selectedProvider']>('ollama');
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
@@ -45,19 +66,62 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const hydratedRef = useRef(false);
   const lastSavedSnapshotRef = useRef(JSON.stringify(createEmptyAiWorkspaceSnapshot()));
+  const chatsRef = useRef<Chat[]>([]);
+  const generatedUserMemoryRef = useRef('');
+  const currentProviderRef = useRef<AiWorkspaceSnapshot['selectedProvider']>('ollama');
+  const currentModelRef = useRef<string | null>(null);
+  const customSystemPromptRef = useRef('');
+  const enabledToolsRef = useRef<Record<string, boolean>>({});
 
-  const snapshot = useMemo<AiWorkspaceSnapshot>(() => ({
+  const setChats = useEffectEvent((next: SetStateAction<Chat[]>) => {
+    setChatsState((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      chatsRef.current = resolved;
+      return resolved;
+    });
+  });
+
+  const setGeneratedUserMemory = useEffectEvent((next: SetStateAction<string>) => {
+    setGeneratedUserMemoryState((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      generatedUserMemoryRef.current = resolved;
+      return resolved;
+    });
+  });
+
+  const getChats = useEffectEvent(() => chatsRef.current);
+  const getGeneratedUserMemory = useEffectEvent(() => generatedUserMemoryRef.current);
+  const getWorkspaceSnapshot = useEffectEvent((overrides: Partial<AiWorkspaceSnapshot> = {}) =>
+    buildSnapshot(
+      overrides.chats ?? chatsRef.current,
+      overrides.generatedUserMemory ?? generatedUserMemoryRef.current,
+      overrides.selectedProvider ?? currentProviderRef.current,
+      overrides.selectedModel ?? currentModelRef.current,
+      overrides.enabledTools ?? enabledToolsRef.current,
+      overrides.customSystemPrompt ?? customSystemPromptRef.current,
+    ));
+
+  useEffect(() => {
+    chatsRef.current = chats;
+    generatedUserMemoryRef.current = generatedUserMemory;
+    currentProviderRef.current = currentProvider;
+    currentModelRef.current = currentModel;
+    customSystemPromptRef.current = customSystemPrompt;
+    enabledToolsRef.current = enabledTools;
+  }, [chats, generatedUserMemory, currentProvider, currentModel, customSystemPrompt, enabledTools]);
+
+  const snapshot = useMemo<AiWorkspaceSnapshot>(() => buildSnapshot(
     chats,
     generatedUserMemory,
-    selectedProvider: currentProvider,
-    selectedModel: currentModel,
+    currentProvider,
+    currentModel,
     enabledTools,
     customSystemPrompt,
-  }), [chats, generatedUserMemory, currentProvider, currentModel, enabledTools, customSystemPrompt]);
+  ), [chats, generatedUserMemory, currentProvider, currentModel, enabledTools, customSystemPrompt]);
   const serializedSnapshot = useMemo(() => JSON.stringify(snapshot), [snapshot]);
 
   const flushWorkspace = useEffectEvent(async (options: FlushWorkspaceOptions = {}) => {
-    const nextSnapshot = options.snapshot ?? snapshot;
+    const nextSnapshot = options.snapshot ?? getWorkspaceSnapshot();
     const nextSerializedSnapshot = JSON.stringify(nextSnapshot);
     if (!hydratedRef.current || nextSerializedSnapshot === lastSavedSnapshotRef.current) {
       return;
@@ -87,8 +151,14 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
         hydratedRef.current = true;
         lastSavedSnapshotRef.current = JSON.stringify(loadedSnapshot);
-        setChats(nextSnapshot.chats);
-        setGeneratedUserMemory(nextSnapshot.generatedUserMemory);
+        chatsRef.current = nextSnapshot.chats;
+        generatedUserMemoryRef.current = nextSnapshot.generatedUserMemory;
+        currentProviderRef.current = nextSnapshot.selectedProvider;
+        currentModelRef.current = nextSnapshot.selectedModel;
+        enabledToolsRef.current = nextSnapshot.enabledTools;
+        customSystemPromptRef.current = nextSnapshot.customSystemPrompt;
+        setChatsState(nextSnapshot.chats);
+        setGeneratedUserMemoryState(nextSnapshot.generatedUserMemory);
         setCurrentProvider(nextSnapshot.selectedProvider);
         setCurrentModel(nextSnapshot.selectedModel);
         setEnabledTools(nextSnapshot.enabledTools);
@@ -161,6 +231,9 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     setCurrentModel,
     setCustomSystemPrompt,
     setEnabledTools,
+    getChats,
+    getGeneratedUserMemory,
+    getWorkspaceSnapshot,
     flushWorkspace,
   };
 }

@@ -100,3 +100,35 @@ test('memory service saves successful memory and summary rewrites', async () => 
   assert.equal(state.memory, 'Prefers concise replies.\n\nPlanning a move to Boston.');
   assert.equal(state.chat.summary, 'The chat covers a Boston move.\n\nThe user asked for shorter replies.');
 });
+
+test('memory service propagates aborts without persisting partial refreshes', async () => {
+  const { state, repository } = createRepository();
+  const controller = new AbortController();
+  let sawSignal = false;
+  let resolveStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    resolveStarted = resolve;
+  });
+  const provider = {
+    getStatus: async () => ({
+      option: { value: 'ollama' as const, label: 'Ollama', configured: true, status: 'ready' as const, detail: 'ok', defaultModel: null, defaultModelLabel: null },
+      models: [{ name: 'qwen3.5:9b', provider: 'ollama' as const }],
+    }),
+    callChatStream: async ({ signal }: { signal?: AbortSignal }) => {
+      sawSignal = signal === controller.signal;
+      resolveStarted();
+      return await new Promise<never>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    },
+  };
+
+  const refreshPromise = createAiMemoryService(repository, provider).refreshChatMemory('chat-1', { signal: controller.signal });
+  await started;
+  controller.abort(new DOMException('Stopped background refresh.', 'AbortError'));
+
+  await assert.rejects(refreshPromise, (error: unknown) => error instanceof Error && error.name === 'AbortError');
+  assert.equal(sawSignal, true);
+  assert.equal(state.memory, 'Likes concise replies.');
+  assert.equal(state.chat.summary, 'The chat is about a move.');
+});

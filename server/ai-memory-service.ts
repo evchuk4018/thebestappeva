@@ -22,6 +22,18 @@ interface MemoryRepository {
 
 type MemoryModelProvider = Pick<ModelProviderDefinition, 'getStatus' | 'callChatStream'>;
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new DOMException(typeof signal?.reason === 'string' ? signal.reason : 'The request was aborted.', 'AbortError');
+  }
+}
+
 function normalizeParagraphBoundedText(value: string, maxParagraphs: number) {
   const paragraphs = value
     .split(/\n\s*\n/g)
@@ -91,12 +103,16 @@ async function rewriteBoundedNote(
   provider: MemoryModelProvider,
   messages: ModelChatMessage[],
   maxParagraphs: number,
+  signal?: AbortSignal,
 ) {
+  throwIfAborted(signal);
   const reply = await provider.callChatStream({
     model: backgroundModel,
     messages,
     think: true,
+    signal,
   });
+  throwIfAborted(signal);
   const normalized = normalizeParagraphBoundedText(reply.content, maxParagraphs);
   return isMeaningfulGeneratedText(normalized) ? normalized : null;
 }
@@ -125,7 +141,8 @@ export function createAiMemoryService(
   now: () => string = () => new Date().toISOString(),
 ) {
   return {
-    async refreshChatMemory(chatId: string): Promise<AiMemoryRefreshResponse> {
+    async refreshChatMemory(chatId: string, options: { signal?: AbortSignal } = {}): Promise<AiMemoryRefreshResponse> {
+      throwIfAborted(options.signal);
       const chat = repository.findChatById(chatId);
       if (!chat) {
         throw new HttpError(404, `Chat "${chatId}" was not found.`);
@@ -148,6 +165,7 @@ export function createAiMemoryService(
         };
       }
 
+      throwIfAborted(options.signal);
       if (!(await isBackgroundModelAvailable(provider))) {
         return {
           chatId,
@@ -170,7 +188,7 @@ export function createAiMemoryService(
       let summaryError: string | undefined;
 
       try {
-        const rewrittenMemory = await rewriteBoundedNote(provider, buildMemoryMessages(generatedUserMemory, exchange), 2);
+        const rewrittenMemory = await rewriteBoundedNote(provider, buildMemoryMessages(generatedUserMemory, exchange), 2, options.signal);
         if (!rewrittenMemory) {
           memoryError = 'The background model returned no usable memory update.';
         } else if (rewrittenMemory !== generatedUserMemory) {
@@ -179,11 +197,14 @@ export function createAiMemoryService(
           memoryUpdated = true;
         }
       } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
         memoryError = error instanceof Error ? error.message : 'Unable to refresh generated user memory.';
       }
 
       try {
-        const rewrittenSummary = await rewriteBoundedNote(provider, buildSummaryMessages(priorSummary, exchange), 3);
+        const rewrittenSummary = await rewriteBoundedNote(provider, buildSummaryMessages(priorSummary, exchange), 3, options.signal);
         if (!rewrittenSummary) {
           summaryError = 'The background model returned no usable chat summary.';
         } else if (rewrittenSummary !== priorSummary) {
@@ -193,6 +214,9 @@ export function createAiMemoryService(
           summaryUpdated = true;
         }
       } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
         summaryError = error instanceof Error ? error.message : 'Unable to refresh the chat summary.';
       }
 

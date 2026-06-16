@@ -26,21 +26,25 @@ function getEntry(id: string, chats: Chat[], activeChatId: string | null = null)
   let latestMemory = 'Initial memory';
   const snapshots: Array<{ chats: Chat[]; generatedUserMemory: string }> = [];
   const entries = createChatContextToolEntries({
-    chats,
+    getChats: () => latestChats,
     activeChatId,
-    generatedUserMemory: latestMemory,
-    currentProvider: 'ollama',
-    currentModel: 'qwen3.5:9b',
-    enabledTools: {},
-    customSystemPrompt: '',
+    getGeneratedUserMemory: () => latestMemory,
+    getWorkspaceSnapshot: (overrides = {}) => ({
+      chats: overrides.chats ?? latestChats,
+      generatedUserMemory: overrides.generatedUserMemory ?? latestMemory,
+      selectedProvider: 'ollama',
+      selectedModel: 'qwen3.5:9b',
+      enabledTools: {},
+      customSystemPrompt: '',
+    }),
     flushWorkspace: async ({ snapshot }) => {
       snapshots.push({ chats: snapshot.chats, generatedUserMemory: snapshot.generatedUserMemory });
     },
     setGeneratedUserMemory: (value) => {
-      latestMemory = value;
+      latestMemory = typeof value === 'function' ? value(latestMemory) : value;
     },
     setChats: (value) => {
-      latestChats = value;
+      latestChats = typeof value === 'function' ? value(latestChats) : value;
     },
   });
   const entry = entries.find((candidate) => candidate.definition.id === id);

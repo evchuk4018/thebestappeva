@@ -17,7 +17,7 @@ import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
-import { refreshCompletedTurnMemory } from './use-ollama-chat-persistence';
+import { useAutoMemoryRefresh } from './use-auto-memory-refresh';
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -40,6 +40,9 @@ export function useOllamaChat() {
     setCurrentModel,
     setCustomSystemPrompt,
     setEnabledTools,
+    getChats,
+    getGeneratedUserMemory,
+    getWorkspaceSnapshot,
     flushWorkspace,
   } = useAiWorkspacePersistence();
   const {
@@ -53,16 +56,14 @@ export function useOllamaChat() {
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
   useChatTitleGeneration({ availableModels, chats, setChats });
+  const autoMemoryRefresh = useAutoMemoryRefresh({ getChats, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats });
   const toolRegistryEntries = [
     ...getToolRegistryEntries(),
     ...createChatContextToolEntries({
-      chats,
+      getChats,
       activeChatId: selectedChatId,
-      generatedUserMemory,
-      currentProvider,
-      currentModel,
-      enabledTools,
-      customSystemPrompt,
+      getGeneratedUserMemory,
+      getWorkspaceSnapshot,
       flushWorkspace,
       setGeneratedUserMemory,
       setChats,
@@ -116,7 +117,7 @@ export function useOllamaChat() {
   }
   function toggleChatMode() { setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking'); }
   async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {
-    if (!currentModel || activeTurnControllerRef.current) return;
+    if (!currentModel || activeTurnControllerRef.current) return null;
     const effectiveMode = resolveTurnMode(baseChat, currentProvider, nextChatMode);
     const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
     setChats((currentChats) => replaceChat(currentChats, turnChat));
@@ -156,23 +157,12 @@ export function useOllamaChat() {
               assistantMessageId,
               controller.signal,
             );
-      let nextChats = replaceChat(chats, resolvedTurn.chat);
+      const nextChats = replaceChat(getChats(), resolvedTurn.chat);
       setChats(nextChats);
       setAvailability(resolvedTurn.availability);
       setLastError(resolvedTurn.lastError);
       setPendingAskUserTurn(resolvedTurn.status === 'paused' ? resolvedTurn.pendingAskUser : null);
-      nextChats = await refreshCompletedTurnMemory({
-        resolvedTurn,
-        chats: nextChats,
-        generatedUserMemory,
-        currentProvider,
-        currentModel,
-        enabledTools,
-        customSystemPrompt,
-        flushWorkspace,
-        setGeneratedUserMemory,
-        setChats,
-      });
+      return resolvedTurn;
     } finally {
       if (activeTurnControllerRef.current === controller) {
         activeTurnControllerRef.current = null;
@@ -184,6 +174,7 @@ export function useOllamaChat() {
   async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
     const normalizedContent = content.trim() || (attachments.length ? buildDefaultAttachmentPrompt(attachments) : '');
     if (!currentModel || activeTurnControllerRef.current || pendingAskUserTurn || !normalizedContent) return;
+    const hasImageAttachments = attachments.some((attachment) => attachment.kind === 'image');
     const userMessage = createUserMessage(normalizedContent, attachments);
     const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
     const nextChatMode = resolveTurnMode(appendedChat, currentProvider, chatMode);
@@ -192,19 +183,24 @@ export function useOllamaChat() {
       setSelectedChatId(baseChat.id);
       setDraftMode('thinking');
     }
-    await runModelTurn(baseChat, nextChatMode);
+    autoMemoryRefresh.startForegroundTurn(hasImageAttachments);
+    try {
+      autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, nextChatMode));
+    } finally {
+      autoMemoryRefresh.finishForegroundTurn(hasImageAttachments);
+    }
   }
   async function editAndResendMessage(messageId: string, nextContent: string) {
     if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = editUserMessageBranch(persistedSelectedChat, messageId, nextContent);
     if (!baseChat) return;
-    await runModelTurn(baseChat, selectedChat.mode);
+    autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, selectedChat.mode));
   }
   async function regenerateAssistantMessage(messageId: string) {
     if (!persistedSelectedChat || !currentModel || activeTurnControllerRef.current || pendingAskUserTurn) return;
     const baseChat = regenerateAssistantBranch(persistedSelectedChat, messageId);
     if (!baseChat) return;
-    await runModelTurn(baseChat, selectedChat.mode);
+    autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, selectedChat.mode));
   }
   function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
     if (!selectedChatId || activeTurnControllerRef.current || pendingAskUserTurn) {
@@ -251,7 +247,7 @@ export function useOllamaChat() {
     const nextChat = updateAskUserStepInChat(targetChat, messageId, stepId, response);
     setChats((currentChats) => replaceChat(currentChats, nextChat));
     setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: messageId });
-    await runModelTurn(nextChat, nextChat.mode, messageId);
+    autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(nextChat, nextChat.mode, messageId));
   }
   return {
     activeProviderOption,
