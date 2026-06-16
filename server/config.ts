@@ -23,7 +23,7 @@ function readStringListEnv(name: string) {
   return value ? value.split(/[\s,]+/).filter(Boolean) : [];
 }
 
-const defaultVisionModels = ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b', 'qwen3vl:2b', 'internvl3:2b'];
+const defaultVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b', 'qwen3-vl:2b', 'internvl3:2b'];
 
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),

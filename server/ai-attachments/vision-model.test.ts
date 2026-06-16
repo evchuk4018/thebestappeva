@@ -6,13 +6,13 @@ import { ensureVisionModelReady, getPreferredVisionModels, queryImageModel, quer
 const originalVisionModels = [...serverConfig.aiVisionModels];
 
 test('preferred vision models default to the structured-analysis order', () => {
-  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b']);
+  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b']);
 });
 
 test('reuses an installed preferred vision model before attempting a pull', async () => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];
-  serverConfig.aiVisionModels = ['qwen3vl:8b', 'qwen2.5vl:7b'];
+  serverConfig.aiVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b'];
   globalThis.fetch = async (input) => {
     requests.push(String(input));
     return new Response(JSON.stringify({ models: [{ name: 'qwen2.5vl:7b' }] }), { headers: { 'Content-Type': 'application/json' } });
@@ -30,7 +30,7 @@ test('reuses an installed preferred vision model before attempting a pull', asyn
 test('pulls the first preferred vision model when none is installed', async () => {
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; body: string }> = [];
-  serverConfig.aiVisionModels = ['qwen3vl:8b', 'qwen2.5vl:7b'];
+  serverConfig.aiVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b'];
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     const body = typeof init?.body === 'string' ? init.body : '';
@@ -42,8 +42,8 @@ test('pulls the first preferred vision model when none is installed', async () =
   };
 
   try {
-    assert.equal(await ensureVisionModelReady(), 'qwen3vl:8b');
-    assert.match(requests[1]?.body ?? '', /qwen3vl:8b/);
+    assert.equal(await ensureVisionModelReady(), 'qwen3-vl:8b');
+    assert.match(requests[1]?.body ?? '', /qwen3-vl:8b/);
   } finally {
     globalThis.fetch = originalFetch;
     serverConfig.aiVisionModels = [...originalVisionModels];
