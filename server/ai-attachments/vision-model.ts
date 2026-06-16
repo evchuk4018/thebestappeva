@@ -13,6 +13,8 @@ interface OllamaChatResponse {
   error?: string;
 }
 
+let preferCpuVisionRequests = false;
+
 function buildModelUnavailableError() {
   return new HttpError(503, 'Unable to prepare a local Ollama vision model for image understanding.');
 }
@@ -108,16 +110,25 @@ export async function ensureVisionModelReady() {
   }
 }
 
-async function askVisionModel(model: string, imageBase64: string, prompt: string) {
+function isGpuKernelFailure(message: string) {
+  return /cuda error: device kernel image is invalid|stack-based buffer|llama-server process has terminated/i.test(message);
+}
+
+function buildVisionChatBody(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {
+  return {
+    model,
+    stream: false,
+    think: false,
+    messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+    options: forceCpu ? { num_gpu: 0 } : undefined,
+  };
+}
+
+async function requestVisionChat(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {
   const response = await fetch(`${serverConfig.ollamaHost}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      think: false,
-      messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
-    }),
+    body: JSON.stringify(buildVisionChatBody(model, imageBase64, prompt, forceCpu)),
   });
 
   const payload = await readJson<OllamaChatResponse>(response, 'Unable to complete the local vision request.');
@@ -130,6 +141,23 @@ async function askVisionModel(model: string, imageBase64: string, prompt: string
     throw new HttpError(502, 'The local vision model returned an empty response.');
   }
   return content;
+}
+
+async function askVisionModel(model: string, imageBase64: string, prompt: string) {
+  if (preferCpuVisionRequests) {
+    return requestVisionChat(model, imageBase64, prompt, true);
+  }
+
+  try {
+    return await requestVisionChat(model, imageBase64, prompt, false);
+  } catch (error) {
+    if (!(error instanceof HttpError) || !isGpuKernelFailure(error.message)) {
+      throw error;
+    }
+
+    preferCpuVisionRequests = true;
+    return requestVisionChat(model, imageBase64, prompt, true);
+  }
 }
 
 export async function generateImageSummary(imageBase64: string) {
@@ -161,4 +189,8 @@ export async function queryImageModel(imageBase64: string, question: string) {
   );
 
   return { answer, model };
+}
+
+export function resetVisionModelStateForTests() {
+  preferCpuVisionRequests = false;
 }
