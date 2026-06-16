@@ -6,7 +6,7 @@ import { ensureVisionModelReady, getPreferredVisionModels, queryImageModel, quer
 const originalVisionModels = [...serverConfig.aiVisionModels];
 
 test('preferred vision models default to the structured-analysis order', () => {
-  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b']);
+  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b']);
 });
 
 test('reuses an installed preferred vision model before attempting a pull', async () => {
@@ -42,10 +42,20 @@ test('pulls the first preferred vision model when none is installed', async () =
   };
 
   try {
-    assert.equal(await ensureVisionModelReady(), 'qwen3-vl:8b');
-    assert.match(requests[1]?.body ?? '', /qwen3-vl:8b/);
+    assert.equal(await ensureVisionModelReady(), 'qwen3vl:8b');
+    assert.match(requests[1]?.body ?? '', /qwen3vl:8b/);
   } finally {
     globalThis.fetch = originalFetch;
+    serverConfig.aiVisionModels = [...originalVisionModels];
+  }
+});
+
+test('normalizes legacy qwen3-vl aliases in preferred vision models', () => {
+  serverConfig.aiVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b', 'qwen3vl:4b'];
+
+  try {
+    assert.deepEqual(getPreferredVisionModels(), ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b']);
+  } finally {
     serverConfig.aiVisionModels = [...originalVisionModels];
   }
 });

@@ -147,7 +147,7 @@ Implementation notes:
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
-- Image bridge vision models: prefers local `qwen3vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3vl` and `internvl3` fallbacks; override the order with `AI_VISION_MODELS`
+- Image bridge vision models: prefers local `qwen3vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3vl` and `internvl3` fallbacks; override the order with `AI_VISION_MODELS`, and legacy `qwen3-vl:*` aliases are normalized automatically
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
 - Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`

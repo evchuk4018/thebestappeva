@@ -46,7 +46,7 @@ test('image uploads get image_* ids and an immediate summary', async () => {
     assert.equal(record.attachment.summary, 'A street map with route labels.');
     assert.equal(record.attachment.width, 640);
     assert.equal(record.attachment.analysisStatus, 'idle');
-    assert.match(requests[1]?.body ?? '', /qwen3-vl:8b/);
+    assert.match(requests[1]?.body ?? '', /qwen3vl:8b/);
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.json`)));
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.png`)));
   } finally {

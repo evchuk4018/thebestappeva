@@ -13,6 +13,10 @@ interface OllamaChatResponse {
 
 let preferCpuVisionRequests = false;
 
+function normalizeVisionModelName(model: string) {
+  return model.trim().replace(/^qwen3-vl:/i, 'qwen3vl:');
+}
+
 function buildModelUnavailableError() {
   return new HttpError(503, 'Unable to prepare a local Ollama vision model for image understanding.');
 }
@@ -32,23 +36,29 @@ async function readJson<T>(response: Response, fallback: string) {
 async function listInstalledModels() {
   const response = await fetch(`${serverConfig.ollamaHost}/api/tags`);
   const payload = await readJson<OllamaTagsResponse>(response, 'Unable to inspect local Ollama models.');
-  return new Set((payload.models ?? []).map((model) => model.name?.trim()).filter((name): name is string => Boolean(name)));
+  return new Set(
+    (payload.models ?? [])
+      .map((model) => model.name?.trim())
+      .filter((name): name is string => Boolean(name))
+      .map(normalizeVisionModelName),
+  );
 }
 
 async function pullModel(model: string) {
+  const normalizedModel = normalizeVisionModelName(model);
   const response = await fetch(`${serverConfig.ollamaHost}/api/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: model }),
+    body: JSON.stringify({ name: normalizedModel }),
   });
   if (!response.ok) {
-    const message = (await response.text()).trim() || `Unable to pull ${model}.`;
+    const message = (await response.text()).trim() || `Unable to pull ${normalizedModel}.`;
     throw new HttpError(response.status >= 500 ? 502 : response.status, message);
   }
 }
 
 export function getPreferredVisionModels() {
-  return [...serverConfig.aiVisionModels];
+  return [...new Set(serverConfig.aiVisionModels.map(normalizeVisionModelName))];
 }
 
 export async function ensureVisionModelReady() {
@@ -75,7 +85,7 @@ function isGpuKernelFailure(message: string) {
 
 function buildVisionChatBody(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {
   return {
-    model,
+    model: normalizeVisionModelName(model),
     stream: false,
     think: false,
     messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
