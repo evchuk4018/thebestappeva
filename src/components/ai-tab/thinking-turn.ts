@@ -52,7 +52,7 @@ export async function resolveThinkingTurn({
   let turnWarning: string | null = null;
   let toolCallCount = 0;
   const turnToolState = createTurnToolState();
-  let requestMessages = await buildModelMessages(chat.messages, getTurnPromptContext(promptContext, activeToolEntries));
+  let requestMessages = await buildModelMessages(chat.messages, getTurnPromptContext(promptContext, activeToolEntries), provider);
   const liveAssistant = createAssistantLiveUpdater({
     assistantMessageId,
     chat,

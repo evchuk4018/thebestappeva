@@ -204,8 +204,8 @@ test('chat summary returns a clear error when no summary can be produced', async
 test('chat context tools are assembled independently and remain separately toggleable', () => {
   const chat = createChat('chat-1');
   const { entries } = getEntry('chat-summary', [chat], 'chat-1');
-  const visibleTools = buildVisibleTools(entries, { 'chat-summary': false }, chat.id, chat);
-  const activeEntries = getActiveToolEntriesForChat(chat, entries, { 'chat-summary': false });
+  const visibleTools = buildVisibleTools(entries, { 'chat-summary': false }, chat.id, chat, 'ollama');
+  const activeEntries = getActiveToolEntriesForChat(chat, entries, { 'chat-summary': false }, 'ollama');
 
   assert.deepEqual(
     visibleTools

@@ -29,7 +29,7 @@ export async function sendFlashTurn({ chat, model, provider, onProgress, promptC
   });
 
   try {
-    const reply = await streamChatWithModel(model, await buildPlainModelMessages(chat.messages, promptContext), {
+    const reply = await streamChatWithModel(model, await buildPlainModelMessages(chat.messages, promptContext, provider), {
       provider,
       think: false,
       signal,

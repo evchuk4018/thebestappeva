@@ -108,6 +108,8 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
+- pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids and an immediate local vision summary
+- DeepSeek chats with uploaded images automatically switch into `Thinking`, receive the stored image summary plus bridge instructions, and can call `ask_image_model` for targeted follow-up questions through a local Ollama vision model
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
@@ -128,7 +130,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - when a long PDF is submitted from `Flash`, that chat turn switches to `Thinking` so `pdf_reader` can run
 - while a local AI turn is running, the composer swaps send for stop so the active `/ai` turn can be interrupted without leaving the page
 - user prompts can be copied, edited, resent from their original point in the thread, and switched between persisted edit branches with compact version controls
-- the composer paperclip now accepts local `.pdf`, `.docx`, and `.xlsx` uploads, parses them through a local Docling sidecar, and attaches the extracted content to the next AI turn
+- the composer accepts pasted images plus local `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.pdf`, `.docx`, and `.xlsx` uploads; images are summarized locally on arrival, while documents still parse through the Docling sidecar
 - failed local AI turns now surface inline in the conversation as explicit failed replies instead of only dropping the typing state and relying on the global banner
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
@@ -141,9 +143,10 @@ Implementation notes:
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
+- Image bridge vision models: prefers local `openbmb/minicpm-v4.5:8b`, then `qwen2.5vl:7b`, and auto-pulls the top preferred model on first image use when needed
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
-- Local attachment parsing APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, and `DELETE /api/ai/attachments/:id`
+- Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`

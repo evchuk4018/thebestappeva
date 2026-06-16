@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deleteAiAttachment, loadAiAttachmentHealth, parseAiAttachmentFile } from '../../lib/ai-attachments-storage';
 import { AiAttachmentHealth, AiAttachmentReference, AiParsedAttachment } from './types';
+import { normalizeAttachmentFile } from './attachment-file';
 
 type PendingAttachmentStatus = 'uploading' | 'ready' | 'error';
 
@@ -17,8 +18,24 @@ function createLocalId() {
 }
 
 function toReference(attachment: AiParsedAttachment): AiAttachmentReference {
+  if (attachment.kind === 'image') {
+    return {
+      id: attachment.id,
+      kind: 'image',
+      fileName: attachment.fileName,
+      mediaType: attachment.mediaType,
+      fileSize: attachment.fileSize,
+      width: attachment.width,
+      height: attachment.height,
+      summary: attachment.summary,
+      summaryModel: attachment.summaryModel,
+      summaryStatus: attachment.summaryStatus,
+    };
+  }
+
   return {
     id: attachment.id,
+    kind: 'document',
     fileName: attachment.fileName,
     mediaType: attachment.mediaType,
     fileSize: attachment.fileSize,
@@ -66,7 +83,7 @@ export function useAiAttachments() {
   }, []);
 
   async function addFiles(files: FileList | File[]) {
-    const nextFiles = Array.from(files);
+    const nextFiles = Array.from(files).map(normalizeAttachmentFile);
     if (!nextFiles.length) {
       return;
     }
@@ -86,11 +103,13 @@ export function useAiAttachments() {
           setPendingAttachments((current) =>
             current.map((item) => (item.localId === localId ? { ...item, attachment, status: 'ready' } : item)),
           );
-          setParserHealth({
-            available: true,
-            parser: 'docling',
-            message: 'The local Docling parser is available.',
-          });
+          if (attachment.kind === 'document') {
+            setParserHealth({
+              available: true,
+              parser: 'docling',
+              message: 'The local Docling parser is available.',
+            });
+          }
         } catch (error) {
           setPendingAttachments((current) =>
             current.map((item) =>

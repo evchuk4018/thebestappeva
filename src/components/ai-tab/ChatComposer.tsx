@@ -25,11 +25,20 @@ interface ChatComposerProps {
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onRemoveAttachment: (localId: string) => Promise<void> | void;
   onSend: () => void;
-  onSelectFiles: (files: FileList) => Promise<void> | void;
+  onSelectFiles: (files: FileList | File[]) => Promise<void> | void;
   onStop: () => void;
   onSelectModel: (model: string) => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;
+}
+
+function readPastedImageFiles(event: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  return Array.from(event.clipboardData.items)
+    .filter((item) => item.type.startsWith('image/'))
+    .flatMap((item) => {
+      const file = item.getAsFile();
+      return file ? [file] : [];
+    });
 }
 
 function getPlaceholder(availability: OllamaAvailability, currentModel: string | null) {
@@ -106,6 +115,13 @@ export function ChatComposer({
               disabled={isInputDisabled}
               onChange={(event) => onInputChange(event.target.value)}
               onKeyDown={onKeyDown}
+              onPaste={(event) => {
+                const files = readPastedImageFiles(event);
+                if (files.length) {
+                  event.preventDefault();
+                  void onSelectFiles(files);
+                }
+              }}
               placeholder={placeholder}
               className="w-full border-none bg-transparent px-3 py-1 text-left text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-600"
             />
@@ -172,6 +188,13 @@ export function ChatComposer({
         disabled={isInputDisabled}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={(event) => {
+          const files = readPastedImageFiles(event);
+          if (files.length) {
+            event.preventDefault();
+            void onSelectFiles(files);
+          }
+        }}
         placeholder={placeholder}
         className="min-h-[76px] w-full resize-none border-none bg-transparent py-1 text-left text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-600"
       />

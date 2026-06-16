@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { appendMessage, createNewChat, createUserMessage } from './helpers';
 import { TurnAbortedError } from './abort-utils';
 import { replaceChat, updateChatMode } from './chat-helpers';
+import { buildDefaultAttachmentPrompt, resolveTurnMode } from './attachment-behavior';
 import { sendFlashTurn } from './flash-turn';
 import { LiveChatState, resolveActiveChat, shouldShowTypingIndicator } from './live-turn';
 import { BranchDirection, editUserMessageBranch, regenerateAssistantBranch, switchUserMessageBranch } from './message-branches';
@@ -11,14 +12,12 @@ import { findPendingAskUserState, updateAskUserStepInChat } from './ask-user';
 import { buildVisibleTools, getActiveToolEntriesForChat, setChatActiveArtifactState, setChatIncludedArtifactState } from './artifact-chat-helpers';
 import type { AiAttachmentReference, AskUserResponse, Chat, ChatMode, ModelProvider } from './types';
 import { createChatContextToolEntries } from './tools/chat-context-tools';
-import { collectLongPdfAttachments } from './tools/pdf-reader-tool';
 import { getToolRegistryEntries } from './tools/registry';
 import { useOllamaModelState } from './useOllamaModelState';
 import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
 import { refreshCompletedTurnMemory } from './use-ollama-chat-persistence';
-const DEFAULT_ATTACHMENT_PROMPT = 'Please analyze the attached documents.';
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -72,8 +71,8 @@ export function useOllamaChat() {
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
   const selectedChat = resolveActiveChat(persistedSelectedChat, selectedLiveChat);
-  const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat);
-  const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools);
+  const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat, currentProvider);
+  const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools, currentProvider);
   const chatMode = selectedChat?.mode ?? draftMode;
   const isBusy = isTyping || Boolean(pendingAskUserTurn);
   const systemPromptContext: SystemPromptContext = {
@@ -118,7 +117,7 @@ export function useOllamaChat() {
   function toggleChatMode() { setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking'); }
   async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {
     if (!currentModel || activeTurnControllerRef.current) return;
-    const effectiveMode = collectLongPdfAttachments(baseChat.messages).length ? 'thinking' : nextChatMode;
+    const effectiveMode = resolveTurnMode(baseChat, currentProvider, nextChatMode);
     const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
     setChats((currentChats) => replaceChat(currentChats, turnChat));
     setLiveChat({ chatId: turnChat.id, chat: turnChat, assistantMessageId: null });
@@ -128,7 +127,7 @@ export function useOllamaChat() {
     const controller = new AbortController();
     activeTurnControllerRef.current = controller;
     try {
-      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools) : [];
+      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools, currentProvider) : [];
       const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
       const promptContext = {
         generatedUserMemory,
@@ -183,11 +182,11 @@ export function useOllamaChat() {
     }
   }
   async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
-    const normalizedContent = content.trim() || (attachments.length ? DEFAULT_ATTACHMENT_PROMPT : '');
+    const normalizedContent = content.trim() || (attachments.length ? buildDefaultAttachmentPrompt(attachments) : '');
     if (!currentModel || activeTurnControllerRef.current || pendingAskUserTurn || !normalizedContent) return;
     const userMessage = createUserMessage(normalizedContent, attachments);
     const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
-    const nextChatMode = collectLongPdfAttachments(appendedChat.messages).length ? 'thinking' : chatMode;
+    const nextChatMode = resolveTurnMode(appendedChat, currentProvider, chatMode);
     const baseChat = { ...appendedChat, mode: nextChatMode };
     if (!selectedChat) {
       setSelectedChatId(baseChat.id);

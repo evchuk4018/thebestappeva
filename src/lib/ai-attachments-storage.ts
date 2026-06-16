@@ -3,6 +3,7 @@ import {
   parseAiAttachmentHealth,
   parseAiParsedAttachment,
 } from '../../shared/ai-attachments-contract';
+import { parseAiImageQueryPayload } from '../../shared/ai-image-bridge-contract';
 import {
   parseAiPdfPageImagePayload,
   parseAiPdfPagePayload,
@@ -53,7 +54,32 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
+function shouldReadImageDimensions(file: File) {
+  return file.type.startsWith('image/');
+}
+
+async function readImageDimensions(file: File) {
+  if (!shouldReadImageDimensions(file)) {
+    return {};
+  }
+
+  return new Promise<{ width?: number; height?: number }>((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      resolve({ width: image.naturalWidth || undefined, height: image.naturalHeight || undefined });
+      URL.revokeObjectURL(objectUrl);
+    };
+    image.onerror = () => {
+      resolve({});
+      URL.revokeObjectURL(objectUrl);
+    };
+    image.src = objectUrl;
+  });
+}
+
 export async function parseAiAttachmentFile(file: File) {
+  const dimensions = await readImageDimensions(file);
   const response = await fetch('/api/ai/attachments/parse', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -61,6 +87,7 @@ export async function parseAiAttachmentFile(file: File) {
       fileName: file.name,
       contentType: file.type || 'application/octet-stream',
       base64Data: arrayBufferToBase64(await file.arrayBuffer()),
+      ...dimensions,
     }),
   });
 
@@ -85,6 +112,16 @@ export async function loadAiAttachmentContext(attachmentId: string, query: strin
 export async function deleteAiAttachment(attachmentId: string) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}`, { method: 'DELETE' });
   await readJsonResponse(response);
+}
+
+export async function askAiImageQuestion(attachmentId: string, question: string) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+
+  return parseAiImageQueryPayload(await readJsonResponse(response));
 }
 
 export async function loadAiAttachmentHealth() {

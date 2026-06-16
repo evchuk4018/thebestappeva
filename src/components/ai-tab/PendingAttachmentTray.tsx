@@ -26,11 +26,13 @@ export function PendingAttachmentTray({ attachments, onRemove }: PendingAttachme
           <span className="max-w-52 truncate">{attachment.fileName}</span>
           {attachment.status === 'ready' && attachment.attachment && (
             <span className="text-[10px] text-zinc-500">
-              {attachment.attachment.pdfReaderMode === 'tool'
-                ? `${attachment.attachment.pageCount ?? '?'} pages | PDF reader`
-                : attachment.attachment.pdfReaderMode === 'inline'
-                  ? `${attachment.attachment.pageCount} pages | loaded`
-                  : `${attachment.attachment.chunkCount} chunks`}
+              {attachment.attachment.kind === 'image'
+                ? `${attachment.attachment.id} | summary ready`
+                : attachment.attachment.pdfReaderMode === 'tool'
+                  ? `${attachment.attachment.pageCount ?? '?'} pages | PDF reader`
+                  : attachment.attachment.pdfReaderMode === 'inline'
+                    ? `${attachment.attachment.pageCount} pages | loaded`
+                    : `${attachment.attachment.chunkCount} chunks`}
             </span>
           )}
           {attachment.status === 'error' && attachment.error && (

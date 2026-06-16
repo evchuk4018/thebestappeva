@@ -5,6 +5,7 @@ import { createPdfReaderTool } from './pdf-reader-tool';
 
 const attachment: AiAttachmentReference = {
   id: 'pdf-1',
+  kind: 'document',
   fileName: 'audit.pdf',
   mediaType: 'application/pdf',
   fileSize: 100,

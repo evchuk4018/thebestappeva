@@ -23,7 +23,7 @@ interface EmptyStateProps {
   onSelectModel: (model: string) => void;
   onSelectSuggestion: (label: string) => void;
   onSend: () => void;
-  onSelectFiles: (files: FileList) => Promise<void> | void;
+  onSelectFiles: (files: FileList | File[]) => Promise<void> | void;
   onStop: () => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;

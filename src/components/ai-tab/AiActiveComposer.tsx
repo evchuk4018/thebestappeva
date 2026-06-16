@@ -22,7 +22,7 @@ interface AiActiveComposerProps {
   onRemoveAttachment: (localId: string) => Promise<void> | void;
   onSelectModel: (model: string) => void;
   onSend: () => void;
-  onSelectFiles: (files: FileList) => Promise<void> | void;
+  onSelectFiles: (files: FileList | File[]) => Promise<void> | void;
   onStop: () => void;
   onToggleMode: () => void;
   onToggleModelDropdown: () => void;

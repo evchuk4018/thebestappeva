@@ -1,4 +1,4 @@
-import { AiParsedAttachment } from '../../shared/ai-attachments-contract';
+import { AiDocumentAttachment, AiImageAttachment } from '../../shared/ai-attachments-contract';
 
 export interface StoredAiAttachmentChunk {
   id: string;
@@ -12,14 +12,21 @@ export interface StoredAiAttachmentPage {
   text: string;
 }
 
-export interface StoredAiAttachmentRecord {
-  attachment: AiParsedAttachment;
+export interface StoredDocumentAttachmentRecord {
+  attachment: AiDocumentAttachment;
   markdown: string;
   text: string;
   chunks: StoredAiAttachmentChunk[];
   pages?: StoredAiAttachmentPage[];
   sourceExtension: string;
 }
+
+export interface StoredImageAttachmentRecord {
+  attachment: AiImageAttachment;
+  sourceExtension: string;
+}
+
+export type StoredAiAttachmentRecord = StoredDocumentAttachmentRecord | StoredImageAttachmentRecord;
 
 export interface ParsedDocumentPage {
   markdown: string;

@@ -4,6 +4,7 @@ import { parseAiPdfPagesPayload } from './ai-pdf-reader-contract';
 
 const attachment = {
   id: 'pdf-1',
+  kind: 'document',
   createdAt: '2026-06-08T00:00:00.000Z',
   fileName: 'audit.pdf',
   mediaType: 'application/pdf',

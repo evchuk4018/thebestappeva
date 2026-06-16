@@ -1,4 +1,4 @@
-import { AiParsedAttachment, parseAiParsedAttachment } from './ai-attachments-contract';
+import { AiDocumentAttachment, parseAiDocumentAttachment } from './ai-attachments-contract';
 
 export interface AiPdfSearchMatch {
   pageNumber: number;
@@ -6,14 +6,14 @@ export interface AiPdfSearchMatch {
 }
 
 export interface AiPdfSearchPayload {
-  attachment: AiParsedAttachment;
+  attachment: AiDocumentAttachment;
   matchCount: number;
   matches: AiPdfSearchMatch[];
   query: string;
 }
 
 export interface AiPdfPagePayload {
-  attachment: AiParsedAttachment;
+  attachment: AiDocumentAttachment;
   markdown: string;
   pageNumber: number;
   text: string;
@@ -26,13 +26,13 @@ export interface AiPdfPageContent {
 }
 
 export interface AiPdfPagesPayload {
-  attachment: AiParsedAttachment;
+  attachment: AiDocumentAttachment;
   pageCount: number;
   pages: AiPdfPageContent[];
 }
 
 export interface AiPdfPageImagePayload {
-  attachment: AiParsedAttachment;
+  attachment: AiDocumentAttachment;
   base64Data: string;
   cached: boolean;
   mediaType: 'image/png';
@@ -83,7 +83,7 @@ export function parseAiPdfSearchPayload(value: unknown, field = 'PDF search payl
       })();
 
   return {
-    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    attachment: parseAiDocumentAttachment(record.attachment, `${field}.attachment`),
     matchCount: expectNumber(record.matchCount, `${field}.matchCount`),
     matches,
     query: expectString(record.query, `${field}.query`),
@@ -93,7 +93,7 @@ export function parseAiPdfSearchPayload(value: unknown, field = 'PDF search payl
 export function parseAiPdfPagePayload(value: unknown, field = 'PDF page payload'): AiPdfPagePayload {
   const record = expectRecord(value, field);
   return {
-    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    attachment: parseAiDocumentAttachment(record.attachment, `${field}.attachment`),
     markdown: expectString(record.markdown, `${field}.markdown`),
     pageNumber: expectNumber(record.pageNumber, `${field}.pageNumber`),
     text: expectString(record.text, `${field}.text`),
@@ -116,7 +116,7 @@ export function parseAiPdfPagesPayload(value: unknown, field = 'PDF pages payloa
       })();
 
   return {
-    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    attachment: parseAiDocumentAttachment(record.attachment, `${field}.attachment`),
     pageCount: expectNumber(record.pageCount, `${field}.pageCount`),
     pages,
   };
@@ -130,7 +130,7 @@ export function parseAiPdfPageImagePayload(value: unknown, field = 'PDF page ima
   }
 
   return {
-    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    attachment: parseAiDocumentAttachment(record.attachment, `${field}.attachment`),
     base64Data: expectString(record.base64Data, `${field}.base64Data`),
     cached: Boolean(record.cached),
     mediaType,

@@ -24,7 +24,12 @@ export type {
   UserMessageVersion,
 } from '../../../shared/ai-workspace-contract';
 export type { ArtifactCardSummary } from '../../../shared/ai-artifacts-contract';
-export type { AiAttachmentHealth, AiParsedAttachment } from '../../../shared/ai-attachments-contract';
+export type {
+  AiAttachmentHealth,
+  AiDocumentAttachment,
+  AiImageAttachment,
+  AiParsedAttachment,
+} from '../../../shared/ai-attachments-contract';
 export type {
   AiRuntimeConfig,
   ModelChatMessage,

@@ -1,15 +1,16 @@
 import path from 'node:path';
 import { HttpError } from '../http';
+import { isStoredDocumentAttachmentRecord } from './record-guards';
 import { classifyPdfReaderMode } from './pdf-content';
 import { parseDocumentWithDocling } from './parser';
 import { getAttachmentSourcePath, saveAttachmentRecord } from './storage';
-import { StoredAiAttachmentPage, StoredAiAttachmentRecord } from './types';
+import { StoredAiAttachmentPage, StoredDocumentAttachmentRecord } from './types';
 
-export function isPdfRecord(record: StoredAiAttachmentRecord) {
+export function isPdfRecord(record: StoredDocumentAttachmentRecord) {
   return record.sourceExtension === '.pdf' || path.extname(record.attachment.fileName).toLowerCase() === '.pdf';
 }
 
-export function getPdfReaderMode(record: StoredAiAttachmentRecord) {
+export function getPdfReaderMode(record: StoredDocumentAttachmentRecord) {
   if (!isPdfRecord(record)) {
     return undefined;
   }
@@ -24,8 +25,8 @@ function normalizePages(pages: StoredAiAttachmentPage[] | undefined) {
     .sort((left, right) => left.pageNumber - right.pageNumber);
 }
 
-export async function ensurePdfPages(record: StoredAiAttachmentRecord) {
-  if (!isPdfRecord(record)) {
+export async function ensurePdfPages(record: StoredDocumentAttachmentRecord) {
+  if (!isStoredDocumentAttachmentRecord(record) || !isPdfRecord(record)) {
     throw new HttpError(415, `"${record.attachment.fileName}" is not a PDF.`);
   }
 

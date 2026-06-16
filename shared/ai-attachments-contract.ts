@@ -1,15 +1,22 @@
+export type AiAttachmentKind = 'document' | 'image';
 export type AiAttachmentParser = 'docling';
+export type AiImageSummaryStatus = 'ready';
 
 export interface AiAttachmentStats {
   pageCount: number | null;
   sheetCount: number | null;
 }
 
-export interface AiAttachmentReference {
+export interface AiAttachmentBase {
   id: string;
+  kind: AiAttachmentKind;
   fileName: string;
   mediaType: string;
   fileSize: number;
+}
+
+export interface AiDocumentAttachmentReference extends AiAttachmentBase {
+  kind: 'document';
   parser: AiAttachmentParser;
   title: string;
   textChars: number;
@@ -19,7 +26,18 @@ export interface AiAttachmentReference {
   pdfReaderMode?: 'inline' | 'tool';
 }
 
-export interface AiParsedAttachment extends AiAttachmentReference {
+export interface AiImageAttachmentReference extends AiAttachmentBase {
+  kind: 'image';
+  width?: number | null;
+  height?: number | null;
+  summary: string;
+  summaryModel: string;
+  summaryStatus: AiImageSummaryStatus;
+}
+
+export type AiAttachmentReference = AiDocumentAttachmentReference | AiImageAttachmentReference;
+
+export interface AiDocumentAttachment extends AiDocumentAttachmentReference {
   createdAt: string;
   outline: string[];
   warnings: string[];
@@ -27,8 +45,14 @@ export interface AiParsedAttachment extends AiAttachmentReference {
   previewText: string;
 }
 
+export interface AiImageAttachment extends AiImageAttachmentReference {
+  createdAt: string;
+}
+
+export type AiParsedAttachment = AiDocumentAttachment | AiImageAttachment;
+
 export interface AiAttachmentContextPayload {
-  attachment: AiParsedAttachment;
+  attachment: AiDocumentAttachment;
   context: string;
   mode: 'inline' | 'ranked';
   selectedChunkCount: number;
@@ -49,7 +73,6 @@ function expectRecord(value: unknown, field: string) {
   if (!isRecord(value)) {
     throw new Error(`Invalid ${field}. Expected an object.`);
   }
-
   return value;
 }
 
@@ -57,23 +80,17 @@ function expectString(value: unknown, field: string) {
   if (typeof value !== 'string') {
     throw new Error(`Invalid ${field}. Expected a string.`);
   }
-
   return value;
 }
 
 function expectOptionalString(value: unknown, field: string) {
-  if (typeof value === 'undefined') {
-    return undefined;
-  }
-
-  return expectString(value, field);
+  return typeof value === 'undefined' ? undefined : expectString(value, field);
 }
 
 function expectNumber(value: unknown, field: string) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid ${field}. Expected a finite number.`);
   }
-
   return value;
 }
 
@@ -89,11 +106,9 @@ function parseOptionalPdfReaderMode(value: unknown, field: string) {
   if (typeof value === 'undefined') {
     return undefined;
   }
-
   if (value !== 'inline' && value !== 'tool') {
     throw new Error(`Invalid ${field}. Expected "inline" or "tool".`);
   }
-
   return value;
 }
 
@@ -105,19 +120,50 @@ function parseStats(value: unknown, field: string): AiAttachmentStats {
   };
 }
 
+function parseAttachmentBase(record: Record<string, unknown>, field: string): AiAttachmentBase {
+  const kind = expectString(record.kind, `${field}.kind`);
+  if (kind !== 'document' && kind !== 'image') {
+    throw new Error(`Invalid ${field}.kind. Expected "document" or "image".`);
+  }
+
+  return {
+    id: expectString(record.id, `${field}.id`),
+    kind,
+    fileName: expectString(record.fileName, `${field}.fileName`),
+    mediaType: expectString(record.mediaType, `${field}.mediaType`),
+    fileSize: expectNumber(record.fileSize, `${field}.fileSize`),
+  };
+}
+
 export function parseAiAttachmentReference(value: unknown, field = 'AI attachment'): AiAttachmentReference {
   const record = expectRecord(value, field);
-  const parser = expectString(record.parser, `${field}.parser`);
+  const base = parseAttachmentBase(record, field);
 
+  if (base.kind === 'image') {
+    const summaryStatus = expectString(record.summaryStatus, `${field}.summaryStatus`);
+    if (summaryStatus !== 'ready') {
+      throw new Error(`Invalid ${field}.summaryStatus. Expected "ready".`);
+    }
+
+    return {
+      ...base,
+      kind: 'image',
+      width: expectOptionalNullableNumber(record.width, `${field}.width`),
+      height: expectOptionalNullableNumber(record.height, `${field}.height`),
+      summary: expectString(record.summary, `${field}.summary`),
+      summaryModel: expectString(record.summaryModel, `${field}.summaryModel`),
+      summaryStatus,
+    };
+  }
+
+  const parser = expectString(record.parser, `${field}.parser`);
   if (parser !== 'docling') {
     throw new Error(`Invalid ${field}.parser. Expected "docling".`);
   }
 
   return {
-    id: expectString(record.id, `${field}.id`),
-    fileName: expectString(record.fileName, `${field}.fileName`),
-    mediaType: expectString(record.mediaType, `${field}.mediaType`),
-    fileSize: expectNumber(record.fileSize, `${field}.fileSize`),
+    ...base,
+    kind: 'document',
     parser,
     title: expectString(record.title, `${field}.title`),
     textChars: expectNumber(record.textChars, `${field}.textChars`),
@@ -130,6 +176,16 @@ export function parseAiAttachmentReference(value: unknown, field = 'AI attachmen
 
 export function parseAiParsedAttachment(value: unknown, field = 'Parsed AI attachment'): AiParsedAttachment {
   const record = expectRecord(value, field);
+  const attachment = parseAiAttachmentReference(record, field);
+  const createdAt = expectString(record.createdAt, `${field}.createdAt`);
+
+  if (attachment.kind === 'image') {
+    return {
+      ...attachment,
+      createdAt,
+    };
+  }
+
   const outline = Array.isArray(record.outline)
     ? record.outline.map((item, index) => expectString(item, `${field}.outline[${index}]`))
     : (() => {
@@ -142,8 +198,8 @@ export function parseAiParsedAttachment(value: unknown, field = 'Parsed AI attac
       })();
 
   return {
-    ...parseAiAttachmentReference(record, field),
-    createdAt: expectString(record.createdAt, `${field}.createdAt`),
+    ...attachment,
+    createdAt,
     outline,
     warnings,
     stats: parseStats(record.stats, `${field}.stats`),
@@ -151,16 +207,23 @@ export function parseAiParsedAttachment(value: unknown, field = 'Parsed AI attac
   };
 }
 
+export function parseAiDocumentAttachment(value: unknown, field = 'Document attachment'): AiDocumentAttachment {
+  const attachment = parseAiParsedAttachment(value, field);
+  if (attachment.kind !== 'document') {
+    throw new Error(`Invalid ${field}. Expected a document attachment.`);
+  }
+  return attachment;
+}
+
 export function parseAiAttachmentContextPayload(value: unknown, field = 'AI attachment context'): AiAttachmentContextPayload {
   const record = expectRecord(value, field);
   const mode = expectString(record.mode, `${field}.mode`);
-
   if (mode !== 'inline' && mode !== 'ranked') {
     throw new Error(`Invalid ${field}.mode. Expected "inline" or "ranked".`);
   }
 
   return {
-    attachment: parseAiParsedAttachment(record.attachment, `${field}.attachment`),
+    attachment: parseAiDocumentAttachment(record.attachment, `${field}.attachment`),
     context: expectString(record.context, `${field}.context`),
     mode,
     selectedChunkCount: expectNumber(record.selectedChunkCount, `${field}.selectedChunkCount`),
@@ -170,7 +233,6 @@ export function parseAiAttachmentContextPayload(value: unknown, field = 'AI atta
 export function parseAiAttachmentHealth(value: unknown, field = 'AI attachment health'): AiAttachmentHealth {
   const record = expectRecord(value, field);
   const parser = expectString(record.parser, `${field}.parser`);
-
   if (parser !== 'docling') {
     throw new Error(`Invalid ${field}.parser. Expected "docling".`);
   }

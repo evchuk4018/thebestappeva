@@ -3,7 +3,10 @@ import { getModelCapabilities } from '../ollama-client';
 import { AiAttachmentReference, AiMessage } from '../types';
 import { ToolExecutionResult, ToolRegistryEntry } from './types';
 
-function isPdf(attachment: AiAttachmentReference) {
+function isPdf(attachment: AiAttachmentReference): attachment is Extract<AiAttachmentReference, { kind: 'document' }> {
+  if (attachment.kind !== 'document') {
+    return false;
+  }
   return attachment.fileName.toLowerCase().endsWith('.pdf') || attachment.mediaType === 'application/pdf';
 }
 
@@ -12,11 +15,12 @@ export function isLongPdfAttachment(attachment: AiAttachmentReference) {
     return false;
   }
 
+  const pdfAttachment = attachment;
   if (attachment.pdfReaderMode) {
-    return attachment.pdfReaderMode === 'tool';
+    return pdfAttachment.pdfReaderMode === 'tool';
   }
 
-  return attachment.pageCount == null || attachment.pageCount > 3;
+  return pdfAttachment.pageCount == null || pdfAttachment.pageCount > 3;
 }
 
 export function collectLongPdfAttachments(messages: AiMessage[]) {

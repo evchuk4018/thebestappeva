@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { HttpError, getOptionalIntParam, getRequiredQueryParam, toErrorMessage } from '../http';
+import { isStoredDocumentAttachmentRecord } from './record-guards';
 import { findPdfPage, searchPdfPages, selectPdfPageRange } from './pdf-content';
 import { ensurePdfPages } from './pdf-record';
 import { renderPdfPage } from './parser';
@@ -43,6 +44,9 @@ export async function handleSearchAiPdf(request: Request, response: Response) {
     const query = getRequiredQueryParam(request.query.query, 'query');
     const limit = getOptionalIntParam(request.query.limit, 10, 1, 10);
     const record = await readAttachmentRecord(attachmentId);
+    if (!isStoredDocumentAttachmentRecord(record)) {
+      throw new HttpError(415, `"${attachmentId}" is not a PDF attachment.`);
+    }
     const pages = await ensurePdfPages(record);
     const matches = searchPdfPages(pages, query, limit);
 
@@ -62,6 +66,9 @@ export async function handleGetAiPdfPage(request: Request, response: Response) {
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
     const pageNumber = readPageNumber(request.params.pageNumber);
     const record = await readAttachmentRecord(attachmentId);
+    if (!isStoredDocumentAttachmentRecord(record)) {
+      throw new HttpError(415, `"${attachmentId}" is not a PDF attachment.`);
+    }
     const page = findPdfPage(await ensurePdfPages(record), pageNumber);
     response.json({ attachment: record.attachment, ...page });
   } catch (error) {
@@ -73,6 +80,9 @@ export async function handleGetAiPdfPages(request: Request, response: Response) 
   try {
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
     const record = await readAttachmentRecord(attachmentId);
+    if (!isStoredDocumentAttachmentRecord(record)) {
+      throw new HttpError(415, `"${attachmentId}" is not a PDF attachment.`);
+    }
     const allPages = await ensurePdfPages(record);
     const startPage = readOptionalPageNumber(request.query.startPage, 1, 'startPage');
     const endPage = readOptionalPageNumber(request.query.endPage, allPages.length, 'endPage');
@@ -93,6 +103,9 @@ export async function handleGetAiPdfPageImage(request: Request, response: Respon
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
     const pageNumber = readPageNumber(request.params.pageNumber);
     const record = await readAttachmentRecord(attachmentId);
+    if (!isStoredDocumentAttachmentRecord(record)) {
+      throw new HttpError(415, `"${attachmentId}" is not a PDF attachment.`);
+    }
     const page = findPdfPage(await ensurePdfPages(record), pageNumber);
     let image = await readCachedPdfPageImage(attachmentId, pageNumber);
     const cached = Boolean(image);
