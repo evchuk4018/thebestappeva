@@ -28,7 +28,7 @@ python -m pip install -r python/requirements-docling.txt
 
 On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS`, `AI_IMAGE_ANALYSIS_PYTHON_COMMAND` / `AI_IMAGE_ANALYSIS_PYTHON_ARGS`, or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
 The same requirements file now also installs the local image-analysis stack used by `image-bridge`: OpenCV, Pillow, NumPy, and RapidOCR ONNX.
-Structured image analysis now uses its own Ollama settings: `AI_IMAGE_ANALYSIS_VISION_MODEL` defaults to `qwen3-vl:8b`, and `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS` controls the per-pass timeout window, defaulting to 90000ms.
+Structured image analysis now uses its own Ollama settings: `AI_IMAGE_ANALYSIS_VISION_MODEL` defaults to `qwen3-vl:8b`, and `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS` controls the per-pass timeout window, defaulting to 600000ms.
 PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
