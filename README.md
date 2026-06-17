@@ -28,6 +28,7 @@ python -m pip install -r python/requirements-docling.txt
 
 On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS`, `AI_IMAGE_ANALYSIS_PYTHON_COMMAND` / `AI_IMAGE_ANALYSIS_PYTHON_ARGS`, or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
 The same requirements file now also installs the local image-analysis stack used by `image-bridge`: OpenCV, Pillow, NumPy, and RapidOCR ONNX.
+Structured image analysis now uses its own Ollama settings: `AI_IMAGE_ANALYSIS_VISION_MODEL` defaults to `qwen3-vl:8b`, and `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS` controls the per-pass strict GPU timeout window.
 PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
@@ -147,7 +148,8 @@ Implementation notes:
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
-- Image bridge vision models: prefers local `qwen3-vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3-vl` and `internvl3` fallbacks; override the order with `AI_VISION_MODELS`, and `qwen3vl:*` aliases are normalized automatically
+- Image upload summaries and generic image questions prefer local `qwen3-vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3-vl` and `internvl3` fallbacks; override that shared order with `AI_VISION_MODELS`, and `qwen3vl:*` aliases are normalized automatically
+- Structured `image-analysis` sessions use only `AI_IMAGE_ANALYSIS_VISION_MODEL`, enforce a strict per-pass timeout from `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS`, evict other loaded Ollama models before analysis, and unload the pinned model again when the session ends
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
 - Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`

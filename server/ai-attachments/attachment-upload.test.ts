@@ -9,8 +9,12 @@ import { parseIncomingAttachment } from './attachment-upload';
 test('image uploads get image_* ids and an immediate summary', async () => {
   const originalFetch = globalThis.fetch;
   const originalStoragePath = serverConfig.aiAttachmentStoragePath;
+  const originalVisionModels = [...serverConfig.aiVisionModels];
+  const originalAnalysisModel = serverConfig.aiImageAnalysisVisionModel;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-upload-'));
   serverConfig.aiAttachmentStoragePath = tempDir;
+  serverConfig.aiVisionModels = ['qwen2.5vl:7b'];
+  serverConfig.aiImageAnalysisVisionModel = 'qwen3-vl:8b';
   const requests: Array<{ url: string; body: string }> = [];
 
   globalThis.fetch = async (input, init) => {
@@ -46,12 +50,14 @@ test('image uploads get image_* ids and an immediate summary', async () => {
     assert.equal(record.attachment.summary, 'A street map with route labels.');
     assert.equal(record.attachment.width, 640);
     assert.equal(record.attachment.analysisStatus, 'idle');
-    assert.match(requests[1]?.body ?? '', /qwen3-vl:8b/);
+    assert.match(requests[1]?.body ?? '', /qwen2\.5vl:7b/);
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.json`)));
     await assert.doesNotReject(fs.access(path.join(tempDir, `${record.attachment.id}.png`)));
   } finally {
     globalThis.fetch = originalFetch;
     serverConfig.aiAttachmentStoragePath = originalStoragePath;
+    serverConfig.aiVisionModels = [...originalVisionModels];
+    serverConfig.aiImageAnalysisVisionModel = originalAnalysisModel;
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });

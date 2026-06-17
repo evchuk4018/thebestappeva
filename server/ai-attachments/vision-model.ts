@@ -1,79 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { HttpError } from '../http';
 import { serverConfig } from '../config';
-
-interface OllamaTagsResponse {
-  models?: Array<{ name?: string }>;
-}
-
-interface OllamaChatResponse {
-  message?: { content?: string };
-  error?: string;
-}
+import {
+  type OllamaChatResponse,
+  buildJsonPrompt,
+  buildVisionModelUnavailableError,
+  canonicalizeVisionModelName,
+  isTimeoutLikeError,
+  listInstalledVisionModels,
+  pullVisionModel,
+  readJson,
+  trimVisionModelName,
+} from './vision-model-shared';
+export { createImageAnalysisVisionSession } from './vision-model-image-analysis';
 
 let preferCpuVisionRequests = false;
-
-function trimVisionModelName(model: string) {
-  return model.trim();
-}
-
-function canonicalizeVisionModelName(model: string) {
-  return trimVisionModelName(model).replace(/^qwen3-vl:/i, 'qwen3vl:');
-}
-
-function getVisionModelAliases(model: string) {
-  const trimmed = trimVisionModelName(model);
-  const canonical = canonicalizeVisionModelName(trimmed);
-  if (!canonical.startsWith('qwen3vl:')) {
-    return [trimmed];
-  }
-  const suffix = canonical.slice('qwen3vl:'.length);
-  return [`qwen3-vl:${suffix}`, `qwen3vl:${suffix}`];
-}
-
-function buildModelUnavailableError() {
-  return new HttpError(503, 'Unable to prepare a local Ollama vision model for image understanding.');
-}
-
-async function readJson<T>(response: Response, fallback: string) {
-  if (!response.ok) {
-    const message = (await response.text()).trim() || fallback;
-    throw new HttpError(response.status >= 500 ? 502 : response.status, message);
-  }
-  try {
-    return (await response.json()) as T;
-  } catch {
-    throw new HttpError(502, fallback);
-  }
-}
-
-async function listInstalledModels() {
-  const response = await fetch(`${serverConfig.ollamaHost}/api/tags`);
-  const payload = await readJson<OllamaTagsResponse>(response, 'Unable to inspect local Ollama models.');
-  return new Map(
-    (payload.models ?? [])
-      .map((model) => model.name?.trim())
-      .filter((name): name is string => Boolean(name))
-      .map((name) => [canonicalizeVisionModelName(name), name] as const),
-  );
-}
-
-async function pullModel(model: string) {
-  let lastError: HttpError | null = null;
-  for (const candidate of getVisionModelAliases(model)) {
-    const response = await fetch(`${serverConfig.ollamaHost}/api/pull`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: candidate }),
-    });
-    if (response.ok) {
-      return candidate;
-    }
-    const message = (await response.text()).trim() || `Unable to pull ${candidate}.`;
-    lastError = new HttpError(response.status >= 500 ? 502 : response.status, message);
-  }
-  throw lastError ?? buildModelUnavailableError();
-}
 
 export function getPreferredVisionModels() {
   const seen = new Set<string>();
@@ -91,18 +32,18 @@ export function getPreferredVisionModels() {
 
 export async function ensureVisionModelReady() {
   try {
-    const installedModels = await listInstalledModels();
+    const installedModels = await listInstalledVisionModels();
     const installedPreferred = getPreferredVisionModels().find((model) => installedModels.has(canonicalizeVisionModelName(model)));
     if (installedPreferred) {
       return installedModels.get(canonicalizeVisionModelName(installedPreferred)) ?? installedPreferred;
     }
     const modelToPull = getPreferredVisionModels()[0];
-    return await pullModel(modelToPull);
+    return await pullVisionModel(modelToPull);
   } catch (error) {
     if (error instanceof HttpError) {
       throw error;
     }
-    throw buildModelUnavailableError();
+    throw buildVisionModelUnavailableError();
   }
 }
 
@@ -121,20 +62,27 @@ function buildVisionChatBody(model: string, imageBase64: string, prompt: string,
 }
 
 async function requestVisionChat(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {
-  const response = await fetch(`${serverConfig.ollamaHost}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildVisionChatBody(model, imageBase64, prompt, forceCpu)),
-  });
-  const payload = await readJson<OllamaChatResponse>(response, 'Unable to complete the local vision request.');
-  if (payload.error?.trim()) {
-    throw new HttpError(502, payload.error.trim());
+  try {
+    const response = await fetch(`${serverConfig.ollamaHost}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildVisionChatBody(model, imageBase64, prompt, forceCpu)),
+    });
+    const payload = await readJson<OllamaChatResponse>(response, 'Unable to complete the local vision request.');
+    if (payload.error?.trim()) {
+      throw new HttpError(502, payload.error.trim());
+    }
+    const content = payload.message?.content?.trim();
+    if (!content) {
+      throw new HttpError(502, 'The local vision model returned an empty response.');
+    }
+    return content;
+  } catch (error) {
+    if (isTimeoutLikeError(error)) {
+      throw new HttpError(504, 'The local vision model timed out.');
+    }
+    throw error instanceof HttpError ? error : new HttpError(502, 'Unable to complete the local vision request.');
   }
-  const content = payload.message?.content?.trim();
-  if (!content) {
-    throw new HttpError(502, 'The local vision model returned an empty response.');
-  }
-  return content;
 }
 
 async function askVisionModel(model: string, imageBase64: string, prompt: string) {
@@ -152,20 +100,11 @@ async function askVisionModel(model: string, imageBase64: string, prompt: string
   }
 }
 
-function buildJsonPrompt(instructions: string[], attempt: number) {
-  return [
-    ...instructions,
-    'Respond with JSON only. Do not include Markdown fences, prose, or commentary.',
-    attempt > 0 ? 'Your previous response was not valid JSON. Return one valid JSON object only.' : null,
-    `Request ID: ${randomUUID()}`,
-  ].filter(Boolean).join('\n');
-}
-
 export async function queryVisionModelJson<T>(imageBase64: string, instructions: string[], parser: (value: unknown) => T) {
   const model = await ensureVisionModelReady();
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = await askVisionModel(model, imageBase64, buildJsonPrompt(instructions, attempt));
+    const raw = await askVisionModel(model, imageBase64, buildJsonPrompt(instructions, attempt, randomUUID()));
     try {
       return { model, value: parser(JSON.parse(raw) as unknown) };
     } catch (error) {

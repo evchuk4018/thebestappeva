@@ -6,7 +6,7 @@ import { getAttachmentSourcePath, readAttachmentRecord, saveAttachmentRecord } f
 import { isStoredImageAttachmentRecord } from './record-guards';
 import { analyzeImageWithSidecar } from './image-analysis-sidecar';
 import { readCachedSceneGraph, saveCachedSceneGraph, saveDebugImages } from './image-analysis-cache';
-import { queryVisionModelJson } from './vision-model';
+import { createImageAnalysisVisionSession, queryVisionModelJson } from './vision-model';
 import { HttpError } from '../http';
 
 const analysisVersion = 'scene-graph-v1';
@@ -90,24 +90,58 @@ function buildLabelPrompt(sceneGraph: AiImageSceneGraph, passName: string) {
 async function applySemanticLabels(sceneGraph: AiImageSceneGraph, debugImages: Record<string, Buffer>) {
   const labels = new Map<string, VisionLabel>();
   let model = 'geometry-only';
-  for (const passName of ['full', 'left', 'center', 'right']) {
+  const activePasses = ['full', 'left', 'center', 'right'].filter((passName) => {
     const image = debugImages[passName];
-    const passObjects = sceneGraph.objects.filter((object) => object.crops.includes(passName));
-    if (!image || !passObjects.length) {
-      continue;
-    }
-    const response = await (testHooks.queryJson ?? queryVisionModelJson<VisionLabel[]>)(
-      image.toString('base64'),
-      buildLabelPrompt(sceneGraph, passName),
-      parseVisionLabels,
-    );
-    model = response.model;
-    response.value.forEach((label) => {
-      const current = labels.get(label.id);
-      if (!current || label.confidence >= current.confidence) {
-        labels.set(label.id, label);
+    return Boolean(image) && sceneGraph.objects.some((object) => object.crops.includes(passName));
+  });
+  if (!activePasses.length) {
+    return { model, objects: sceneGraph.objects, uncertain: sceneGraph.uncertain };
+  }
+  if (testHooks.queryJson) {
+    for (const passName of activePasses) {
+      const image = debugImages[passName];
+      if (!image) {
+        continue;
       }
-    });
+      const response = await testHooks.queryJson(
+        image.toString('base64'),
+        buildLabelPrompt(sceneGraph, passName),
+        parseVisionLabels,
+      );
+      model = response.model;
+      response.value.forEach((label) => {
+        const current = labels.get(label.id);
+        if (!current || label.confidence >= current.confidence) {
+          labels.set(label.id, label);
+        }
+      });
+    }
+  } else {
+    const session = await createImageAnalysisVisionSession();
+    try {
+      for (const [index, passName] of activePasses.entries()) {
+        const image = debugImages[passName];
+        if (!image) {
+          continue;
+        }
+        const response = await session.queryJson(
+          passName,
+          index === activePasses.length - 1,
+          image.toString('base64'),
+          buildLabelPrompt(sceneGraph, passName),
+          parseVisionLabels,
+        );
+        model = response.model;
+        response.value.forEach((label) => {
+          const current = labels.get(label.id);
+          if (!current || label.confidence >= current.confidence) {
+            labels.set(label.id, label);
+          }
+        });
+      }
+    } finally {
+      await session.dispose().catch(() => undefined);
+    }
   }
   return {
     model,
