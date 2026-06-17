@@ -6,7 +6,7 @@ import { ensureVisionModelReady, getPreferredVisionModels, queryImageModel, quer
 const originalVisionModels = [...serverConfig.aiVisionModels];
 
 test('preferred vision models default to the structured-analysis order', () => {
-  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b']);
+  assert.deepEqual(getPreferredVisionModels().slice(0, 3), ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b']);
 });
 
 test('reuses an installed preferred vision model before attempting a pull', async () => {
@@ -42,8 +42,8 @@ test('pulls the first preferred vision model when none is installed', async () =
   };
 
   try {
-    assert.equal(await ensureVisionModelReady(), 'qwen3vl:8b');
-    assert.match(requests[1]?.body ?? '', /qwen3vl:8b/);
+    assert.equal(await ensureVisionModelReady(), 'qwen3-vl:8b');
+    assert.match(requests[1]?.body ?? '', /qwen3-vl:8b/);
   } finally {
     globalThis.fetch = originalFetch;
     serverConfig.aiVisionModels = [...originalVisionModels];
@@ -54,8 +54,36 @@ test('normalizes legacy qwen3-vl aliases in preferred vision models', () => {
   serverConfig.aiVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b', 'qwen3vl:4b'];
 
   try {
-    assert.deepEqual(getPreferredVisionModels(), ['qwen3vl:8b', 'qwen2.5vl:7b', 'qwen3vl:4b']);
+    assert.deepEqual(getPreferredVisionModels(), ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b']);
   } finally {
+    serverConfig.aiVisionModels = [...originalVisionModels];
+  }
+});
+
+test('reuses the exact installed qwen3-vl alias for chat requests', async () => {
+  const originalFetch = globalThis.fetch;
+  const chatBodies: string[] = [];
+  serverConfig.aiVisionModels = ['qwen3vl:8b'];
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/api/tags')) {
+      return new Response(JSON.stringify({ models: [{ name: 'qwen3-vl:8b' }] }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.endsWith('/api/chat')) {
+      const body = typeof init?.body === 'string' ? init.body : '';
+      chatBodies.push(body);
+      return new Response(JSON.stringify({ message: { content: 'A concise answer.' } }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const result = await queryImageModel('ZmFrZQ==', 'What is in the image?');
+    assert.equal(result.model, 'qwen3-vl:8b');
+    assert.match(chatBodies[0] ?? '', /qwen3-vl:8b/);
+  } finally {
+    globalThis.fetch = originalFetch;
     serverConfig.aiVisionModels = [...originalVisionModels];
   }
 });

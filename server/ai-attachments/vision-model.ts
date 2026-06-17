@@ -13,8 +13,22 @@ interface OllamaChatResponse {
 
 let preferCpuVisionRequests = false;
 
-function normalizeVisionModelName(model: string) {
-  return model.trim().replace(/^qwen3-vl:/i, 'qwen3vl:');
+function trimVisionModelName(model: string) {
+  return model.trim();
+}
+
+function canonicalizeVisionModelName(model: string) {
+  return trimVisionModelName(model).replace(/^qwen3-vl:/i, 'qwen3vl:');
+}
+
+function getVisionModelAliases(model: string) {
+  const trimmed = trimVisionModelName(model);
+  const canonical = canonicalizeVisionModelName(trimmed);
+  if (!canonical.startsWith('qwen3vl:')) {
+    return [trimmed];
+  }
+  const suffix = canonical.slice('qwen3vl:'.length);
+  return [`qwen3-vl:${suffix}`, `qwen3vl:${suffix}`];
 }
 
 function buildModelUnavailableError() {
@@ -36,41 +50,54 @@ async function readJson<T>(response: Response, fallback: string) {
 async function listInstalledModels() {
   const response = await fetch(`${serverConfig.ollamaHost}/api/tags`);
   const payload = await readJson<OllamaTagsResponse>(response, 'Unable to inspect local Ollama models.');
-  return new Set(
+  return new Map(
     (payload.models ?? [])
       .map((model) => model.name?.trim())
       .filter((name): name is string => Boolean(name))
-      .map(normalizeVisionModelName),
+      .map((name) => [canonicalizeVisionModelName(name), name] as const),
   );
 }
 
 async function pullModel(model: string) {
-  const normalizedModel = normalizeVisionModelName(model);
-  const response = await fetch(`${serverConfig.ollamaHost}/api/pull`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: normalizedModel }),
-  });
-  if (!response.ok) {
-    const message = (await response.text()).trim() || `Unable to pull ${normalizedModel}.`;
-    throw new HttpError(response.status >= 500 ? 502 : response.status, message);
+  let lastError: HttpError | null = null;
+  for (const candidate of getVisionModelAliases(model)) {
+    const response = await fetch(`${serverConfig.ollamaHost}/api/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: candidate }),
+    });
+    if (response.ok) {
+      return candidate;
+    }
+    const message = (await response.text()).trim() || `Unable to pull ${candidate}.`;
+    lastError = new HttpError(response.status >= 500 ? 502 : response.status, message);
   }
+  throw lastError ?? buildModelUnavailableError();
 }
 
 export function getPreferredVisionModels() {
-  return [...new Set(serverConfig.aiVisionModels.map(normalizeVisionModelName))];
+  const seen = new Set<string>();
+  const models: string[] = [];
+  for (const model of serverConfig.aiVisionModels) {
+    const canonical = canonicalizeVisionModelName(model);
+    if (seen.has(canonical)) {
+      continue;
+    }
+    seen.add(canonical);
+    models.push(trimVisionModelName(model));
+  }
+  return models;
 }
 
 export async function ensureVisionModelReady() {
   try {
     const installedModels = await listInstalledModels();
-    const installedPreferred = getPreferredVisionModels().find((model) => installedModels.has(model));
+    const installedPreferred = getPreferredVisionModels().find((model) => installedModels.has(canonicalizeVisionModelName(model)));
     if (installedPreferred) {
-      return installedPreferred;
+      return installedModels.get(canonicalizeVisionModelName(installedPreferred)) ?? installedPreferred;
     }
     const modelToPull = getPreferredVisionModels()[0];
-    await pullModel(modelToPull);
-    return modelToPull;
+    return await pullModel(modelToPull);
   } catch (error) {
     if (error instanceof HttpError) {
       throw error;
@@ -85,7 +112,7 @@ function isGpuKernelFailure(message: string) {
 
 function buildVisionChatBody(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {
   return {
-    model: normalizeVisionModelName(model),
+    model: trimVisionModelName(model),
     stream: false,
     think: false,
     messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
