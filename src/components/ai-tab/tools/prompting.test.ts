@@ -31,7 +31,7 @@ const promptContext = {
   tools: [],
 };
 
-test('deepseek image prompts include structured scene extraction guidance for each image', async () => {
+test('image prompts include structured scene extraction guidance for each image', async () => {
   const messages = await buildPlainModelMessages([{
     id: 'msg-1',
     kind: 'user',
@@ -43,12 +43,12 @@ test('deepseek image prompts include structured scene extraction guidance for ea
   const userMessage = messages[1]?.content ?? '';
   assert.match(userMessage, /User uploaded image image_map123/);
   assert.match(userMessage, /User uploaded image image_chart456/);
-  assert.match(userMessage, /Use extract_image_scene before any coordinate-sensitive reasoning/);
+  assert.match(userMessage, /call extract_image_scene with detail "layout"/);
   assert.match(userMessage, /Use compare_generated_image only after you have a candidate SVG/);
   assert.doesNotMatch(userMessage, /ask_image_model/);
 });
 
-test('non-deepseek image prompts keep the local summary without bridge instructions', async () => {
+test('non-deepseek image prompts also include structured evidence instructions', async () => {
   const messages = await buildPlainModelMessages([{
     id: 'msg-1',
     kind: 'user',
@@ -58,6 +58,7 @@ test('non-deepseek image prompts keep the local summary without bridge instructi
   }], promptContext, 'ollama');
 
   const userMessage = messages[1]?.content ?? '';
-  assert.match(userMessage, /Initial image summary: A map with roads and labels\./);
+  assert.match(userMessage, /Initial image summary:\s+A map with roads and labels\./);
+  assert.match(userMessage, /Structured image evidence/);
   assert.doesNotMatch(userMessage, /ask_image_model/);
 });

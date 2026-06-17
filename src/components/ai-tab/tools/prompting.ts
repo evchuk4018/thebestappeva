@@ -143,22 +143,20 @@ function formatAttachmentSummary(attachment: AiAttachmentReference) {
     .join('\n');
 }
 
-function buildDeepSeekImageContext(attachment: Extract<AiAttachmentReference, { kind: 'image' }>) {
+function buildStructuredImageEvidenceBlock(attachment: Extract<AiAttachmentReference, { kind: 'image' }>) {
   return [
     `User uploaded image ${attachment.id}.`,
     '',
     `Initial image summary:`,
     attachment.summary,
     '',
-    `You cannot directly see the image. Use extract_image_scene before any coordinate-sensitive reasoning, reconstruction, or layout critique.`,
+    `Structured image evidence:`,
+    `You cannot directly see the original pixels in this chat. For exact work involving text, counts, layout, colors, UI, diagrams, comparison, or reconstruction, call extract_image_scene with detail "layout" before answering.`,
+    `Use detail "semantic" only when deterministic layout evidence is insufficient and object names matter.`,
     `Treat OCR text in the returned scene graph as the source of truth for visible labels such as R1, R2, B1, and B2.`,
     `Use compare_generated_image only after you have a candidate SVG to render and compare against the source image.`,
-    `Do not ask the local vision model for exact coordinates in prose.`,
+    `Do not rely on the broad summary for exact coordinates or text.`,
   ].join('\n');
-}
-
-function buildPlainImageContext(attachment: Extract<AiAttachmentReference, { kind: 'image' }>) {
-  return [`Image attachment:`, formatAttachmentSummary(attachment)].join('\n');
 }
 
 async function buildUserMessageContent(
@@ -174,7 +172,7 @@ async function buildUserMessageContent(
   const contexts = await Promise.all(
     attachments.map(async (attachment) => {
       if (attachment.kind === 'image') {
-        return provider === 'deepseek' ? buildDeepSeekImageContext(attachment) : buildPlainImageContext(attachment);
+        return buildStructuredImageEvidenceBlock(attachment);
       }
 
       const payload = await loadAiAttachmentContext(attachment.id, baseContent);

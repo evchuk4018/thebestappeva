@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseAiImageSceneGraph, type AiImageSceneGraph } from '../../shared/ai-image-scene-contract';
 import { serverConfig } from '../config';
 import { HttpError } from '../http';
@@ -12,6 +12,21 @@ export interface ImageAnalysisSidecarResult {
 }
 
 let runSidecarHook: ((args: string[]) => Promise<string>) | null = null;
+let worker: ImageAnalysisWorker | null = null;
+
+interface WorkerRequest {
+  resolve: (value: string) => void;
+  reject: (error: Error) => void;
+  timeoutId: NodeJS.Timeout;
+}
+
+interface ImageAnalysisWorker {
+  child: ChildProcessWithoutNullStreams;
+  pending: Map<string, WorkerRequest>;
+  nextId: number;
+  stderr: string[];
+  stdoutBuffer: string;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -73,8 +88,105 @@ function runSidecar(args: string[]) {
   });
 }
 
+function rejectPending(workerState: ImageAnalysisWorker, error: Error) {
+  for (const request of workerState.pending.values()) {
+    clearTimeout(request.timeoutId);
+    request.reject(error);
+  }
+  workerState.pending.clear();
+}
+
+function parseWorkerLine(workerState: ImageAnalysisWorker, line: string) {
+  if (!line.trim()) {
+    return;
+  }
+  let payload: { id?: string; ok?: boolean; payload?: unknown; error?: string };
+  try {
+    payload = JSON.parse(line) as typeof payload;
+  } catch {
+    return;
+  }
+  const id = payload.id ?? '';
+  const request = workerState.pending.get(id);
+  if (!request) {
+    return;
+  }
+  workerState.pending.delete(id);
+  clearTimeout(request.timeoutId);
+  if (payload.ok) {
+    request.resolve(JSON.stringify(payload.payload));
+    return;
+  }
+  request.reject(new HttpError(503, payload.error || 'The local image-analysis worker failed.'));
+}
+
+function handleWorkerStdout(workerState: ImageAnalysisWorker, chunk: Buffer) {
+  workerState.stdoutBuffer += String(chunk);
+  const lines = workerState.stdoutBuffer.split(/\r?\n/);
+  workerState.stdoutBuffer = lines.pop() ?? '';
+  lines.forEach((line) => parseWorkerLine(workerState, line));
+}
+
+function createWorker() {
+  const child = spawn(
+    serverConfig.aiImageAnalysisPythonCommand,
+    [...serverConfig.aiImageAnalysisPythonArgs, sidecarScriptPath, '--worker'],
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  const workerState: ImageAnalysisWorker = {
+    child,
+    pending: new Map(),
+    nextId: 1,
+    stderr: [],
+    stdoutBuffer: '',
+  };
+  child.stdout.on('data', (chunk) => handleWorkerStdout(workerState, chunk));
+  child.stderr.on('data', (chunk) => workerState.stderr.push(String(chunk)));
+  child.once('error', (error) => {
+    worker = null;
+    rejectPending(workerState, new HttpError(503, `Unable to start the local image-analysis worker: ${error.message}`));
+  });
+  child.once('close', (code) => {
+    worker = null;
+    rejectPending(
+      workerState,
+      new HttpError(503, workerState.stderr.join('').trim() || `The local image-analysis worker exited with code ${code}.`),
+    );
+  });
+  worker = workerState;
+  return workerState;
+}
+
+function getWorker() {
+  return worker && !worker.child.killed ? worker : createWorker();
+}
+
+function requestWorkerAnalysis(filePath: string) {
+  const workerState = getWorker();
+  const id = String(workerState.nextId++);
+  return new Promise<string>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      workerState.pending.delete(id);
+      workerState.child.kill();
+      if (worker === workerState) {
+        worker = null;
+      }
+      reject(new HttpError(504, `The local image-analysis worker timed out after ${serverConfig.aiImageAnalysisTimeoutMs}ms.`));
+    }, serverConfig.aiImageAnalysisTimeoutMs);
+    workerState.pending.set(id, { resolve, reject, timeoutId });
+    workerState.child.stdin.write(`${JSON.stringify({ id, filePath })}\n`, (error) => {
+      if (!error) {
+        return;
+      }
+      workerState.pending.delete(id);
+      clearTimeout(timeoutId);
+      reject(new HttpError(503, `Unable to write to the local image-analysis worker: ${error.message}`));
+    });
+  });
+}
+
 export async function analyzeImageWithSidecar(filePath: string): Promise<ImageAnalysisSidecarResult> {
-  const raw = await runSidecar(['--analyze', filePath]);
+  const raw = runSidecarHook ? await runSidecar(['--analyze', filePath]) : await requestWorkerAnalysis(filePath);
   let payload: { debugImages?: Record<string, string>; sceneGraph?: unknown };
   try {
     payload = JSON.parse(raw) as { debugImages?: Record<string, string>; sceneGraph?: unknown };

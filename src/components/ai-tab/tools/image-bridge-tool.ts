@@ -1,4 +1,5 @@
 import { analyzeAiImage, compareAiGeneratedImage } from '../../../lib/ai-attachments-storage';
+import type { AiImageAnalysisDetail } from '../../../../shared/ai-image-bridge-contract';
 import { AiAttachmentReference, AiMessage } from '../types';
 import { ToolRegistryEntry } from './types';
 
@@ -15,6 +16,10 @@ function requireString(value: unknown, name: string) {
 
 function requireBoolean(value: unknown, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function requireDetail(value: unknown): AiImageAnalysisDetail {
+  return value === 'semantic' ? 'semantic' : 'layout';
 }
 
 function requireNumber(value: unknown) {
@@ -51,6 +56,7 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
           parameters: [
             { name: 'imageId', type: 'string', description: 'Image attachment ID, such as image_abc123.', required: true },
             { name: 'refresh', type: 'boolean', description: 'Recompute the scene graph instead of reusing cached analysis.' },
+            { name: 'detail', type: 'string', description: 'Use "layout" for fast exact evidence or "semantic" for optional model labels.' },
           ],
         },
         {
@@ -69,7 +75,11 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
     async execute(invocation) {
       const attachment = requireImageAttachment(attachments, invocation.args.imageId);
       if (invocation.functionName === 'extract_image_scene') {
-        const payload = await analyzeAiImage(attachment.id, requireBoolean(invocation.args.refresh));
+        const payload = await analyzeAiImage(
+          attachment.id,
+          requireBoolean(invocation.args.refresh),
+          requireDetail(invocation.args.detail),
+        );
         return {
           toolId: invocation.toolId,
           functionName: invocation.functionName,
@@ -79,6 +89,7 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
             imageId: attachment.id,
             model: payload.model,
             cached: payload.cached,
+            detail: payload.detail,
             sceneGraph: payload.sceneGraph,
           },
         };

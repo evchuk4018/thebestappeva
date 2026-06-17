@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AiImageSceneGraph } from '../../shared/ai-image-bridge-contract';
+import type { AiImageAnalysisDetail, AiImageSceneGraph } from '../../shared/ai-image-bridge-contract';
 import { getAttachmentSourcePath, readAttachmentRecord, saveAttachmentRecord } from './storage';
 import { isStoredImageAttachmentRecord } from './record-guards';
 import { analyzeImageWithSidecar } from './image-analysis-sidecar';
@@ -9,7 +9,7 @@ import { readCachedSceneGraph, saveCachedSceneGraph, saveDebugImages } from './i
 import { createImageAnalysisVisionSession, queryVisionModelJson } from './vision-model';
 import { HttpError } from '../http';
 
-const analysisVersion = 'scene-graph-v1';
+const analysisVersion = 'scene-graph-v2';
 type VisionLabel = { id: string; label: string; type?: string; confidence: number };
 
 let testHooks: Partial<{
@@ -74,7 +74,7 @@ function buildRelationships(sceneGraph: AiImageSceneGraph) {
 
 function buildLabelPrompt(sceneGraph: AiImageSceneGraph, passName: string) {
   const objects = sceneGraph.objects
-    .filter((object) => object.crops.includes(passName))
+    .filter((object) => passName === 'contact' || object.crops.includes(passName))
     .map(({ id, type, dominantColors }) => ({ id, type, dominantColors }));
   const text = sceneGraph.text.filter((item) => !item.objectId || objects.some((object) => object.id === item.objectId)).map(({ value, objectId }) => ({ value, objectId }));
   return [
@@ -87,12 +87,19 @@ function buildLabelPrompt(sceneGraph: AiImageSceneGraph, passName: string) {
   ];
 }
 
-async function applySemanticLabels(sceneGraph: AiImageSceneGraph, debugImages: Record<string, Buffer>) {
+async function applySemanticLabels(
+  sceneGraph: AiImageSceneGraph,
+  debugImages: Record<string, Buffer>,
+  detail: AiImageAnalysisDetail,
+) {
   const labels = new Map<string, VisionLabel>();
   let model = 'geometry-only';
-  const activePasses = ['full', 'left', 'center', 'right'].filter((passName) => {
+  if (detail === 'layout') {
+    return { model, objects: sceneGraph.objects, uncertain: sceneGraph.uncertain };
+  }
+  const activePasses = ['contact'].filter((passName) => {
     const image = debugImages[passName];
-    return Boolean(image) && sceneGraph.objects.some((object) => object.crops.includes(passName));
+    return Boolean(image) && sceneGraph.objects.length > 0;
   });
   if (!activePasses.length) {
     return { model, objects: sceneGraph.objects, uncertain: sceneGraph.uncertain };
@@ -163,9 +170,10 @@ async function analyzePath(filePath: string) {
   return (testHooks.analyzeFile ?? analyzeImageWithSidecar)(filePath);
 }
 
-async function analyzeImageFromPath(filePath: string) {
+async function analyzeImageFromPath(filePath: string, detail: AiImageAnalysisDetail) {
   const base = await analyzePath(filePath);
-  const labeled = await applySemanticLabels(base.sceneGraph, base.debugImages);
+  const labeled = await applySemanticLabels(base.sceneGraph, base.debugImages, detail);
+  const generatedAt = new Date().toISOString();
   return {
     debugImages: base.debugImages,
     sceneGraph: {
@@ -176,8 +184,11 @@ async function analyzeImageFromPath(filePath: string) {
       diagnostics: {
         ...base.sceneGraph.diagnostics,
         analysisVersion,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         vlmModel: labeled.model,
+        detail,
+        objectCount: labeled.objects.length,
+        textCount: base.sceneGraph.text.length,
       },
     } satisfies AiImageSceneGraph,
     model: labeled.model,
@@ -195,24 +206,30 @@ async function withTempImageFile(buffer: Buffer, extension: string, action: (fil
   }
 }
 
-export async function analyzeImageBuffer(buffer: Buffer, extension = '.png') {
-  return withTempImageFile(buffer, extension, async (filePath) => (await analyzeImageFromPath(filePath)).sceneGraph);
+export async function analyzeImageBuffer(buffer: Buffer, extension = '.png', detail: AiImageAnalysisDetail = 'layout') {
+  return withTempImageFile(buffer, extension, async (filePath) => (await analyzeImageFromPath(filePath, detail)).sceneGraph);
 }
 
-export async function analyzeStoredImage(attachmentId: string, refresh = false) {
+export async function analyzeStoredImage(attachmentId: string, refresh = false, detail: AiImageAnalysisDetail = 'layout') {
   const record = await readAttachmentRecord(attachmentId);
   if (!isStoredImageAttachmentRecord(record)) {
     throw new HttpError(415, `"${attachmentId}" is not an image attachment.`);
   }
   if (!refresh) {
-    const cached = await readCachedSceneGraph(attachmentId);
-    if (cached) {
-      return { attachment: record.attachment, cached: true, model: cached.sceneGraph.diagnostics.vlmModel, sceneGraph: cached.sceneGraph };
+    const cached = await readCachedSceneGraph(attachmentId, detail);
+    if (cached?.sceneGraph.diagnostics.analysisVersion === analysisVersion) {
+      return {
+        attachment: record.attachment,
+        cached: true,
+        detail,
+        model: cached.sceneGraph.diagnostics.vlmModel,
+        sceneGraph: cached.sceneGraph,
+      };
     }
   }
   const sourcePath = getAttachmentSourcePath(attachmentId, record.sourceExtension);
-  const analyzed = await analyzeImageFromPath(sourcePath);
-  await saveCachedSceneGraph(attachmentId, { sceneGraph: analyzed.sceneGraph });
+  const analyzed = await analyzeImageFromPath(sourcePath, detail);
+  await saveCachedSceneGraph(attachmentId, detail, { sceneGraph: analyzed.sceneGraph });
   if (Object.keys(analyzed.debugImages).length) {
     await saveDebugImages(attachmentId, analyzed.debugImages);
   }
@@ -223,7 +240,7 @@ export async function analyzeStoredImage(attachmentId: string, refresh = false) 
     analysisUpdatedAt: analyzed.sceneGraph.diagnostics.generatedAt,
   };
   await saveAttachmentRecord({ ...record, attachment });
-  return { attachment, cached: false, model: analyzed.model, sceneGraph: analyzed.sceneGraph };
+  return { attachment, cached: false, detail, model: analyzed.model, sceneGraph: analyzed.sceneGraph };
 }
 
 export function setImageAnalysisTestHooksForTests(hooks: typeof testHooks) {

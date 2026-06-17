@@ -22,11 +22,31 @@ function computeIoU(left: [number, number, number, number], right: [number, numb
   return overlap / Math.max(1, bboxArea(left) + bboxArea(right) - overlap);
 }
 
-function objectScore(source: AiImageSceneObject, target: AiImageSceneObject) {
+function aspectRatio([left, top, right, bottom]: [number, number, number, number]) {
+  return Math.max(1, right - left) / Math.max(1, bottom - top);
+}
+
+function objectTextValues(scene: AiImageSceneGraph, objectId: string) {
+  return scene.text
+    .filter((item) => item.objectId === objectId)
+    .map((item) => item.value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function textOverlap(source: AiImageSceneGraph, target: AiImageSceneGraph, sourceId: string, targetId: string) {
+  const targetValues = new Set(objectTextValues(target, targetId));
+  return objectTextValues(source, sourceId).some((value) => targetValues.has(value)) ? 0.35 : 0;
+}
+
+function objectScore(sourceScene: AiImageSceneGraph, targetScene: AiImageSceneGraph, source: AiImageSceneObject, target: AiImageSceneObject) {
+  const iou = computeIoU(source.bbox, target.bbox);
   const labelMatch = source.label && target.label && source.label.toLowerCase() === target.label.toLowerCase() ? 0.45 : 0;
-  const typeMatch = source.type === target.type ? 0.2 : 0;
-  const colorMatch = source.dominantColors[0] && source.dominantColors[0] === target.dominantColors[0] ? 0.1 : 0;
-  return labelMatch + typeMatch + colorMatch + computeIoU(source.bbox, target.bbox);
+  const roleMatch = source.role && target.role && source.role === target.role ? 0.25 : 0;
+  const typeMatch = source.type === target.type ? 0.16 : 0;
+  const colorMatch = source.dominantColors[0] && source.dominantColors[0] === target.dominantColors[0] ? 0.12 : 0;
+  const ratioDelta = Math.abs(aspectRatio(source.bbox) - aspectRatio(target.bbox));
+  const ratioMatch = ratioDelta < 0.4 ? 0.12 : 0;
+  return iou * 1.1 + labelMatch + roleMatch + typeMatch + colorMatch + ratioMatch + textOverlap(sourceScene, targetScene, source.id, target.id);
 }
 
 function compareObjects(source: AiImageSceneGraph, target: AiImageSceneGraph) {
@@ -35,7 +55,7 @@ function compareObjects(source: AiImageSceneGraph, target: AiImageSceneGraph) {
   for (const sourceObject of source.objects) {
     let best: { object: AiImageSceneObject; score: number } | null = null;
     for (const targetObject of target.objects.filter((candidate) => !matchedTargetIds.has(candidate.id))) {
-      const score = objectScore(sourceObject, targetObject);
+      const score = objectScore(source, target, sourceObject, targetObject);
       if (!best || score > best.score) {
         best = { object: targetObject, score };
       }

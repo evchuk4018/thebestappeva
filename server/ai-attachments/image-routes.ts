@@ -22,6 +22,11 @@ function readRefresh(request: Request) {
   return body?.refresh === true;
 }
 
+function readAnalysisDetail(request: Request) {
+  const body = request.body as { detail?: unknown } | null;
+  return body?.detail === 'semantic' ? 'semantic' : 'layout';
+}
+
 function readCompareRequest(request: Request) {
   const body = request.body as { content?: unknown; format?: unknown; iteration?: unknown; maxIterations?: unknown; refresh?: unknown } | null;
   const format = typeof body?.format === 'string' ? body.format.trim() : '';
@@ -67,7 +72,7 @@ export async function handlePostAiImageQuestion(request: Request, response: Resp
 export async function handlePostAiImageAnalysis(request: Request, response: Response) {
   try {
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
-    response.json(await analyzeStoredImage(attachmentId, readRefresh(request)));
+    response.json(await analyzeStoredImage(attachmentId, readRefresh(request), readAnalysisDetail(request)));
   } catch (error) {
     sendAttachmentRouteError(response, error, 'Unable to analyze this image.');
   }

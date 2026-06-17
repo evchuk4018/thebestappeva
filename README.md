@@ -27,8 +27,8 @@ python -m pip install -r python/requirements-docling.txt
 ```
 
 On Windows, the app defaults to the `py -3` launcher for both Python sidecars. Override `AI_PARSER_PYTHON_COMMAND` / `AI_PARSER_PYTHON_ARGS`, `AI_IMAGE_ANALYSIS_PYTHON_COMMAND` / `AI_IMAGE_ANALYSIS_PYTHON_ARGS`, or `AI_PYTHON_EXEC_COMMAND` / `AI_PYTHON_EXEC_ARGS` in `.env` if your local Python command differs.
-The same requirements file now also installs the local image-analysis stack used by `image-bridge`: OpenCV, Pillow, NumPy, and RapidOCR ONNX.
-Structured image analysis now uses its own Ollama settings: `AI_IMAGE_ANALYSIS_VISION_MODEL` defaults to `qwen3-vl:8b`, and `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS` controls the per-pass timeout window, defaulting to 600000ms.
+The same requirements file now also installs the local image-analysis stack used by `image-bridge`: OpenCV, Pillow, NumPy, and RapidOCR ONNX. The image-analysis sidecar stays alive as a worker after the first request, so OpenCV and OCR do not reload for every image.
+Structured image analysis defaults to fast `layout` detail, which skips VLM labeling and returns deterministic OCR, geometry, colors, hierarchy, and relationship evidence. Optional `semantic` detail uses `AI_IMAGE_ANALYSIS_VISION_MODEL`, defaulting to `qwen3-vl:8b`, and `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS`, defaulting to 600000ms.
 PDF page images for the AI `pdf_reader` tool are rendered on demand with `AI_PDF_RENDER_SCALE`, defaulting to `1.5`.
 
 ## Validation
@@ -112,7 +112,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids, an immediate local vision summary, and on-demand structured scene-graph analysis
-- DeepSeek chats with uploaded images automatically switch into `Thinking`, receive the stored image summary plus scene-graph instructions, and can call `extract_image_scene` before layout-sensitive reasoning or SVG reconstruction
+- image chats that ask for exact text, counts, colors, layout, UI, diagrams, comparison, or SVG reconstruction automatically switch into `Thinking`, receive structured-evidence guidance, and can call `extract_image_scene` before layout-sensitive reasoning
 - OCR for image labels is handled separately from semantic labeling, so labels like `R1`, `R2`, `B1`, and `B2` come from the structured scene graph instead of prose follow-up guesses
 - generated SVG candidates can be rendered back to PNG with `compare_generated_image`, which returns structured layout/color/text diffs and patch guidance for iterative repair loops
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
@@ -149,7 +149,7 @@ Implementation notes:
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
 - Image upload summaries and generic image questions prefer local `qwen3-vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3-vl` and `internvl3` fallbacks; override that shared order with `AI_VISION_MODELS`, and `qwen3vl:*` aliases are normalized automatically
-- Structured `image-analysis` sessions use only `AI_IMAGE_ANALYSIS_VISION_MODEL`, enforce a per-pass timeout from `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS`, evict other loaded Ollama models before analysis, retry CUDA/kernel failures once on CPU, and unload the pinned model again when the session ends
+- Structured `image-analysis` layout mode is local deterministic OpenCV/RapidOCR work and does not call a VLM. Semantic mode uses one annotated contact-sheet request to `AI_IMAGE_ANALYSIS_VISION_MODEL`, enforces `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS`, evicts other loaded Ollama models before analysis, retries CUDA/kernel failures once on CPU, and unloads the pinned model again when the session ends
 - Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
 - Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
@@ -159,7 +159,7 @@ Implementation notes:
 - Model discovery: `GET /api/tags` for Ollama and `GET /models` for DeepSeek BYOK
 - Chat requests: `POST /api/chat`
 - Model downloads: `POST /api/pull`
-- Attachment parser sidecars: `python/docling_sidecar.py` for documents and `python/image_analysis_sidecar.py` for structured image geometry/OCR extraction
+- Attachment parser sidecars: `python/docling_sidecar.py` for documents and persistent-worker `python/image_analysis_sidecar.py` for structured image geometry/OCR extraction
 - Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`

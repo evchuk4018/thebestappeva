@@ -16,11 +16,14 @@ export interface AiImageQueryPayload {
   model: string;
 }
 
+export type AiImageAnalysisDetail = 'layout' | 'semantic';
+
 export interface AiImageAnalysisPayload {
   attachment: AiImageAttachment;
   sceneGraph: AiImageSceneGraph;
   cached: boolean;
   model: string;
+  detail: AiImageAnalysisDetail;
 }
 
 export interface AiImageComparePayload {
@@ -70,11 +73,27 @@ export function parseAiImageQueryPayload(value: unknown, field = 'AI image query
 
 export function parseAiImageAnalysisPayload(value: unknown, field = 'AI image analysis payload'): AiImageAnalysisPayload {
   const record = expectRecord(value, field);
+  const detail = typeof record.detail === 'string' ? record.detail : record.sceneGraph && typeof record.sceneGraph === 'object'
+    ? (record.sceneGraph as { diagnostics?: { detail?: unknown } }).diagnostics?.detail
+    : undefined;
+  if (typeof detail === 'undefined') {
+    return {
+      attachment: parseImageAttachment(record.attachment, `${field}.attachment`),
+      sceneGraph: parseAiImageSceneGraph(record.sceneGraph, `${field}.sceneGraph`),
+      cached: expectBoolean(record.cached, `${field}.cached`),
+      model: expectString(record.model, `${field}.model`),
+      detail: 'layout',
+    };
+  }
+  if (detail !== 'layout' && detail !== 'semantic') {
+    throw new Error(`Invalid ${field}.detail. Expected "layout" or "semantic".`);
+  }
   return {
     attachment: parseImageAttachment(record.attachment, `${field}.attachment`),
     sceneGraph: parseAiImageSceneGraph(record.sceneGraph, `${field}.sceneGraph`),
     cached: expectBoolean(record.cached, `${field}.cached`),
     model: expectString(record.model, `${field}.model`),
+    detail,
   };
 }
 

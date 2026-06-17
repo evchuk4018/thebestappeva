@@ -29,12 +29,12 @@ const documentAttachment: AiAttachmentReference = {
   pdfReaderMode: 'tool',
 };
 
-function createChat(attachments: AiAttachmentReference[]): Chat {
+function createChat(attachments: AiAttachmentReference[], content = 'Check this'): Chat {
   return {
     id: 'chat-1',
     title: 'Chat',
     titleStatus: 'generated',
-    messages: [{ id: 'msg-1', kind: 'user', content: 'Check this', attachments, createdAt: '2026-06-15T00:00:00.000Z' }],
+    messages: [{ id: 'msg-1', kind: 'user', content, attachments, createdAt: '2026-06-15T00:00:00.000Z' }],
     activeArtifactId: null,
     includedArtifactIds: [],
     mode: 'flash',
@@ -46,9 +46,14 @@ test('image-only attachments default to a semantic image prompt', () => {
   assert.match(buildDefaultAttachmentPrompt([imageAttachment]), /attached image/i);
 });
 
-test('deepseek image turns force thinking while ollama image turns do not', () => {
-  const chat = createChat([imageAttachment]);
+test('exact image turns force thinking for every provider', () => {
+  const chat = createChat([imageAttachment], 'Read the text and count the labels in this UI screenshot.');
   assert.equal(resolveTurnMode(chat, 'deepseek', 'flash'), 'thinking');
+  assert.equal(resolveTurnMode(chat, 'ollama', 'flash'), 'thinking');
+});
+
+test('vague image turns can stay in flash mode', () => {
+  const chat = createChat([imageAttachment], 'What is visible here?');
   assert.equal(resolveTurnMode(chat, 'ollama', 'flash'), 'flash');
 });
 

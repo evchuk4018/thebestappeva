@@ -15,7 +15,7 @@ export function buildVisibleTools(
   const artifactTool = createArtifactWorkspaceTool(selectedChatId ?? 'draft-artifact-chat');
   const selectedPdfAttachments = selectedChat ? collectLongPdfAttachments(selectedChat.messages) : [];
   const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
-  const selectedImageAttachments = provider === 'deepseek' && selectedChat ? collectImageAttachments(selectedChat.messages) : [];
+  const selectedImageAttachments = selectedChat ? collectImageAttachments(selectedChat.messages) : [];
   const selectedImageTool = createImageBridgeTool(selectedImageAttachments);
 
   return baseEntries
@@ -42,7 +42,7 @@ export function getActiveToolEntriesForChat(
   );
   const artifactEntries = chat && (enabledTools['artifact-workspace'] ?? true) ? [createArtifactWorkspaceTool(chat.id)] : [];
   const pdfAttachments = chat ? collectLongPdfAttachments(chat.messages) : [];
-  const imageAttachments = provider === 'deepseek' && chat ? collectImageAttachments(chat.messages) : [];
+  const imageAttachments = chat ? collectImageAttachments(chat.messages) : [];
   return [
     ...enabledEntries,
     ...artifactEntries,

@@ -8,6 +8,10 @@ export interface AiImageSceneObject {
   id: string;
   type: string;
   label?: string;
+  role?: string;
+  parentId?: string;
+  zIndex?: number;
+  source?: string;
   bbox: [number, number, number, number];
   polygon?: number[][];
   line?: [number, number, number, number];
@@ -45,6 +49,10 @@ export interface AiImageSceneDiagnostics {
   ocrEngine: string;
   vlmModel: string;
   passes: string[];
+  detail?: 'layout' | 'semantic';
+  timingsMs?: Record<string, number>;
+  objectCount?: number;
+  textCount?: number;
 }
 
 export interface AiImageSceneGraph {
@@ -141,12 +149,41 @@ function parseOptionalString(value: unknown, field: string) {
   return typeof value === 'undefined' ? undefined : expectString(value, field);
 }
 
+function parseOptionalNumber(value: unknown, field: string) {
+  return typeof value === 'undefined' ? undefined : expectNumber(value, field);
+}
+
+function parseOptionalStringRecord(value: unknown, field: string) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  const record = expectRecord(value, field);
+  return Object.fromEntries(
+    Object.entries(record).map(([key, item]) => [key, expectNumber(item, `${field}.${key}`)]),
+  );
+}
+
+function parseOptionalDetail(value: unknown, field: string) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  const detail = expectString(value, field);
+  if (detail !== 'layout' && detail !== 'semantic') {
+    throw new Error(`Invalid ${field}. Expected "layout" or "semantic".`);
+  }
+  return detail;
+}
+
 function parseObject(value: unknown, field: string): AiImageSceneObject {
   const record = expectRecord(value, field);
   return {
     id: expectString(record.id, `${field}.id`),
     type: expectString(record.type, `${field}.type`),
     label: parseOptionalString(record.label, `${field}.label`),
+    role: parseOptionalString(record.role, `${field}.role`),
+    parentId: parseOptionalString(record.parentId, `${field}.parentId`),
+    zIndex: parseOptionalNumber(record.zIndex, `${field}.zIndex`),
+    source: parseOptionalString(record.source, `${field}.source`),
     bbox: expectNumberTuple(record.bbox, `${field}.bbox`),
     polygon: parsePolygon(record.polygon, `${field}.polygon`),
     line: typeof record.line === 'undefined' ? undefined : expectNumberTuple(record.line, `${field}.line`),
@@ -220,6 +257,10 @@ export function parseAiImageSceneGraph(value: unknown, field = 'AI image scene g
       ocrEngine: expectString(diagnostics.ocrEngine, `${field}.diagnostics.ocrEngine`),
       vlmModel: expectString(diagnostics.vlmModel, `${field}.diagnostics.vlmModel`),
       passes: expectStringArray(diagnostics.passes, `${field}.diagnostics.passes`),
+      detail: parseOptionalDetail(diagnostics.detail, `${field}.diagnostics.detail`),
+      timingsMs: parseOptionalStringRecord(diagnostics.timingsMs, `${field}.diagnostics.timingsMs`),
+      objectCount: parseOptionalNumber(diagnostics.objectCount, `${field}.diagnostics.objectCount`),
+      textCount: parseOptionalNumber(diagnostics.textCount, `${field}.diagnostics.textCount`),
     },
   };
 }

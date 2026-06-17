@@ -49,19 +49,24 @@ const sceneGraph = {
 
 test('extract_image_scene proxies the structured analysis route', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  let requestBody = '';
+  globalThis.fetch = async (_input, init) => {
+    requestBody = typeof init?.body === 'string' ? init.body : '';
+    return new Response(JSON.stringify({
     attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
     sceneGraph,
     cached: true,
     model: 'qwen2.5vl:7b',
+    detail: 'semantic',
   }), { headers: { 'Content-Type': 'application/json' } });
+  };
 
   try {
     const tool = createImageBridgeTool([attachment]);
     const result = await tool.execute({
       toolId: 'image-bridge',
       functionName: 'extract_image_scene',
-      args: { imageId: attachment.id },
+      args: { imageId: attachment.id, detail: 'semantic' },
       createdAt: '2026-06-15T00:00:00.000Z',
     }, {});
     if ('deferred' in result) {
@@ -69,6 +74,8 @@ test('extract_image_scene proxies the structured analysis route', async () => {
     }
     assert.equal(result.ok, true);
     assert.equal(result.data?.imageId, attachment.id);
+    assert.equal(result.data?.detail, 'semantic');
+    assert.match(requestBody, /"detail":"semantic"/);
     assert.deepEqual((result.data?.sceneGraph as { objects: Array<{ line?: number[] }> }).objects[1]?.line, [111, 0, 111, 100]);
   } finally {
     globalThis.fetch = originalFetch;

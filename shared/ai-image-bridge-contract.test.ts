@@ -49,19 +49,25 @@ const sceneGraph = {
   text: [{ value: 'R1', bbox: [45, 120, 70, 145], confidence: 0.9, objectId: 'obj_1' }],
   relationships: [{ type: 'label-for', from: 'R1', to: 'obj_1', confidence: 0.9 }],
   uncertain: [],
-  diagnostics: {
-    analysisVersion: 'scene-graph-v1',
+    diagnostics: {
+    analysisVersion: 'scene-graph-v2',
     generatedAt: '2026-06-15T01:00:00.000Z',
     ocrEngine: 'rapidocr-onnxruntime',
     vlmModel: 'qwen2.5vl:7b',
     passes: ['full', 'left', 'center', 'right', 'text-ocr'],
+    detail: 'layout',
+    timingsMs: { total: 123 },
+    objectCount: 2,
+    textCount: 1,
   },
 };
 
 test('parses image-analysis payloads with scene graphs', () => {
   const payload = parseAiImageAnalysisPayload({ attachment, sceneGraph, cached: true, model: 'qwen2.5vl:7b' });
   assert.equal(payload.cached, true);
+  assert.equal(payload.detail, 'layout');
   assert.equal(payload.sceneGraph.objects[0]?.label, 'left_red_zone');
+  assert.equal(payload.sceneGraph.diagnostics.objectCount, 2);
   assert.deepEqual(payload.sceneGraph.objects[1]?.line, [182, 80, 182, 500]);
 });
 

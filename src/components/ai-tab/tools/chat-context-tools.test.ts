@@ -228,3 +228,30 @@ test('chat context tools are assembled independently and remain separately toggl
     ['recent-chats', 'chat-title-search'],
   );
 });
+
+test('image bridge tools are available for local providers when images are attached', () => {
+  const chat = createChat('chat-1', {
+    messages: [{
+      id: 'msg-1',
+      kind: 'user',
+      content: 'Read the labels in this diagram.',
+      createdAt: '2026-06-12T00:00:00.000Z',
+      attachments: [{
+        id: 'image_map123',
+        kind: 'image',
+        fileName: 'diagram.png',
+        mediaType: 'image/png',
+        fileSize: 200,
+        summary: 'A diagram with labels.',
+        summaryModel: 'qwen2.5vl:7b',
+        summaryStatus: 'ready',
+      }],
+    }],
+  });
+  const { entries } = getEntry('chat-summary', [chat], 'chat-1');
+  const visibleTools = buildVisibleTools(entries, {}, chat.id, chat, 'ollama');
+  const activeEntries = getActiveToolEntriesForChat(chat, entries, {}, 'ollama');
+
+  assert.equal(visibleTools.find((tool) => tool.id === 'image-bridge')?.enabled, true);
+  assert.ok(activeEntries.some((tool) => tool.definition.id === 'image-bridge'));
+});

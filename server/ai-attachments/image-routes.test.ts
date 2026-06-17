@@ -104,14 +104,20 @@ test('image-analysis route returns cached or freshly analyzed scene graphs', asy
     await saveAttachmentRecord({ attachment: imageAttachment, sourceExtension: '.png' });
 
     const first = createResponseCapture();
-    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true } } as never, first as never);
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, first as never);
     assert.equal(first.statusCode, 200);
     assert.equal((first.body as { cached: boolean }).cached, false);
+    assert.equal((first.body as { detail: string }).detail, 'semantic');
     assert.deepEqual((first.body as { sceneGraph: AiImageSceneGraph }).sceneGraph.objects[1]?.line, [122, 0, 122, 120]);
 
     const second = createResponseCapture();
-    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: {} } as never, second as never);
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { detail: 'semantic' } } as never, second as never);
     assert.equal((second.body as { cached: boolean }).cached, true);
+
+    const layout = createResponseCapture();
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: {} } as never, layout as never);
+    assert.equal((layout.body as { detail: string }).detail, 'layout');
+    assert.equal((layout.body as { cached: boolean }).cached, false);
   } finally {
     setImageAnalysisTestHooksForTests({});
     serverConfig.aiAttachmentStoragePath = originalStoragePath;
