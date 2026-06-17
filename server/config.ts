@@ -50,7 +50,7 @@ export const serverConfig = {
     ? readStringListEnv('AI_IMAGE_ANALYSIS_PYTHON_ARGS')
     : defaultParserArgs,
   aiImageAnalysisVisionModel: readStringEnv('AI_IMAGE_ANALYSIS_VISION_MODEL', 'qwen3-vl:8b'),
-  aiImageAnalysisVisionTimeoutMs: readNumberEnv('AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS', 30000),
+  aiImageAnalysisVisionTimeoutMs: readNumberEnv('AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS', 90000),
   aiVisionModels: readStringListEnv('AI_VISION_MODELS').length ? readStringListEnv('AI_VISION_MODELS') : defaultVisionModels,
   aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserCommand),
   aiPythonExecArgs: readStringListEnv('AI_PYTHON_EXEC_ARGS').length ? readStringListEnv('AI_PYTHON_EXEC_ARGS') : defaultParserArgs,

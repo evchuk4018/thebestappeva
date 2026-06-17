@@ -7,6 +7,7 @@ import {
   buildVisionModelUnavailableError,
   canonicalizeVisionModelName,
   getVisionModelAliases,
+  isGpuKernelFailure,
   isTimeoutLikeError,
   readJson,
   trimVisionModelName,
@@ -17,6 +18,7 @@ interface OllamaPsResponse {
 }
 
 const warmKeepAlive = '5m';
+let preferCpuImageAnalysisRequests = false;
 
 export interface ImageAnalysisVisionSession {
   dispose(): Promise<void>;
@@ -119,18 +121,30 @@ async function evictNonTargetModels(model: string) {
   }
 }
 
-async function requestImageAnalysisChat(model: string, passName: string, imageBase64: string, prompt: string, keepAlive: string | number) {
+function buildImageAnalysisChatBody(model: string, imageBase64: string, prompt: string, keepAlive: string | number, forceCpu: boolean) {
+  return {
+    model: trimVisionModelName(model),
+    stream: false,
+    think: false,
+    keep_alive: keepAlive,
+    messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+    options: forceCpu ? { num_gpu: 0 } : undefined,
+  };
+}
+
+async function requestImageAnalysisChat(
+  model: string,
+  passName: string,
+  imageBase64: string,
+  prompt: string,
+  keepAlive: string | number,
+  forceCpu: boolean,
+) {
   try {
     const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: trimVisionModelName(model),
-        stream: false,
-        think: false,
-        keep_alive: keepAlive,
-        messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
-      }),
+      body: JSON.stringify(buildImageAnalysisChatBody(model, imageBase64, prompt, keepAlive, forceCpu)),
     }, serverConfig.aiImageAnalysisVisionTimeoutMs);
     const payload = await readJson<OllamaChatResponse>(
       response,
@@ -159,6 +173,22 @@ async function requestImageAnalysisChat(model: string, passName: string, imageBa
   }
 }
 
+async function askImageAnalysisModel(model: string, passName: string, imageBase64: string, prompt: string, keepAlive: string | number) {
+  if (preferCpuImageAnalysisRequests) {
+    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true);
+  }
+  try {
+    return await requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, false);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (!isGpuKernelFailure(message)) {
+      throw error;
+    }
+    preferCpuImageAnalysisRequests = true;
+    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true);
+  }
+}
+
 export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisVisionSession> {
   const model = await ensureImageAnalysisModelReady();
   await evictNonTargetModels(model);
@@ -182,7 +212,7 @@ export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisV
       let lastError: unknown;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         shouldUnloadOnDispose = true;
-        const raw = await requestImageAnalysisChat(
+        const raw = await askImageAnalysisModel(
           model,
           passName,
           imageBase64,
@@ -201,4 +231,8 @@ export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisV
       throw buildStrictVisionError(model, passName, `returned invalid JSON: ${message}`);
     },
   };
+}
+
+export function resetImageAnalysisVisionStateForTests() {
+  preferCpuImageAnalysisRequests = false;
 }

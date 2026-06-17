@@ -6,6 +6,7 @@ import {
   buildJsonPrompt,
   buildVisionModelUnavailableError,
   canonicalizeVisionModelName,
+  isGpuKernelFailure,
   isTimeoutLikeError,
   listInstalledVisionModels,
   pullVisionModel,
@@ -45,10 +46,6 @@ export async function ensureVisionModelReady() {
     }
     throw buildVisionModelUnavailableError();
   }
-}
-
-function isGpuKernelFailure(message: string) {
-  return /cuda error: device kernel image is invalid|stack-based buffer|llama-server process has terminated/i.test(message);
 }
 
 function buildVisionChatBody(model: string, imageBase64: string, prompt: string, forceCpu: boolean) {

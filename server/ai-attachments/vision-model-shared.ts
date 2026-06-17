@@ -32,6 +32,10 @@ export function buildVisionModelUnavailableError() {
   return new HttpError(503, 'Unable to prepare a local Ollama vision model for image understanding.');
 }
 
+export function isGpuKernelFailure(message: string) {
+  return /cuda error: device kernel image is invalid|stack-based buffer|llama-server process has terminated/i.test(message);
+}
+
 export async function readJson<T>(response: Response, fallback: string) {
   if (!response.ok) {
     const message = (await response.text()).trim() || fallback;

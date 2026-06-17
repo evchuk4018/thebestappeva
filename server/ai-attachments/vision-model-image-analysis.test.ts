@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { serverConfig } from '../config';
-import { createImageAnalysisVisionSession } from './vision-model-image-analysis';
+import { createImageAnalysisVisionSession, resetImageAnalysisVisionStateForTests } from './vision-model-image-analysis';
 
 const originalAnalysisModel = serverConfig.aiImageAnalysisVisionModel;
 const originalAnalysisTimeoutMs = serverConfig.aiImageAnalysisVisionTimeoutMs;
 
 function withAnalysisConfig(action: () => Promise<void>) {
+  resetImageAnalysisVisionStateForTests();
   serverConfig.aiImageAnalysisVisionModel = 'qwen3-vl:8b';
   serverConfig.aiImageAnalysisVisionTimeoutMs = 30000;
   return action().finally(() => {
+    resetImageAnalysisVisionStateForTests();
     serverConfig.aiImageAnalysisVisionModel = originalAnalysisModel;
     serverConfig.aiImageAnalysisVisionTimeoutMs = originalAnalysisTimeoutMs;
   });
@@ -45,8 +47,8 @@ test('strict image-analysis policy evicts other models and unloads on the final 
     await withAnalysisConfig(async () => {
       const session = await createImageAnalysisVisionSession();
       try {
-        const first = await session.queryJson('full', false, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string }>);
-        const second = await session.queryJson('left', true, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string }>);
+        const first = await session.queryJson('full', false, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string; label: string }>);
+        const second = await session.queryJson('left', true, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string; label: string }>);
         assert.equal(first.model, 'qwen3-vl:8b');
         assert.equal(second.value[0]?.id, 'obj_1');
       } finally {
@@ -63,7 +65,7 @@ test('strict image-analysis policy evicts other models and unloads on the final 
   }
 });
 
-test('strict image-analysis policy does not retry on CPU or switch models after a GPU failure', async () => {
+test('strict image-analysis policy retries on CPU after a GPU failure', async () => {
   const originalFetch = globalThis.fetch;
   const chatBodies: string[] = [];
 
@@ -78,7 +80,12 @@ test('strict image-analysis policy does not retry on CPU or switch models after 
     }
     if (url.endsWith('/api/chat')) {
       chatBodies.push(body);
-      return new Response('CUDA error: device kernel image is invalid', { status: 500 });
+      if (chatBodies.length === 1) {
+        return new Response('CUDA error: device kernel image is invalid', { status: 500 });
+      }
+      return new Response(JSON.stringify({ message: { content: '[{"id":"obj_1","label":"zone","confidence":0.9}]' } }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
     return new Response(JSON.stringify({ done: true, response: '' }), { headers: { 'Content-Type': 'application/json' } });
   };
@@ -86,16 +93,21 @@ test('strict image-analysis policy does not retry on CPU or switch models after 
   try {
     await withAnalysisConfig(async () => {
       const session = await createImageAnalysisVisionSession();
-      await assert.rejects(
-        () => session.queryJson('full', true, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string }>),
-        /CUDA error: device kernel image is invalid/i,
-      );
-      await session.dispose();
+      try {
+        const first = await session.queryJson('full', false, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string; label: string }>);
+        const second = await session.queryJson('left', true, 'ZmFrZQ==', ['Label objects.'], (value) => value as Array<{ id: string; label: string }>);
+        assert.equal(first.value[0]?.id, 'obj_1');
+        assert.equal(second.value[0]?.label, 'zone');
+      } finally {
+        await session.dispose();
+      }
     });
 
-    assert.equal(chatBodies.length, 1);
+    assert.equal(chatBodies.length, 3);
     assert.match(chatBodies[0] ?? '', /"model":"qwen3-vl:8b"/);
     assert.doesNotMatch(chatBodies[0] ?? '', /"num_gpu"/);
+    assert.match(chatBodies[1] ?? '', /"num_gpu"\s*:\s*0/);
+    assert.match(chatBodies[2] ?? '', /"num_gpu"\s*:\s*0/);
   } finally {
     globalThis.fetch = originalFetch;
   }
