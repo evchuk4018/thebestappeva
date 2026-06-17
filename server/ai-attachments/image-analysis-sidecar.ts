@@ -11,7 +11,38 @@ export interface ImageAnalysisSidecarResult {
   sceneGraph: AiImageSceneGraph;
 }
 
+let runSidecarHook: ((args: string[]) => Promise<string>) | null = null;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeSceneGraphForSidecar(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.objects)) {
+    return value;
+  }
+  return {
+    ...value,
+    objects: value.objects.map((item) => {
+      if (!isRecord(item)) {
+        return item;
+      }
+      const normalized = { ...item };
+      if (normalized.polygon === null) {
+        delete normalized.polygon;
+      }
+      if (normalized.line === null) {
+        delete normalized.line;
+      }
+      return normalized;
+    }),
+  };
+}
+
 function runSidecar(args: string[]) {
+  if (runSidecarHook) {
+    return runSidecarHook(args);
+  }
   return new Promise<string>((resolve, reject) => {
     const child = spawn(
       serverConfig.aiImageAnalysisPythonCommand,
@@ -44,9 +75,9 @@ function runSidecar(args: string[]) {
 
 export async function analyzeImageWithSidecar(filePath: string): Promise<ImageAnalysisSidecarResult> {
   const raw = await runSidecar(['--analyze', filePath]);
-  let payload: { debugImages?: Record<string, string>; sceneGraph?: AiImageSceneGraph };
+  let payload: { debugImages?: Record<string, string>; sceneGraph?: unknown };
   try {
-    payload = JSON.parse(raw) as { debugImages?: Record<string, string>; sceneGraph?: AiImageSceneGraph };
+    payload = JSON.parse(raw) as { debugImages?: Record<string, string>; sceneGraph?: unknown };
   } catch {
     throw new HttpError(502, 'The local image-analysis sidecar returned invalid JSON.');
   }
@@ -55,9 +86,13 @@ export async function analyzeImageWithSidecar(filePath: string): Promise<ImageAn
   }
 
   return {
-    sceneGraph: parseAiImageSceneGraph(payload.sceneGraph, 'Image analysis sidecar scene graph'),
+    sceneGraph: parseAiImageSceneGraph(normalizeSceneGraphForSidecar(payload.sceneGraph), 'Image analysis sidecar scene graph'),
     debugImages: Object.fromEntries(
       Object.entries(payload.debugImages ?? {}).map(([name, base64Data]) => [name, Buffer.from(base64Data, 'base64')]),
     ),
   };
+}
+
+export function setImageAnalysisSidecarHookForTests(hook: typeof runSidecarHook) {
+  runSidecarHook = hook;
 }

@@ -61,20 +61,21 @@ def extract_geometry(image: Image.Image) -> tuple[dict[str, Any], dict[str, str]
         shape_type, line = _classify_shape(len(approx), bbox)
         palette = dominant_colors(region)
         polygon = [[int(point[0][0]), int(point[0][1])] for point in approx]
-        objects.append(
-            {
-                "id": f"obj_{len(objects) + 1}",
-                "type": shape_type,
-                "bbox": bbox,
-                "polygon": polygon if len(polygon) >= 3 else None,
-                "line": line,
-                "dominantColors": palette,
-                "fill": palette[0],
-                "stroke": palette[1] if len(palette) > 1 else palette[0],
-                "crops": crop_name_for_bbox(bbox, image.width),
-                "confidence": min(0.98, 0.45 + area / max(1, image.width * image.height)),
-            }
-        )
+        obj = {
+            "id": f"obj_{len(objects) + 1}",
+            "type": shape_type,
+            "bbox": bbox,
+            "dominantColors": palette,
+            "fill": palette[0],
+            "stroke": palette[1] if len(palette) > 1 else palette[0],
+            "crops": crop_name_for_bbox(bbox, image.width),
+            "confidence": min(0.98, 0.45 + area / max(1, image.width * image.height)),
+        }
+        if len(polygon) >= 3:
+            obj["polygon"] = polygon
+        if line is not None:
+            obj["line"] = line
+        objects.append(obj)
 
     background = rgb_to_hex(image_rgb.reshape(-1, 3)[0]) if image_rgb.size else "#ffffff"
     scene_graph = {

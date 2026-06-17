@@ -42,7 +42,10 @@ const imageAttachment = {
 
 const sceneGraph: AiImageSceneGraph = {
   canvas: { width: 640, height: 480, background: '#ffffff' },
-  objects: [{ id: 'obj_1', type: 'rectangle', label: 'left_zone', bbox: [0, 0, 120, 120], dominantColors: ['#ff0000'], fill: '#ff0000', stroke: '#000000', crops: ['full', 'left'], confidence: 0.9 }],
+  objects: [
+    { id: 'obj_1', type: 'rectangle', label: 'left_zone', bbox: [0, 0, 120, 120], dominantColors: ['#ff0000'], fill: '#ff0000', stroke: '#000000', crops: ['full', 'left'], confidence: 0.9 },
+    { id: 'obj_2', type: 'line', label: 'divider', bbox: [121, 0, 123, 120], line: [122, 0, 122, 120], dominantColors: ['#000000'], fill: '#000000', stroke: '#000000', crops: ['full', 'center'], confidence: 0.92 },
+  ],
   text: [{ value: 'R1', bbox: [5, 5, 20, 20], confidence: 0.9, objectId: 'obj_1' }],
   relationships: [],
   uncertain: [],
@@ -104,6 +107,7 @@ test('image-analysis route returns cached or freshly analyzed scene graphs', asy
     await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true } } as never, first as never);
     assert.equal(first.statusCode, 200);
     assert.equal((first.body as { cached: boolean }).cached, false);
+    assert.deepEqual((first.body as { sceneGraph: AiImageSceneGraph }).sceneGraph.objects[1]?.line, [122, 0, 122, 120]);
 
     const second = createResponseCapture();
     await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: {} } as never, second as never);

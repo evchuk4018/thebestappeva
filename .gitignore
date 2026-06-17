@@ -6,6 +6,8 @@ coverage/
 .local-data/
 .local-bin/
 .DS_Store
+__pycache__/
+*.pyc
 *.log
 .env
 .env*

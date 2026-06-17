@@ -15,7 +15,26 @@ const attachment = {
 
 const sceneGraph = {
   canvas: { width: 640, height: 480, background: '#ffffff' },
-  objects: [{ id: 'obj_1', type: 'rectangle', bbox: [0, 0, 100, 100], dominantColors: ['#ff0000'], crops: ['full', 'left'], confidence: 0.9 }],
+  objects: [
+    {
+      id: 'obj_1',
+      type: 'rectangle',
+      bbox: [0, 0, 100, 100],
+      polygon: [[0, 0], [100, 0], [100, 100], [0, 100]],
+      dominantColors: ['#ff0000'],
+      crops: ['full', 'left'],
+      confidence: 0.9,
+    },
+    {
+      id: 'obj_2',
+      type: 'line',
+      bbox: [110, 0, 112, 100],
+      line: [111, 0, 111, 100],
+      dominantColors: ['#000000'],
+      crops: ['full', 'center'],
+      confidence: 0.88,
+    },
+  ],
   text: [],
   relationships: [],
   uncertain: [],
@@ -50,7 +69,7 @@ test('extract_image_scene proxies the structured analysis route', async () => {
     }
     assert.equal(result.ok, true);
     assert.equal(result.data?.imageId, attachment.id);
-    assert.equal((result.data?.sceneGraph as { objects: unknown[] }).objects.length, 1);
+    assert.deepEqual((result.data?.sceneGraph as { objects: Array<{ line?: number[] }> }).objects[1]?.line, [111, 0, 111, 100]);
   } finally {
     globalThis.fetch = originalFetch;
   }

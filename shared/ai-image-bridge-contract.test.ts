@@ -21,17 +21,31 @@ const attachment = {
 
 const sceneGraph = {
   canvas: { width: 640, height: 480, background: '#ffffff' },
-  objects: [{
-    id: 'obj_1',
-    type: 'rectangle',
-    label: 'left_red_zone',
-    bbox: [0, 80, 180, 500],
-    dominantColors: ['#d71920'],
-    fill: '#d71920',
-    stroke: '#000000',
-    crops: ['full', 'left'],
-    confidence: 0.85,
-  }],
+  objects: [
+    {
+      id: 'obj_1',
+      type: 'rectangle',
+      label: 'left_red_zone',
+      bbox: [0, 80, 180, 500],
+      dominantColors: ['#d71920'],
+      fill: '#d71920',
+      stroke: '#000000',
+      crops: ['full', 'left'],
+      confidence: 0.85,
+    },
+    {
+      id: 'obj_2',
+      type: 'line',
+      label: 'divider',
+      bbox: [181, 80, 183, 500],
+      line: [182, 80, 182, 500],
+      dominantColors: ['#000000'],
+      fill: '#000000',
+      stroke: '#000000',
+      crops: ['full', 'center'],
+      confidence: 0.92,
+    },
+  ],
   text: [{ value: 'R1', bbox: [45, 120, 70, 145], confidence: 0.9, objectId: 'obj_1' }],
   relationships: [{ type: 'label-for', from: 'R1', to: 'obj_1', confidence: 0.9 }],
   uncertain: [],
@@ -48,6 +62,7 @@ test('parses image-analysis payloads with scene graphs', () => {
   const payload = parseAiImageAnalysisPayload({ attachment, sceneGraph, cached: true, model: 'qwen2.5vl:7b' });
   assert.equal(payload.cached, true);
   assert.equal(payload.sceneGraph.objects[0]?.label, 'left_red_zone');
+  assert.deepEqual(payload.sceneGraph.objects[1]?.line, [182, 80, 182, 500]);
 });
 
 test('parses image-compare payloads with patch guidance', () => {
@@ -66,4 +81,23 @@ test('parses image-compare payloads with patch guidance', () => {
   });
   assert.equal(payload.comparison.format, 'svg');
   assert.equal(payload.comparison.issues[0]?.kind, 'moved-object');
+});
+
+test('rejects null optional geometry fields in shared scene-graph contracts', () => {
+  assert.throws(
+    () => parseAiImageAnalysisPayload({
+      attachment,
+      cached: false,
+      model: 'qwen2.5vl:7b',
+      sceneGraph: {
+        ...sceneGraph,
+        objects: [{
+          ...sceneGraph.objects[0],
+          polygon: null,
+          line: null,
+        }],
+      },
+    }),
+    /Expected an array/,
+  );
 });
