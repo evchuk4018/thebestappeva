@@ -165,6 +165,8 @@ export default function AiTab() {
         selectedChatId={selectedChatId}
         sidebarOpen={sidebarOpen}
         tools={tools}
+        hydrationStatus={hydrationStatus}
+        persistenceError={persistenceError}
         onClose={() => setSidebarOpen(false)}
         onDeleteChat={handleDeleteChat}
         onNavigateHome={() => navigate('/')}

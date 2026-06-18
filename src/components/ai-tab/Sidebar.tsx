@@ -1,10 +1,13 @@
-import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Wrench } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Wrench, X } from 'lucide-react';
 import { Chat } from './types';
+import { searchChats } from './chat-search';
 import { SidebarChatsPanel } from './SidebarChatsPanel';
 import { ToolsPanel } from './ToolsPanel';
 import { ToolDefinition } from './tools/types';
 
 type SidebarPanel = 'chats' | 'tools';
+type HydrationStatus = 'loading' | 'ready' | 'error';
 
 interface SidebarTool extends ToolDefinition {
   enabled: boolean;
@@ -17,6 +20,8 @@ interface SidebarProps {
   selectedChatId: string | null;
   sidebarOpen: boolean;
   tools: SidebarTool[];
+  hydrationStatus?: HydrationStatus;
+  persistenceError?: string | null;
   onClose: () => void;
   onDeleteChat: (chatId: string, event: React.MouseEvent) => void;
   onNavigateHome: () => void;
@@ -39,6 +44,8 @@ export function Sidebar({
   selectedChatId,
   sidebarOpen,
   tools,
+  hydrationStatus = 'ready',
+  persistenceError = null,
   onClose,
   onDeleteChat,
   onNavigateHome,
@@ -48,6 +55,32 @@ export function Sidebar({
   onSelectPanel,
   onToggleTool,
 }: SidebarProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const showSearch = searchOpen && activePanel === 'chats';
+  const filteredChats = useMemo(
+    () => (showSearch ? searchChats(chats, searchQuery) : chats),
+    [chats, searchQuery, showSearch],
+  );
+
+  const resetSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  const toggleSearch = () => {
+    if (activePanel !== 'chats') {
+      onSelectPanel('chats');
+    }
+    setSearchOpen((prev) => {
+      if (prev) {
+        setSearchQuery('');
+      }
+      return !prev;
+    });
+  };
+
   return (
     <div
       className={`fixed bottom-0 left-0 top-0 z-40 flex h-full w-72 transform flex-col justify-between border-r border-[#242422]/60 bg-[#121210] transition-transform duration-300 md:relative md:w-64 lg:w-72 ${
@@ -58,7 +91,14 @@ export function Sidebar({
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <span className="font-serif text-2xl font-medium tracking-wide text-[#efeae4]">Ollama</span>
           <div className="flex items-center gap-1.5">
-            <button type="button" className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#20201e] hover:text-zinc-200">
+            <button
+              type="button"
+              onClick={toggleSearch}
+              title="Search chats"
+              className={`rounded-lg p-1.5 hover:bg-[#20201e] hover:text-zinc-200 ${
+                showSearch ? 'bg-[#20201e] text-zinc-200' : 'text-zinc-400'
+              }`}
+            >
               <Search size={16} />
             </button>
             <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-[#20201e] hover:text-zinc-200">
@@ -66,6 +106,34 @@ export function Sidebar({
             </button>
           </div>
         </div>
+
+        {showSearch && (
+          <div className="px-3 pb-1">
+            <label className="flex items-center gap-2 rounded-lg border border-[#2f2f2b] bg-[#1a1a18] px-3 py-2">
+              <Search size={14} className="text-zinc-500" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    resetSearch();
+                  }
+                }}
+                placeholder="Search chats or messages"
+                className="w-full bg-transparent text-xs text-[#efeae4] outline-none placeholder:text-zinc-600"
+              />
+              <button
+                type="button"
+                onClick={resetSearch}
+                title="Close search"
+                className="rounded p-0.5 text-zinc-500 hover:text-zinc-200"
+              >
+                <X size={12} />
+              </button>
+            </label>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1 px-3 py-2">
           <button
@@ -108,12 +176,20 @@ export function Sidebar({
 
         {activePanel === 'chats' ? (
           <SidebarChatsPanel
-            chats={chats}
+            chats={filteredChats}
             isMobile={isMobile}
             selectedChatId={selectedChatId}
+            status={hydrationStatus}
+            errorMessage={persistenceError}
+            searchActive={showSearch && searchQuery.trim().length > 0}
+            searchQuery={searchQuery}
+            totalChats={chats.length}
             onClose={onClose}
             onDeleteChat={onDeleteChat}
-            onSelectChat={onSelectChat}
+            onSelectChat={(chatId) => {
+              resetSearch();
+              onSelectChat(chatId);
+            }}
           />
         ) : (
           <ToolsPanel tools={tools} onToggleTool={onToggleTool} />

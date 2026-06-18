@@ -5,6 +5,11 @@ interface SidebarChatsPanelProps {
   chats: Chat[];
   isMobile: boolean;
   selectedChatId: string | null;
+  status?: 'loading' | 'ready' | 'error';
+  errorMessage?: string | null;
+  searchActive?: boolean;
+  searchQuery?: string;
+  totalChats?: number;
   onClose: () => void;
   onDeleteChat: (chatId: string, event: React.MouseEvent) => void;
   onSelectChat: (chatId: string) => void;
@@ -14,20 +19,38 @@ export function SidebarChatsPanel({
   chats,
   isMobile,
   selectedChatId,
+  status = 'ready',
+  errorMessage,
+  searchActive = false,
+  searchQuery = '',
+  totalChats,
   onClose,
   onDeleteChat,
   onSelectChat,
 }: SidebarChatsPanelProps) {
+  const trimmedQuery = searchQuery.trim();
+  const showLoading = status === 'loading';
+  const showError = status === 'error';
+  const showEmpty = !showLoading && !showError && chats.length === 0;
+
   return (
     <div className="mt-5 flex flex-1 flex-col px-2 pb-4">
       <div className="mb-1.5 flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-        <span>Recents</span>
+        <span>{searchActive ? 'Results' : 'Recents'}</span>
         <button type="button" className="rounded p-0.5 text-zinc-600 hover:text-zinc-400">
           <Sliders size={11} />
         </button>
       </div>
       <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto pr-1">
-        {chats.map((chat) => {
+        {showLoading && (
+          <div className="px-3 py-4 text-xs italic text-zinc-500">Loading chats…</div>
+        )}
+        {showError && (
+          <div className="px-3 py-4 text-xs text-red-400">
+            {errorMessage || 'Unable to load chats.'}
+          </div>
+        )}
+        {!showLoading && !showError && chats.map((chat) => {
           const isActive = chat.id === selectedChatId;
           return (
             <div
@@ -54,7 +77,16 @@ export function SidebarChatsPanel({
             </div>
           );
         })}
-        {chats.length === 0 && <div className="px-3 py-4 text-xs italic text-zinc-600">No chats yet</div>}
+        {showEmpty && searchActive && trimmedQuery && (
+          <div className="px-3 py-4 text-xs italic text-zinc-500">
+            No chats found for “{trimmedQuery}”.
+          </div>
+        )}
+        {showEmpty && (!searchActive || !trimmedQuery) && (
+          <div className="px-3 py-4 text-xs italic text-zinc-600">
+            {totalChats && totalChats > 0 ? 'No matching chats.' : 'No chats yet'}
+          </div>
+        )}
       </div>
     </div>
   );
