@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { ChatComposer } from './ChatComposer';
 import { PromptSuggestions } from './PromptSuggestions';
 import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import type { PendingAttachment } from './useAiAttachments';
+import { pickWorkStatusMessage } from './work-status-messages';
 
 interface EmptyStateProps {
   availability: OllamaAvailability;
@@ -30,6 +32,7 @@ interface EmptyStateProps {
 }
 
 export function EmptyState(props: EmptyStateProps) {
+  const [workStatusMessage] = useState(pickWorkStatusMessage);
   return (
     <div className="my-auto flex w-full max-w-xl flex-col items-center justify-center py-12 text-center md:max-w-2xl md:py-20">
       <div className="mb-6 flex items-center justify-center">
@@ -45,7 +48,7 @@ export function EmptyState(props: EmptyStateProps) {
       </div>
 
       <h1 className="mb-3 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">
-        {props.currentProvider === 'deepseek' ? 'DeepSeek BYOK chat' : 'Local Ollama chat'}
+        {workStatusMessage}
       </h1>
       <p className="mb-8 max-w-xl text-sm leading-relaxed text-zinc-400">
         {props.currentProvider === 'deepseek'
