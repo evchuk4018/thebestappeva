@@ -39,6 +39,7 @@ export interface ToolExecutionContext {
   model?: string;
   provider?: ModelProvider;
   signal?: AbortSignal;
+  chatId?: string;
 }
 
 export interface ToolExecutionResult extends ToolResult {

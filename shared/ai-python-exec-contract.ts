@@ -1,6 +1,10 @@
+export type PythonExecGeneratedFileKind = 'image' | 'text' | 'binary';
+export type PythonExecSessionStatus = 'ready' | 'reset' | 'recovered';
+
 export interface PythonExecRequest {
   code: string;
   files?: string[];
+  chatId?: string;
 }
 
 export interface PythonExecStagedFile {
@@ -14,6 +18,9 @@ export interface PythonExecGeneratedFile {
   sizeBytes: number;
   preview: string;
   truncated: boolean;
+  kind?: PythonExecGeneratedFileKind;
+  mediaType?: string;
+  downloadUrl?: string;
 }
 
 export interface PythonExecResponse extends Record<string, unknown> {
@@ -25,4 +32,6 @@ export interface PythonExecResponse extends Record<string, unknown> {
   stderrTruncated: boolean;
   stdout: string;
   stdoutTruncated: boolean;
+  chatId?: string;
+  sessionStatus?: PythonExecSessionStatus;
 }

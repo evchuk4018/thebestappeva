@@ -109,19 +109,15 @@ export async function resolveThinkingTurn({
           toolCallId: toolCall.id,
         };
 
-        const toolCallStep = liveAssistant.appendToolCall(toPersistedToolInvocation(invocation), reply.model);
-        const retryIndicator = scheduleImageToolRetryIndicator(invocation.toolId, () => {
-          liveAssistant.updateToolCall(toolCallStep.stepId, {
-            status: 'retrying',
-            attempt: 2,
-            message: 'The first image attempt timed out. Retrying once.',
-          }, reply.model);
+const toolCallStep = liveAssistant.appendToolCall(toPersistedToolInvocation(invocation), reply.model);
+        const retryIndicator = scheduleImageToolRetryIndicator(invocation.toolId, (payload) => {
+          liveAssistant.updateToolCall(toolCallStep.stepId, payload, reply.model);
         });
         let execution;
         try {
           execution = turnToolState.disabledToolIds.has(invocation.toolId)
             ? buildDisabledToolResult(invocation)
-            : await executeToolInvocation(invocation, roundToolEntries, { model, provider, signal });
+            : await executeToolInvocation(invocation, roundToolEntries, { model, provider, signal, chatId: chat.id });
         } finally {
           retryIndicator.cancel();
         }

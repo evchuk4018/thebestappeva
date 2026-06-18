@@ -18,6 +18,7 @@ export async function executePython(params: PythonExecRequest & { signal?: Abort
     body: JSON.stringify({
       code: params.code,
       ...(params.files?.length ? { files: params.files } : {}),
+      ...(params.chatId ? { chatId: params.chatId } : {}),
     } satisfies PythonExecRequest),
     signal: params.signal,
   });

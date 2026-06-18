@@ -1,6 +1,7 @@
 import { startAppServerProcess } from './bootstrap/app-server';
 import { createLogger } from './bootstrap/log';
 import { ensureOllamaModel } from './bootstrap/ollama';
+import { ensurePythonExecRuntime } from './bootstrap/python-exec';
 import { ensureSearxng } from './bootstrap/searxng';
 
 const logger = createLogger('ai:dev');
@@ -9,6 +10,7 @@ const requiredModel = 'qwen3.5:9b';
 async function main() {
   await ensureOllamaModel(logger, requiredModel);
   await ensureSearxng(logger, true);
+  await ensurePythonExecRuntime(logger, true);
   await startAppServerProcess(logger);
 }
 

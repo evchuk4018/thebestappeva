@@ -115,6 +115,7 @@ export function parsePythonExecRequest(value: unknown): PythonExecRequest {
   const files = Array.isArray(record.files)
     ? record.files.filter((entry): entry is string => typeof entry === 'string')
     : undefined;
+  const chatId = typeof record.chatId === 'string' && record.chatId.trim() ? record.chatId.trim() : undefined;
 
   if (!code.trim()) {
     throw new HttpError(400, 'Missing required "code" field.');
@@ -126,7 +127,11 @@ export function parsePythonExecRequest(value: unknown): PythonExecRequest {
     throw new HttpError(400, `Python exec supports at most ${serverConfig.aiPythonExecMaxFiles} staged files.`);
   }
 
-  return { code, ...(files?.length ? { files } : {}) };
+  return {
+    code,
+    ...(files?.length ? { files } : {}),
+    ...(chatId ? { chatId } : {}),
+  };
 }
 
 export function runPythonExecProcess({ args, command, stdin, timeoutMs }: PythonExecRunnerInput) {

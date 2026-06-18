@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { PythonTraceInspection } from './python-trace';
+import { PythonGeneratedFiles } from './python-generated-files';
 
 interface PythonTraceViewerProps {
   inspection: PythonTraceInspection;
@@ -52,11 +53,7 @@ export function PythonTraceViewer({ inspection }: PythonTraceViewerProps) {
         </Section>
 
         <Section title="Generated Files">
-          <p className="whitespace-pre-line text-xs leading-relaxed text-zinc-300">
-            {inspection.generatedFiles.length
-              ? inspection.generatedFiles.map((file) => `${file.path} (${file.sizeBytes} bytes)`).join('\n')
-              : 'No generated files.'}
-          </p>
+          <PythonGeneratedFiles files={inspection.generatedFiles} />
         </Section>
       </div>
     </details>

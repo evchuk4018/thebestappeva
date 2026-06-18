@@ -46,12 +46,12 @@ export const pythonExecTool: ToolRegistryEntry = {
     id: PYTHON_EXEC_TOOL_ID,
     label: 'Python Exec',
     alias: '/python.exec',
-    description: 'Runs private Python code in a local sandbox with writable work/ and staged repo files in inputs/.',
-    enabledByDefault: false,
+    description: 'Runs private Python code in an isolated per-chat sandbox with persistent variables and imports across calls. Charts, images, tables, and generated files are rendered inline.',
+    enabledByDefault: true,
     functions: [
       {
         name: PYTHON_EXEC_FUNCTION_NAME,
-        description: 'Execute Python code privately. Requested repo files are copied into inputs/ and code runs in work/.',
+        description: 'Execute Python code privately in the chat workspace. Variables and imports persist across calls. Repo and attachment files are staged as read-only inputs and code runs in an isolated sandbox.',
         parameters: [
           { name: 'code', type: 'string', description: 'Python code to execute in the local sandbox.', required: true },
           {
@@ -74,6 +74,7 @@ export const pythonExecTool: ToolRegistryEntry = {
         code: readCode(invocation.args.code),
         files: readFiles(invocation.args.files),
         signal: context.signal,
+        ...(context.chatId ? { chatId: context.chatId } : {}),
       });
 
       return {
