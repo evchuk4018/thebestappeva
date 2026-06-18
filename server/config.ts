@@ -79,6 +79,7 @@ aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserComman
   aiPythonExecDockerImage: readStringEnv('AI_PYTHON_EXEC_DOCKER_IMAGE', 'thebestappeva-python-exec:latest'),
   aiPythonExecMemoryMb: readNumberEnv('AI_PYTHON_EXEC_MEMORY_MB', 512),
   aiPythonExecSessionIdleMs: readNumberEnv('AI_PYTHON_EXEC_SESSION_IDLE_MS', 300000),
+  aiPythonExecSmokeTimeoutMs: readNumberEnv('AI_PYTHON_EXEC_SMOKE_TIMEOUT_MS', 15000),
   aiPythonExecWorkspaceRoot: path.resolve(process.cwd(), readStringEnv('AI_PYTHON_EXEC_WORKSPACE_ROOT', '.local-data/ai-python-workspaces')),
   searxngBaseUrl: readStringEnv('SEARXNG_BASE_URL', 'http://127.0.0.1:8888').replace(/\/+$/, ''),
   webSearchTimeoutMs: readNumberEnv('WEB_SEARCH_TIMEOUT_MS', 10000),

@@ -1,29 +1,12 @@
-import type { ExecFileOptions } from 'node:child_process';
 import type { BootstrapLogger } from './log';
+import { createDockerDaemonEnsurer, type DockerDaemonEnsurerDeps } from './docker-daemon';
 
 const dockerComposeArgs = ['compose', '-f', 'docker-compose.searxng.yml'];
-const defaultDockerDesktopPath = 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe';
 const searxngStartupTimeoutMs = 15000;
 const searxngPollIntervalMs = 1200;
-const dockerStartupTimeoutMs = 60000;
-const dockerPollIntervalMs = 1500;
 
-interface WaitForConditionOptions {
-  timeoutMs: number;
-  intervalMs: number;
-}
-
-interface SearxngBootstrapDeps {
+interface SearxngBootstrapDeps extends DockerDaemonEnsurerDeps {
   fetch: typeof fetch;
-  fileExists: (path: string) => Promise<boolean>;
-  isCommandAvailable: (command: string, args?: string[]) => Promise<boolean>;
-  platform: NodeJS.Platform;
-  runCommand: (command: string, args: string[], options?: ExecFileOptions) => Promise<unknown>;
-  spawnDetachedCommand: (command: string, args: string[]) => Promise<void>;
-  waitForCondition: (
-    check: () => Promise<boolean>,
-    options: WaitForConditionOptions,
-  ) => Promise<boolean>;
 }
 
 interface SearxngBootstrapConfig {
@@ -35,18 +18,6 @@ function buildDockerCliMissingMessage(searxngBaseUrl: string) {
   return `Docker is unavailable. Install Docker Desktop and start SearXNG with \`docker compose -f docker-compose.searxng.yml up -d\`, or keep SearXNG available at ${searxngBaseUrl}.`;
 }
 
-function buildDockerDesktopMissingMessage(searxngBaseUrl: string, dockerDesktopPath: string) {
-  return `Docker Desktop was not found at ${dockerDesktopPath}. Start Docker manually and ensure SearXNG is available at ${searxngBaseUrl}.`;
-}
-
-function buildDockerDaemonTimeoutMessage(timeoutMs: number) {
-  return `Docker Desktop did not become ready within ${timeoutMs}ms. Ensure the Docker daemon is running and try again.`;
-}
-
-function buildDockerDaemonUnavailableMessage(searxngBaseUrl: string) {
-  return `Docker is installed but the daemon is unavailable. Start Docker so SearXNG can boot at ${searxngBaseUrl}.`;
-}
-
 function buildSearxngContainerFailureMessage(error: unknown) {
   return `${toErrorMessage(error, 'Unable to run docker compose.')} Ensure Docker can start the SearXNG container.`;
 }
@@ -55,22 +26,16 @@ function toErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-async function checkDockerDaemonReady(
-  runCommand: SearxngBootstrapDeps['runCommand'],
-) {
-  try {
-    await runCommand('docker', ['version', '--format', '{{.Server.Version}}']);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function createSearxngBootstrap(
   deps: SearxngBootstrapDeps,
   config: SearxngBootstrapConfig,
 ) {
-  const dockerDesktopPath = config.dockerDesktopPath ?? defaultDockerDesktopPath;
+  const daemonEnsurer = createDockerDaemonEnsurer(deps, {
+    dockerDesktopPath: config.dockerDesktopPath,
+    serviceLabel: 'SearXNG',
+    availabilityHint: `and ensure SearXNG is available at ${config.searxngBaseUrl}`,
+    degradeSuffix: 'Starting the app without SearXNG-backed web search.',
+  });
 
   async function isSearxngReady() {
     const searchUrl = new URL('/search', `${config.searxngBaseUrl}/`);
@@ -94,62 +59,6 @@ export function createSearxngBootstrap(
     return false;
   }
 
-  async function waitForDockerDaemon() {
-    return deps.waitForCondition(
-      () => checkDockerDaemonReady(deps.runCommand),
-      {
-        timeoutMs: dockerStartupTimeoutMs,
-        intervalMs: dockerPollIntervalMs,
-      },
-    );
-  }
-
-  async function ensureDockerDaemon(logger: BootstrapLogger, required: boolean) {
-    if (await checkDockerDaemonReady(deps.runCommand)) {
-      logger.step('Docker daemon is ready.');
-      return true;
-    }
-
-    if (deps.platform !== 'win32') {
-      return degradeOrThrow(
-        logger,
-        required,
-        buildDockerDaemonUnavailableMessage(config.searxngBaseUrl),
-      );
-    }
-
-    if (!(await deps.fileExists(dockerDesktopPath))) {
-      return degradeOrThrow(
-        logger,
-        required,
-        buildDockerDesktopMissingMessage(config.searxngBaseUrl, dockerDesktopPath),
-      );
-    }
-
-    logger.step(`Docker daemon is unavailable. Launching Docker Desktop from ${dockerDesktopPath}...`);
-    try {
-      await deps.spawnDetachedCommand(dockerDesktopPath, []);
-    } catch (error) {
-      return degradeOrThrow(
-        logger,
-        required,
-        `Unable to launch Docker Desktop. ${toErrorMessage(error, 'Launch failed.')}`,
-      );
-    }
-
-    logger.step('Waiting for Docker Desktop to become ready...');
-    if (!(await waitForDockerDaemon())) {
-      return degradeOrThrow(
-        logger,
-        required,
-        buildDockerDaemonTimeoutMessage(dockerStartupTimeoutMs),
-      );
-    }
-
-    logger.step('Docker daemon is ready.');
-    return true;
-  }
-
   async function ensureSearxng(logger: BootstrapLogger, required = false) {
     logger.step(`Checking SearXNG at ${config.searxngBaseUrl}...`);
     if (await isSearxngReady().catch(() => false)) {
@@ -166,7 +75,7 @@ export function createSearxngBootstrap(
       );
     }
 
-    if (!(await ensureDockerDaemon(logger, required))) {
+    if (!(await daemonEnsurer.ensureDockerDaemon(logger, required))) {
       return false;
     }
 
@@ -201,4 +110,3 @@ export function createSearxngBootstrap(
 
   return { ensureSearxng };
 }
-
