@@ -64,6 +64,19 @@ function shouldReadImageDimensions(file: File) {
   return file.type.startsWith('image/');
 }
 
+interface AiImageToolRequestOptions {
+  signal?: AbortSignal;
+  toolCallId?: string;
+  requestId?: string;
+}
+
+function buildImageRequestHeaders(options: AiImageToolRequestOptions = {}) {
+  return {
+    ...(options.toolCallId ? { 'x-ai-tool-call-id': options.toolCallId } : {}),
+    'x-ai-image-request-id': options.requestId ?? options.toolCallId ?? globalThis.crypto?.randomUUID?.() ?? `image-${Date.now()}`,
+  };
+}
+
 async function readImageDimensions(file: File) {
   if (!shouldReadImageDimensions(file)) {
     return {};
@@ -120,29 +133,37 @@ export async function deleteAiAttachment(attachmentId: string) {
   await readJsonResponse(response);
 }
 
-export async function askAiImageQuestion(attachmentId: string, question: string) {
+export async function askAiImageQuestion(attachmentId: string, question: string, options: AiImageToolRequestOptions = {}) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}/image-query`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
     body: JSON.stringify({ question }),
+    signal: options.signal,
   });
 
   return parseAiImageQueryPayload(await readJsonResponse(response));
 }
 
-export async function describeAiImage(attachmentId: string) {
+export async function describeAiImage(attachmentId: string, options: AiImageToolRequestOptions = {}) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}/image-describe`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
+    signal: options.signal,
   });
   return parseAiImageDescribePayload(await readJsonResponse(response));
 }
 
-export async function analyzeAiImage(attachmentId: string, refresh = false, detail: AiImageAnalysisDetail = 'layout') {
+export async function analyzeAiImage(
+  attachmentId: string,
+  refresh = false,
+  detail: AiImageAnalysisDetail = 'layout',
+  options: AiImageToolRequestOptions = {},
+) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}/image-analysis`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
     body: JSON.stringify({ refresh, detail }),
+    signal: options.signal,
   });
   return parseAiImageAnalysisPayload(await readJsonResponse(response));
 }
@@ -153,11 +174,13 @@ export async function compareAiGeneratedImage(
   refresh = false,
   iteration?: number,
   maxIterations?: number,
+  options: AiImageToolRequestOptions = {},
 ) {
   const response = await fetch(`/api/ai/attachments/${attachmentId}/image-compare`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
     body: JSON.stringify({ format: 'svg', content, refresh, iteration, maxIterations }),
+    signal: options.signal,
   });
   return parseAiImageComparePayload(await readJsonResponse(response));
 }

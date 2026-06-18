@@ -5,10 +5,12 @@ import path from 'node:path';
 import test from 'node:test';
 import type { AiImageSceneGraph } from '../../shared/ai-image-bridge-contract';
 import { serverConfig } from '../config';
+import { HttpError } from '../http';
 import { handlePostAiImageAnalysis, handlePostAiImageCompare, handlePostAiImageDescribe, handlePostAiImageQuestion } from './image-routes';
 import { saveAttachmentRecord, saveAttachmentSource } from './storage';
 import { setImageAnalysisTestHooksForTests } from './image-analysis-service';
 import { setRenderSvgHookForTests } from './image-compare-service';
+import { setImageToolLogSinkForTests, setImageToolTimingForTests } from './image-tool-runtime';
 import { setVisionServiceTestHooksForTests } from './vision-service';
 
 function createResponseCapture() {
@@ -65,6 +67,11 @@ const sceneGraph: AiImageSceneGraph = {
     passes: ['full', 'left', 'center', 'right', 'text-ocr'],
   },
 };
+
+test.afterEach(() => {
+  setImageToolLogSinkForTests(null);
+  setImageToolTimingForTests(null);
+});
 
 test('image query route sends stored image bytes plus the question to Ollama', async () => {
   const originalStoragePath = serverConfig.aiAttachmentStoragePath;
@@ -156,8 +163,12 @@ test('image-analysis route returns cached or freshly analyzed scene graphs', asy
   const originalStoragePath = serverConfig.aiAttachmentStoragePath;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-analysis-'));
   serverConfig.aiAttachmentStoragePath = tempDir;
+  let analyzeCalls = 0;
   setImageAnalysisTestHooksForTests({
-    analyzeFile: async () => ({ sceneGraph, debugImages: {} }),
+    analyzeFile: async () => {
+      analyzeCalls += 1;
+      return { sceneGraph, debugImages: {} };
+    },
     queryJson: async () => ({ model: 'qwen2.5vl:7b', value: [{ id: 'obj_1', label: 'left_zone', type: 'rectangle', confidence: 0.95 }] }),
   });
 
@@ -175,11 +186,134 @@ test('image-analysis route returns cached or freshly analyzed scene graphs', asy
     const second = createResponseCapture();
     await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { detail: 'semantic' } } as never, second as never);
     assert.equal((second.body as { cached: boolean }).cached, true);
+    assert.equal(analyzeCalls, 1);
 
     const layout = createResponseCapture();
     await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: {} } as never, layout as never);
     assert.equal((layout.body as { detail: string }).detail, 'layout');
     assert.equal((layout.body as { cached: boolean }).cached, false);
+
+    const refreshed = createResponseCapture();
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, refreshed as never);
+    assert.equal((refreshed.body as { cached: boolean }).cached, false);
+    assert.equal(analyzeCalls, 3);
+  } finally {
+    setImageAnalysisTestHooksForTests({});
+    serverConfig.aiAttachmentStoragePath = originalStoragePath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('image-analysis route retries one timed-out semantic extraction and logs the stalled provider stage', async () => {
+  const originalStoragePath = serverConfig.aiAttachmentStoragePath;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-analysis-retry-'));
+  serverConfig.aiAttachmentStoragePath = tempDir;
+  const logs: Array<{ stage: string; attempt?: number; finalStatus?: string }> = [];
+  let semanticCalls = 0;
+  setImageToolTimingForTests({ attemptTimeoutMs: 10, retryDelayMs: 1, totalTimeoutMs: 40 });
+  setImageToolLogSinkForTests((record) => {
+    logs.push({ stage: record.stage, attempt: record.attempt, finalStatus: record.finalStatus });
+  });
+  setImageAnalysisTestHooksForTests({
+    analyzeFile: async () => ({ sceneGraph, debugImages: { contact: Buffer.from('debug') } }),
+    queryJson: async (_image, _instructions, _parser, options) => {
+      semanticCalls += 1;
+      if (semanticCalls === 1) {
+        return await new Promise<never>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+        });
+      }
+      return { model: 'qwen2.5vl:7b', value: [{ id: 'obj_1', label: 'left_zone', type: 'rectangle', confidence: 0.95 }] };
+    },
+  });
+
+  try {
+    await saveAttachmentSource(imageAttachment.id, '.png', Buffer.from('fake-image'));
+    await saveAttachmentRecord({ attachment: imageAttachment, sourceExtension: '.png' });
+
+    const response = createResponseCapture();
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, response as never);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(semanticCalls, 2);
+    assert.equal(logs.some((entry) => entry.stage === 'provider_request_started' && entry.attempt === 1), true);
+    assert.equal(logs.some((entry) => entry.stage === 'provider_response_received' && entry.attempt === 1), false);
+    assert.equal(logs.some((entry) => entry.stage === 'timeout' && entry.attempt === 1 && entry.finalStatus === 'retrying'), true);
+    assert.equal(logs.some((entry) => entry.stage === 'retry_started' && entry.attempt === 2), true);
+  } finally {
+    setImageToolLogSinkForTests(null);
+    setImageAnalysisTestHooksForTests({});
+    serverConfig.aiAttachmentStoragePath = originalStoragePath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('image-analysis route fails permanently after two timed-out attempts', async () => {
+  const originalStoragePath = serverConfig.aiAttachmentStoragePath;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-analysis-timeout-'));
+  serverConfig.aiAttachmentStoragePath = tempDir;
+  setImageToolTimingForTests({ attemptTimeoutMs: 10, retryDelayMs: 1, totalTimeoutMs: 40 });
+  setImageAnalysisTestHooksForTests({
+    analyzeFile: async () => ({ sceneGraph, debugImages: { contact: Buffer.from('debug') } }),
+    queryJson: async (_image, _instructions, _parser, options) => {
+      return await new Promise<never>((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+      });
+    },
+  });
+
+  try {
+    await saveAttachmentSource(imageAttachment.id, '.png', Buffer.from('fake-image'));
+    await saveAttachmentRecord({ attachment: imageAttachment, sourceExtension: '.png' });
+
+    const response = createResponseCapture();
+    await handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, response as never);
+
+    assert.equal(response.statusCode, 504);
+    assert.match(String((response.body as { error?: string }).error ?? ''), /timed out after two attempts/i);
+  } finally {
+    setImageAnalysisTestHooksForTests({});
+    serverConfig.aiAttachmentStoragePath = originalStoragePath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('image-analysis route does not retry permanent 400 failures and deduplicates concurrent matching refresh requests', async () => {
+  const originalStoragePath = serverConfig.aiAttachmentStoragePath;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-analysis-dedupe-'));
+  serverConfig.aiAttachmentStoragePath = tempDir;
+  let analyzeCalls = 0;
+  let releaseGate: (() => void) | null = null;
+  const gate = new Promise<void>((resolve) => {
+    releaseGate = resolve;
+  });
+  setImageAnalysisTestHooksForTests({
+    analyzeFile: async () => {
+      analyzeCalls += 1;
+      await gate;
+      return { sceneGraph, debugImages: { contact: Buffer.from('debug') } };
+    },
+    queryJson: async () => {
+      throw new HttpError(400, 'Bad image request.');
+    },
+  });
+
+  try {
+    await saveAttachmentSource(imageAttachment.id, '.png', Buffer.from('fake-image'));
+    await saveAttachmentRecord({ attachment: imageAttachment, sourceExtension: '.png' });
+
+    const first = createResponseCapture();
+    const second = createResponseCapture();
+    const pending = Promise.all([
+      handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, first as never),
+      handlePostAiImageAnalysis({ params: { attachmentId: imageAttachment.id }, body: { refresh: true, detail: 'semantic' } } as never, second as never),
+    ]);
+    releaseGate?.();
+    await pending;
+
+    assert.equal(first.statusCode, 400);
+    assert.equal(second.statusCode, 400);
+    assert.equal(analyzeCalls, 1);
   } finally {
     setImageAnalysisTestHooksForTests({});
     serverConfig.aiAttachmentStoragePath = originalStoragePath;

@@ -12,6 +12,7 @@ export type {
   AssistantAskUserTraceStep,
   AssistantMessage,
   AssistantMessageStatus,
+  ToolCallState,
   AssistantThinkingTraceStep,
   AssistantToolCallTraceStep,
   AssistantToolResultTraceStep,

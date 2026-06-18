@@ -2,6 +2,7 @@ import { AskUserCard } from './AskUserCard';
 import { PythonTraceViewer } from './PythonTraceViewer';
 import { shouldHideToolCallStep } from './ask-user';
 import { buildPythonTraceInspection } from './python-trace';
+import { isPendingToolCallStep } from './tool-call-progress';
 import { AskUserResponse, AssistantAskUserTraceStep, AssistantTraceStep } from './types';
 
 interface AssistantTracePanelProps {
@@ -33,15 +34,20 @@ function ToolCallStep({ inspectionIndex, step, steps }: {
   steps: AssistantTraceStep[];
 }) {
   const inspection = buildPythonTraceInspection(steps, inspectionIndex);
+  const isPending = isPendingToolCallStep(step, steps, inspectionIndex);
+  const stateLabel = isPending ? (step.toolState?.status === 'retrying' ? 'Retrying' : 'Running') : null;
 
   return (
     <div className="rounded-xl border border-[#2b3946] bg-[#16202a] px-3 py-2.5">
       <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em] text-[#7da8c7]">
         <span>Tool Call</span>
-        <span>{step.invocation.toolId}</span>
+        <span>{stateLabel ?? step.invocation.toolId}</span>
       </div>
       <p className="mt-1 text-sm font-medium text-white">{step.invocation.functionName}</p>
       <p className="mt-1.5 text-xs leading-relaxed text-[#9ab4c8]">{formatArgs(step.invocation.displayArgs ?? step.invocation.args)}</p>
+      {isPending && step.toolState?.message ? (
+        <p className="mt-2 text-xs leading-relaxed text-[#f5d07a]">{step.toolState.message}</p>
+      ) : null}
       {inspection && <PythonTraceViewer inspection={inspection} />}
     </div>
   );

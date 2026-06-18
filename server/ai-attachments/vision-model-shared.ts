@@ -1,5 +1,6 @@
 import { serverConfig } from '../config';
-import { HttpError } from '../http';
+import { fetchWithTimeout, HttpError } from '../http';
+import { IMAGE_TOOL_ATTEMPT_TIMEOUT_MS } from './image-tool-runtime';
 
 interface OllamaTagsResponse {
   models?: Array<{ name?: string }>;
@@ -48,8 +49,8 @@ export async function readJson<T>(response: Response, fallback: string) {
   }
 }
 
-export async function listInstalledVisionModels() {
-  const response = await fetch(`${serverConfig.ollamaHost}/api/tags`);
+export async function listInstalledVisionModels(signal?: AbortSignal) {
+  const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/tags`, {}, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS, signal);
   const payload = await readJson<OllamaTagsResponse>(response, 'Unable to inspect local Ollama models.');
   return new Map(
     (payload.models ?? [])
@@ -59,14 +60,14 @@ export async function listInstalledVisionModels() {
   );
 }
 
-export async function pullVisionModel(model: string) {
+export async function pullVisionModel(model: string, signal?: AbortSignal) {
   let lastError: HttpError | null = null;
   for (const candidate of getVisionModelAliases(model)) {
-    const response = await fetch(`${serverConfig.ollamaHost}/api/pull`, {
+    const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: candidate }),
-    });
+    }, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS, signal);
     if (response.ok) {
       return candidate;
     }

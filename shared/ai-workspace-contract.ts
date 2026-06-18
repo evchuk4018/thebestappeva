@@ -15,6 +15,7 @@ export type {
   AskUserResponse,
   AskUserStatus,
   AssistantAskUserTraceStep,
+  ToolCallState,
   AssistantThinkingTraceStep,
   AssistantToolCallTraceStep,
   AssistantToolResultTraceStep,

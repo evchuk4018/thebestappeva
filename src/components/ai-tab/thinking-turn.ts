@@ -12,6 +12,7 @@ import { MAX_TOOL_CALLS_PER_TURN, executeToolInvocation } from './tools/executor
 import { buildModelMessages, buildOllamaTools, formatToolResultContent } from './tools/prompting';
 import { toPersistedToolResult } from './tools/result-persistence';
 import { toPersistedToolInvocation } from './tools/trace-persistence';
+import { scheduleImageToolRetryIndicator } from './tool-call-progress';
 import { ToolRegistryEntry } from './tools/types';
 import { resolveAskUserExecution } from './thinking-turn-ask-user';
 
@@ -109,9 +110,21 @@ export async function resolveThinkingTurn({
         };
 
         const toolCallStep = liveAssistant.appendToolCall(toPersistedToolInvocation(invocation), reply.model);
-        const execution = turnToolState.disabledToolIds.has(invocation.toolId)
-          ? buildDisabledToolResult(invocation)
-          : await executeToolInvocation(invocation, roundToolEntries, { model, provider, signal });
+        const retryIndicator = scheduleImageToolRetryIndicator(invocation.toolId, () => {
+          liveAssistant.updateToolCall(toolCallStep.stepId, {
+            status: 'retrying',
+            attempt: 2,
+            message: 'The first image attempt timed out. Retrying once.',
+          }, reply.model);
+        });
+        let execution;
+        try {
+          execution = turnToolState.disabledToolIds.has(invocation.toolId)
+            ? buildDisabledToolResult(invocation)
+            : await executeToolInvocation(invocation, roundToolEntries, { model, provider, signal });
+        } finally {
+          retryIndicator.cancel();
+        }
         if ('deferred' in execution) {
           const askUserResolution = resolveAskUserExecution({
             chat: liveAssistant.getChat(),

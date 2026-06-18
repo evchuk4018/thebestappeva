@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import sharp from 'sharp';
 import type { AiImageComparisonIssue, AiImageComparisonResult, AiImageSceneGraph, AiImageSceneObject } from '../../shared/ai-image-bridge-contract';
 import { HttpError } from '../http';
+import type { ImageToolTelemetry } from './image-tool-runtime';
 import { analyzeImageBuffer, analyzeStoredImage } from './image-analysis-service';
 import { getAttachmentSourcePath, readAttachmentRecord } from './storage';
 import { isStoredImageAttachmentRecord } from './record-guards';
@@ -138,15 +139,17 @@ export async function compareGeneratedImage(args: {
   iteration?: number;
   maxIterations?: number;
   refresh?: boolean;
+  signal?: AbortSignal;
+  telemetry?: ImageToolTelemetry;
 }) {
-  const sourceRecord = await analyzeStoredImage(args.attachmentId, args.refresh);
+  const sourceRecord = await analyzeStoredImage(args.attachmentId, args.refresh, 'layout', { signal: args.signal, telemetry: args.telemetry });
   const storedRecord = await readAttachmentRecord(args.attachmentId);
   if (!isStoredImageAttachmentRecord(storedRecord)) {
     throw new HttpError(415, `"${args.attachmentId}" is not an image attachment.`);
   }
   const sourceBuffer = await fs.readFile(getAttachmentSourcePath(args.attachmentId, storedRecord.sourceExtension));
   const renderedPng = await renderSvgToPng(args.content);
-  const targetScene = await analyzeImageBuffer(renderedPng, '.png');
+  const targetScene = await analyzeImageBuffer(renderedPng, '.png', 'layout', { signal: args.signal, telemetry: args.telemetry, disableRetry: true });
   const issues = [...compareObjects(sourceRecord.sceneGraph, targetScene), ...compareText(sourceRecord.sceneGraph, targetScene)];
   const pixelSimilarity = await computePixelSimilarity(sourceBuffer, renderedPng).catch(() => 0);
   const current = Math.max(1, args.iteration ?? 1);

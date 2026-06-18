@@ -22,19 +22,19 @@ export function createLocalVisionProvider(): VisionProvider {
         };
       }
     },
-    async describeImage(imageBase64) {
-      const response = await describeLocalImage(imageBase64);
+    async describeImage(imageBase64, options) {
+      const response = await describeLocalImage(imageBase64, options);
       return {
         provider: 'local',
         model: response.model,
         text: response.summary,
       };
     },
-    async answerImageQuestion(imageBase64, question) {
+    async answerImageQuestion(imageBase64, question, options) {
       if (!question.trim()) {
         throw new HttpError(400, 'Image questions require a non-empty question.');
       }
-      const response = await answerLocalImageQuestion(imageBase64, question);
+      const response = await answerLocalImageQuestion(imageBase64, question, options);
       return {
         provider: 'local',
         model: response.model,

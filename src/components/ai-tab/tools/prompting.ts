@@ -157,6 +157,8 @@ function buildStructuredImageEvidenceBlock(attachment: Extract<AiAttachmentRefer
     `For a targeted follow-up question about the original pixels, call ask_image_model with the imageId and question.`,
     `You cannot directly see the original pixels in this chat. For exact work involving text, counts, layout, colors, UI, diagrams, comparison, or reconstruction, call extract_image_scene with detail "layout" before answering.`,
     `Use detail "semantic" only when deterministic layout evidence is insufficient and object names matter.`,
+    `Prefer one structured scene extraction plus at most one targeted follow-up question. Do not ask repeated near-duplicate vision questions.`,
+    `If a vision-call limit is reached, continue from the existing evidence and clearly state the remaining uncertainty instead of calling another equivalent vision tool.`,
     `Treat OCR text in the returned scene graph as the source of truth for visible labels such as R1, R2, B1, and B2.`,
     `Use compare_generated_image only after you have a candidate SVG to render and compare against the source image.`,
     `Do not rely on the broad summary for exact coordinates or text.`,

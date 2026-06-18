@@ -3,6 +3,7 @@ import { loadAiPreferences } from '../db/ai-workspace-repository';
 import { HttpError } from '../http';
 import type { AiVisionMetadata, AiVisionMode } from '../../shared/ai-vision-contract';
 import { createGeminiVisionProvider } from './gemini-vision-provider';
+import { runImageToolWithRetries } from './image-tool-runtime';
 import { createLocalVisionProvider } from './local-vision-provider';
 import type { ResolvedVisionResult, VisionProvider, VisionProviderResult, VisionRequestOptions } from './vision-provider-types';
 
@@ -33,26 +34,31 @@ function getLocalProvider() {
   return testHooks.localProvider ?? localProvider;
 }
 
-function shouldRetryVisionError(error: unknown) {
-  return error instanceof HttpError && [429, 502, 503, 504].includes(error.statusCode);
-}
-
 async function runProviderWithRetries(
   provider: VisionProvider,
   action: (activeProvider: VisionProvider) => Promise<VisionProviderResult>,
+  options: VisionRequestOptions,
+  operationName: string,
 ) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= serverConfig.visionMaxRetries; attempt += 1) {
-    try {
-      return await action(provider);
-    } catch (error) {
-      lastError = error;
-      if (!shouldRetryVisionError(error) || attempt >= serverConfig.visionMaxRetries) {
-        throw lastError;
-      }
-    }
-  }
-  throw lastError instanceof Error ? lastError : new HttpError(502, 'The online vision provider failed.');
+  const telemetry = options.telemetry ?? {
+    requestId: 'vision-service',
+    toolName: 'vision-service',
+    imageId: 'inline-image',
+    log() {},
+    withAttempt() { return this; },
+  };
+  return runImageToolWithRetries(
+    {
+      signal: options.signal,
+      telemetry,
+      operationName,
+    },
+    async (attempt) => action({
+      ...provider,
+      describeImage: (imageBase64, providerOptions) => provider.describeImage(imageBase64, { ...providerOptions, signal: attempt.signal, telemetry: attempt.telemetry }),
+      answerImageQuestion: (imageBase64, question, providerOptions) => provider.answerImageQuestion(imageBase64, question, { ...providerOptions, signal: attempt.signal, telemetry: attempt.telemetry }),
+    }),
+  );
 }
 
 function buildMetadata(
@@ -100,18 +106,19 @@ function logVisionEvent(operation: 'describe' | 'question', metadata: AiVisionMe
 async function resolveVisionResult(
   operation: 'describe' | 'question',
   action: (provider: VisionProvider) => Promise<VisionProviderResult>,
+  options: VisionRequestOptions = {},
 ): Promise<ResolvedVisionResult> {
   const mode = getEffectiveVisionMode();
   const startedAt = Date.now();
   if (mode === 'offline') {
-    const result = await action(getLocalProvider());
+    const result = await runProviderWithRetries(getLocalProvider(), action, options, 'Image inspection');
     const metadata = buildMetadata(mode, result, startedAt, false);
     logVisionEvent(operation, metadata);
     return { text: result.text, metadata };
   }
 
   try {
-    const result = await runProviderWithRetries(getOnlineProvider(), action);
+    const result = await runProviderWithRetries(getOnlineProvider(), action, options, 'Image inspection');
     const metadata = buildMetadata(mode, result, startedAt, false);
     logVisionEvent(operation, metadata);
     return { text: result.text, metadata };
@@ -125,7 +132,7 @@ async function resolveVisionResult(
 }
 
 export async function describeImageWithVisionProvider(imageBase64: string, options: VisionRequestOptions = {}) {
-  return resolveVisionResult('describe', (provider) => provider.describeImage(imageBase64, options));
+  return resolveVisionResult('describe', (provider) => provider.describeImage(imageBase64, options), options);
 }
 
 export async function answerImageQuestionWithVisionProvider(
@@ -133,7 +140,7 @@ export async function answerImageQuestionWithVisionProvider(
   question: string,
   options: VisionRequestOptions = {},
 ) {
-  return resolveVisionResult('question', (provider) => provider.answerImageQuestion(imageBase64, question, options));
+  return resolveVisionResult('question', (provider) => provider.answerImageQuestion(imageBase64, question, options), options);
 }
 
 export function setVisionServiceTestHooksForTests(hooks: typeof testHooks) {

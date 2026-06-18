@@ -45,7 +45,9 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
 
   function consumeVisionCall(functionName: string) {
     if (visionCallCount >= maxVisionCallsPerMessage) {
-      throw new Error(`${functionName} exceeded the per-message vision call limit of ${maxVisionCallsPerMessage}.`);
+      throw new Error(
+        `${functionName} exceeded the per-message vision call limit of ${maxVisionCallsPerMessage}. Reuse the existing image evidence or return a partial result instead of calling another equivalent vision tool.`,
+      );
     }
     visionCallCount += 1;
   }
@@ -96,11 +98,11 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
         },
       ],
     },
-    async execute(invocation) {
+    async execute(invocation, context) {
       const attachment = requireImageAttachment(attachments, invocation.args.imageId);
       if (invocation.functionName === 'describe_image') {
         consumeVisionCall(invocation.functionName);
-        const payload = await describeAiImage(attachment.id);
+        const payload = await describeAiImage(attachment.id, { signal: context.signal, toolCallId: invocation.toolCallId });
         return {
           toolId: invocation.toolId,
           functionName: invocation.functionName,
@@ -116,7 +118,11 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
 
       if (invocation.functionName === 'ask_image_model') {
         consumeVisionCall(invocation.functionName);
-        const payload = await askAiImageQuestion(attachment.id, requireString(invocation.args.question, 'question'));
+        const payload = await askAiImageQuestion(
+          attachment.id,
+          requireString(invocation.args.question, 'question'),
+          { signal: context.signal, toolCallId: invocation.toolCallId },
+        );
         return {
           toolId: invocation.toolId,
           functionName: invocation.functionName,
@@ -136,6 +142,7 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
           attachment.id,
           requireBoolean(invocation.args.refresh),
           requireDetail(invocation.args.detail),
+          { signal: context.signal, toolCallId: invocation.toolCallId },
         );
         return {
           toolId: invocation.toolId,
@@ -158,6 +165,7 @@ export function createImageBridgeTool(attachments: Extract<AiAttachmentReference
         requireBoolean(invocation.args.refresh),
         requireNumber(invocation.args.iteration),
         requireNumber(invocation.args.maxIterations),
+        { signal: context.signal, toolCallId: invocation.toolCallId },
       );
       return {
         toolId: invocation.toolId,

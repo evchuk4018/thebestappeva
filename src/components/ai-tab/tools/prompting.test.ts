@@ -46,6 +46,7 @@ test('image prompts include structured scene extraction guidance for each image'
   assert.match(userMessage, /call describe_image first/);
   assert.match(userMessage, /call ask_image_model/);
   assert.match(userMessage, /call extract_image_scene with detail "layout"/);
+  assert.match(userMessage, /Prefer one structured scene extraction plus at most one targeted follow-up question/);
   assert.match(userMessage, /Use compare_generated_image only after you have a candidate SVG/);
 });
 
@@ -62,4 +63,5 @@ test('non-deepseek image prompts also include structured evidence instructions',
   assert.match(userMessage, /Initial image summary:\s+A map with roads and labels\./);
   assert.match(userMessage, /Structured image evidence/);
   assert.match(userMessage, /call ask_image_model/);
+  assert.match(userMessage, /If a vision-call limit is reached/);
 });

@@ -50,8 +50,10 @@ const sceneGraph = {
 test('extract_image_scene proxies the structured analysis route', async () => {
   const originalFetch = globalThis.fetch;
   let requestBody = '';
+  let requestHeaders: HeadersInit | undefined;
   globalThis.fetch = async (_input, init) => {
     requestBody = typeof init?.body === 'string' ? init.body : '';
+    requestHeaders = init?.headers;
     return new Response(JSON.stringify({
     attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
     sceneGraph,
@@ -68,6 +70,7 @@ test('extract_image_scene proxies the structured analysis route', async () => {
       functionName: 'extract_image_scene',
       args: { imageId: attachment.id, detail: 'semantic' },
       createdAt: '2026-06-15T00:00:00.000Z',
+      toolCallId: 'tool-1',
     }, {});
     if ('deferred' in result) {
       assert.fail('Expected an immediate tool result.');
@@ -76,6 +79,7 @@ test('extract_image_scene proxies the structured analysis route', async () => {
     assert.equal(result.data?.imageId, attachment.id);
     assert.equal(result.data?.detail, 'semantic');
     assert.match(requestBody, /"detail":"semantic"/);
+    assert.equal((requestHeaders as Record<string, string>)['x-ai-tool-call-id'], 'tool-1');
     assert.deepEqual((result.data?.sceneGraph as { objects: Array<{ line?: number[] }> }).objects[1]?.line, [111, 0, 111, 100]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -174,7 +178,7 @@ test('describe_image enforces the per-message vision call cap', async () => {
         args: { imageId: attachment.id },
         createdAt: '2026-06-15T00:00:00.000Z',
       }, {}),
-      /per-message vision call limit/i,
+      /reuse the existing image evidence/i,
     );
   } finally {
     globalThis.fetch = originalFetch;

@@ -5,17 +5,24 @@ import type { AiImageAnalysisDetail, AiImageSceneGraph } from '../../shared/ai-i
 import { getAttachmentSourcePath, readAttachmentRecord, saveAttachmentRecord } from './storage';
 import { isStoredImageAttachmentRecord } from './record-guards';
 import { analyzeImageWithSidecar } from './image-analysis-sidecar';
+import { type ImageToolTelemetry, runImageToolWithRetries } from './image-tool-runtime';
 import { readCachedSceneGraph, saveCachedSceneGraph, saveDebugImages } from './image-analysis-cache';
 import { createImageAnalysisVisionSession, queryVisionModelJson } from './vision-model';
 import { HttpError } from '../http';
 
 const analysisVersion = 'scene-graph-v2';
 type VisionLabel = { id: string; label: string; type?: string; confidence: number };
+interface ImageAnalysisOptions {
+  signal?: AbortSignal;
+  telemetry?: ImageToolTelemetry;
+  disableRetry?: boolean;
+}
 
 let testHooks: Partial<{
   analyzeFile: typeof analyzeImageWithSidecar;
   queryJson: typeof queryVisionModelJson<VisionLabel[]>;
 }> = {};
+const inFlightAnalyses = new Map<string, Promise<Awaited<ReturnType<typeof analyzeStoredImageCore>>>>();
 
 function parseVisionLabels(value: unknown) {
   if (!Array.isArray(value)) {
@@ -91,6 +98,7 @@ async function applySemanticLabels(
   sceneGraph: AiImageSceneGraph,
   debugImages: Record<string, Buffer>,
   detail: AiImageAnalysisDetail,
+  options: ImageAnalysisOptions = {},
 ) {
   const labels = new Map<string, VisionLabel>();
   let model = 'geometry-only';
@@ -110,11 +118,14 @@ async function applySemanticLabels(
       if (!image) {
         continue;
       }
+      options.telemetry?.log('provider_request_started', { provider: 'local', model, message: `semantic:${passName}` });
       const response = await testHooks.queryJson(
         image.toString('base64'),
         buildLabelPrompt(sceneGraph, passName),
         parseVisionLabels,
+        { signal: options.signal, telemetry: options.telemetry },
       );
+      options.telemetry?.log('provider_response_received', { provider: 'local', model: response.model, message: `semantic:${passName}` });
       model = response.model;
       response.value.forEach((label) => {
         const current = labels.get(label.id);
@@ -124,7 +135,7 @@ async function applySemanticLabels(
       });
     }
   } else {
-    const session = await createImageAnalysisVisionSession();
+    const session = await createImageAnalysisVisionSession({ signal: options.signal, telemetry: options.telemetry });
     try {
       for (const [index, passName] of activePasses.entries()) {
         const image = debugImages[passName];
@@ -166,13 +177,9 @@ async function applySemanticLabels(
   };
 }
 
-async function analyzePath(filePath: string) {
-  return (testHooks.analyzeFile ?? analyzeImageWithSidecar)(filePath);
-}
-
-async function analyzeImageFromPath(filePath: string, detail: AiImageAnalysisDetail) {
-  const base = await analyzePath(filePath);
-  const labeled = await applySemanticLabels(base.sceneGraph, base.debugImages, detail);
+async function analyzeImageFromPath(filePath: string, detail: AiImageAnalysisDetail, options: ImageAnalysisOptions = {}) {
+  const base = await (testHooks.analyzeFile ?? analyzeImageWithSidecar)(filePath, options);
+  const labeled = await applySemanticLabels(base.sceneGraph, base.debugImages, detail, options);
   const generatedAt = new Date().toISOString();
   return {
     debugImages: base.debugImages,
@@ -206,11 +213,16 @@ async function withTempImageFile(buffer: Buffer, extension: string, action: (fil
   }
 }
 
-export async function analyzeImageBuffer(buffer: Buffer, extension = '.png', detail: AiImageAnalysisDetail = 'layout') {
-  return withTempImageFile(buffer, extension, async (filePath) => (await analyzeImageFromPath(filePath, detail)).sceneGraph);
+export async function analyzeImageBuffer(
+  buffer: Buffer,
+  extension = '.png',
+  detail: AiImageAnalysisDetail = 'layout',
+  options: ImageAnalysisOptions = {},
+) {
+  return withTempImageFile(buffer, extension, async (filePath) => (await analyzeImageFromPath(filePath, detail, options)).sceneGraph);
 }
 
-export async function analyzeStoredImage(attachmentId: string, refresh = false, detail: AiImageAnalysisDetail = 'layout') {
+async function analyzeStoredImageCore(attachmentId: string, refresh = false, detail: AiImageAnalysisDetail = 'layout', options: ImageAnalysisOptions = {}) {
   const record = await readAttachmentRecord(attachmentId);
   if (!isStoredImageAttachmentRecord(record)) {
     throw new HttpError(415, `"${attachmentId}" is not an image attachment.`);
@@ -228,7 +240,7 @@ export async function analyzeStoredImage(attachmentId: string, refresh = false, 
     }
   }
   const sourcePath = getAttachmentSourcePath(attachmentId, record.sourceExtension);
-  const analyzed = await analyzeImageFromPath(sourcePath, detail);
+  const analyzed = await analyzeImageFromPath(sourcePath, detail, options);
   await saveCachedSceneGraph(attachmentId, detail, { sceneGraph: analyzed.sceneGraph });
   if (Object.keys(analyzed.debugImages).length) {
     await saveDebugImages(attachmentId, analyzed.debugImages);
@@ -241,6 +253,43 @@ export async function analyzeStoredImage(attachmentId: string, refresh = false, 
   };
   await saveAttachmentRecord({ ...record, attachment });
   return { attachment, cached: false, detail, model: analyzed.model, sceneGraph: analyzed.sceneGraph };
+}
+
+export async function analyzeStoredImage(
+  attachmentId: string,
+  refresh = false,
+  detail: AiImageAnalysisDetail = 'layout',
+  options: ImageAnalysisOptions = {},
+) {
+  const key = `${attachmentId}:${detail}:${refresh ? 'refresh' : 'cached'}`;
+  const existing = inFlightAnalyses.get(key);
+  if (existing) {
+    return existing;
+  }
+  const work = options.disableRetry
+    ? analyzeStoredImageCore(attachmentId, refresh, detail, options)
+    : runImageToolWithRetries(
+      {
+        signal: options.signal,
+        telemetry: options.telemetry ?? {
+          requestId: 'image-analysis',
+          toolName: 'extract_image_scene',
+          imageId: attachmentId,
+          log() {},
+          withAttempt() { return this; },
+        },
+        operationName: 'Image analysis',
+      },
+      async (attempt) => analyzeStoredImageCore(attachmentId, refresh, detail, { ...options, signal: attempt.signal, telemetry: attempt.telemetry, disableRetry: true }),
+    );
+  inFlightAnalyses.set(key, work);
+  try {
+    return await work;
+  } finally {
+    if (inFlightAnalyses.get(key) === work) {
+      inFlightAnalyses.delete(key);
+    }
+  }
 }
 
 export function setImageAnalysisTestHooksForTests(hooks: typeof testHooks) {

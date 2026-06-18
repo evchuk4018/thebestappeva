@@ -22,11 +22,44 @@ export function toErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export async function fetchWithTimeout(url: string | URL, init: RequestInit, timeoutMs: number) {
-  return fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+function createCombinedSignal(signals: Array<AbortSignal | undefined>) {
+  const controller = new AbortController();
+  const cleanups: Array<() => void> = [];
+  for (const signal of signals) {
+    if (!signal) {
+      continue;
+    }
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    const onAbort = () => {
+      if (!controller.signal.aborted) {
+        controller.abort(signal.reason);
+      }
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    cleanups.push(() => signal.removeEventListener('abort', onAbort));
+  }
+  return {
+    signal: controller.signal,
+    cleanup() {
+      cleanups.forEach((cleanup) => cleanup());
+    },
+  };
+}
+
+export async function fetchWithTimeout(url: string | URL, init: RequestInit, timeoutMs: number, signal?: AbortSignal) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const combined = createCombinedSignal([signal, timeoutSignal]);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: combined.signal,
+    });
+  } finally {
+    combined.cleanup();
+  }
 }
 
 export function getRequiredQueryParam(value: unknown, name: string) {

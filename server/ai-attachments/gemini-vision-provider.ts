@@ -1,5 +1,6 @@
 import { serverConfig } from '../config';
 import { fetchWithTimeout, HttpError } from '../http';
+import { IMAGE_TOOL_ATTEMPT_TIMEOUT_MS } from './image-tool-runtime';
 import type { VisionProvider, VisionProviderResult, VisionRequestOptions } from './vision-provider-types';
 
 interface GeminiGenerateContentResponse {
@@ -85,6 +86,7 @@ async function readGeminiJson(response: Response) {
 
 async function requestGemini(model: string, imageBase64: string, prompt: string, options: VisionRequestOptions = {}): Promise<VisionProviderResult> {
   const mediaType = options.mediaType?.trim() || 'image/png';
+  options.telemetry?.log('provider_request_started', { provider: 'gemini', model });
   const response = await fetchWithTimeout(
     `${serverConfig.geminiBaseUrl}/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -106,9 +108,13 @@ async function requestGemini(model: string, imageBase64: string, prompt: string,
         },
       }),
     },
-    serverConfig.visionTimeoutMs,
+    Math.min(serverConfig.visionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS),
+    options.signal,
   );
+  options.telemetry?.log('provider_response_received', { provider: 'gemini', model });
+  options.telemetry?.log('response_parsing_started', { provider: 'gemini', model });
   const payload = await readGeminiJson(response);
+  options.telemetry?.log('response_parsing_completed', { provider: 'gemini', model });
   const promptTokens = payload.usageMetadata?.promptTokenCount;
   const outputTokens = payload.usageMetadata?.candidatesTokenCount;
   const totalTokens = payload.usageMetadata?.totalTokenCount;

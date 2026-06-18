@@ -3,12 +3,18 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseAiImageSceneGraph, type AiImageSceneGraph } from '../../shared/ai-image-scene-contract';
 import { serverConfig } from '../config';
 import { HttpError } from '../http';
+import { IMAGE_TOOL_ATTEMPT_TIMEOUT_MS, type ImageToolTelemetry } from './image-tool-runtime';
 
 const sidecarScriptPath = path.resolve(process.cwd(), 'python', 'image_analysis_sidecar.py');
 
 export interface ImageAnalysisSidecarResult {
   debugImages: Record<string, Buffer>;
   sceneGraph: AiImageSceneGraph;
+}
+
+interface ImageAnalysisSidecarOptions {
+  signal?: AbortSignal;
+  telemetry?: ImageToolTelemetry;
 }
 
 let runSidecarHook: ((args: string[]) => Promise<string>) | null = null;
@@ -161,7 +167,7 @@ function getWorker() {
   return worker && !worker.child.killed ? worker : createWorker();
 }
 
-function requestWorkerAnalysis(filePath: string) {
+function requestWorkerAnalysis(filePath: string, options: ImageAnalysisSidecarOptions = {}) {
   const workerState = getWorker();
   const id = String(workerState.nextId++);
   return new Promise<string>((resolve, reject) => {
@@ -171,31 +177,51 @@ function requestWorkerAnalysis(filePath: string) {
       if (worker === workerState) {
         worker = null;
       }
-      reject(new HttpError(504, `The local image-analysis worker timed out after ${serverConfig.aiImageAnalysisTimeoutMs}ms.`));
-    }, serverConfig.aiImageAnalysisTimeoutMs);
+      reject(new HttpError(504, `The local image-analysis worker timed out after ${IMAGE_TOOL_ATTEMPT_TIMEOUT_MS}ms.`));
+    }, Math.min(serverConfig.aiImageAnalysisTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS));
     workerState.pending.set(id, { resolve, reject, timeoutId });
+    const onAbort = () => {
+      workerState.pending.delete(id);
+      clearTimeout(timeoutId);
+      workerState.child.kill();
+      if (worker === workerState) {
+        worker = null;
+      }
+      reject(options.signal?.reason instanceof Error ? options.signal.reason : new DOMException('The request was aborted.', 'AbortError'));
+    };
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true });
     workerState.child.stdin.write(`${JSON.stringify({ id, filePath })}\n`, (error) => {
       if (!error) {
         return;
       }
       workerState.pending.delete(id);
       clearTimeout(timeoutId);
+      options.signal?.removeEventListener('abort', onAbort);
       reject(new HttpError(503, `Unable to write to the local image-analysis worker: ${error.message}`));
     });
   });
 }
 
-export async function analyzeImageWithSidecar(filePath: string): Promise<ImageAnalysisSidecarResult> {
-  const raw = runSidecarHook ? await runSidecar(['--analyze', filePath]) : await requestWorkerAnalysis(filePath);
+export async function analyzeImageWithSidecar(filePath: string, options: ImageAnalysisSidecarOptions = {}): Promise<ImageAnalysisSidecarResult> {
+  options.telemetry?.log('scene_parsing_started', { provider: 'local', model: 'python-sidecar' });
+  const raw = runSidecarHook ? await runSidecar(['--analyze', filePath]) : await requestWorkerAnalysis(filePath, options);
+  options.telemetry?.log('image_loaded', { provider: 'local', model: 'python-sidecar' });
+  options.telemetry?.log('response_parsing_started', { provider: 'local', model: 'python-sidecar' });
   let payload: { debugImages?: Record<string, string>; sceneGraph?: unknown };
   try {
     payload = JSON.parse(raw) as { debugImages?: Record<string, string>; sceneGraph?: unknown };
   } catch {
     throw new HttpError(502, 'The local image-analysis sidecar returned invalid JSON.');
   }
+  options.telemetry?.log('response_parsing_completed', { provider: 'local', model: 'python-sidecar' });
   if (!payload.sceneGraph) {
     throw new HttpError(502, 'The local image-analysis sidecar did not return a scene graph.');
   }
+  options.telemetry?.log('scene_parsing_completed', { provider: 'local', model: 'python-sidecar' });
 
   return {
     sceneGraph: parseAiImageSceneGraph(normalizeSceneGraphForSidecar(payload.sceneGraph), 'Image analysis sidecar scene graph'),

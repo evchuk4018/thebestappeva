@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { serverConfig } from '../config';
 import { fetchWithTimeout, HttpError } from '../http';
+import { IMAGE_TOOL_ATTEMPT_TIMEOUT_MS } from './image-tool-runtime';
 import {
   type OllamaChatResponse,
   buildJsonPrompt,
@@ -12,6 +13,7 @@ import {
   readJson,
   trimVisionModelName,
 } from './vision-model-shared';
+import type { VisionRequestOptions } from './vision-provider-types';
 
 interface OllamaPsResponse {
   models?: Array<{ name?: string; model?: string }>;
@@ -33,10 +35,15 @@ function buildStrictVisionError(model: string, passName: string, detail: string,
   return new HttpError(statusCode, `Image analysis vision model "${model}" ${detail} on pass "${buildPassLabel(passName)}".`);
 }
 
-async function ensureImageAnalysisModelReady() {
+async function ensureImageAnalysisModelReady(options: VisionRequestOptions = {}) {
   try {
     const configuredModel = trimVisionModelName(serverConfig.aiImageAnalysisVisionModel);
-    const tagsResponse = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/tags`, {}, serverConfig.aiImageAnalysisVisionTimeoutMs);
+    const tagsResponse = await fetchWithTimeout(
+      `${serverConfig.ollamaHost}/api/tags`,
+      {},
+      Math.min(serverConfig.aiImageAnalysisVisionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS),
+      options.signal,
+    );
     const payload = await readJson<{ models?: Array<{ name?: string }> }>(tagsResponse, 'Unable to inspect local Ollama models for image analysis.');
     const installedModels = new Map(
       (payload.models ?? [])
@@ -53,7 +60,7 @@ async function ensureImageAnalysisModelReady() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: candidate }),
-      }, serverConfig.aiImageAnalysisVisionTimeoutMs);
+      }, Math.min(serverConfig.aiImageAnalysisVisionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS), options.signal);
       if (response.ok) {
         return candidate;
       }
@@ -71,9 +78,14 @@ async function ensureImageAnalysisModelReady() {
   }
 }
 
-async function listRunningModels() {
+async function listRunningModels(options: VisionRequestOptions = {}) {
   try {
-    const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/ps`, {}, serverConfig.aiImageAnalysisVisionTimeoutMs);
+    const response = await fetchWithTimeout(
+      `${serverConfig.ollamaHost}/api/ps`,
+      {},
+      Math.min(serverConfig.aiImageAnalysisVisionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS),
+      options.signal,
+    );
     const payload = await readJson<OllamaPsResponse>(response, 'Unable to inspect loaded Ollama models before image analysis.');
     return (payload.models ?? [])
       .map((model) => model.name?.trim() || model.model?.trim() || '')
@@ -86,7 +98,7 @@ async function listRunningModels() {
   }
 }
 
-async function unloadModel(model: string) {
+async function unloadModel(model: string, options: VisionRequestOptions = {}) {
   try {
     const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/generate`, {
       method: 'POST',
@@ -97,21 +109,21 @@ async function unloadModel(model: string) {
         stream: false,
         keep_alive: 0,
       }),
-    }, serverConfig.aiImageAnalysisVisionTimeoutMs);
+    }, Math.min(serverConfig.aiImageAnalysisVisionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS), options.signal);
     await response.text();
   } catch {
     return;
   }
 }
 
-async function evictNonTargetModels(model: string) {
+async function evictNonTargetModels(model: string, options: VisionRequestOptions = {}) {
   const target = canonicalizeVisionModelName(model);
-  const loadedBefore = await listRunningModels();
+  const loadedBefore = await listRunningModels(options);
   const otherModels = loadedBefore.filter((candidate) => canonicalizeVisionModelName(candidate) !== target);
   for (const candidate of otherModels) {
-    await unloadModel(candidate);
+    await unloadModel(candidate, options);
   }
-  const loadedAfter = await listRunningModels();
+  const loadedAfter = await listRunningModels(options);
   const remainingModels = loadedAfter.filter((candidate) => canonicalizeVisionModelName(candidate) !== target);
   if (remainingModels.length) {
     throw new HttpError(
@@ -139,17 +151,22 @@ async function requestImageAnalysisChat(
   prompt: string,
   keepAlive: string | number,
   forceCpu: boolean,
+  options: VisionRequestOptions = {},
 ) {
   try {
+    options.telemetry?.log('provider_request_started', { provider: 'local', model });
     const response = await fetchWithTimeout(`${serverConfig.ollamaHost}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildImageAnalysisChatBody(model, imageBase64, prompt, keepAlive, forceCpu)),
-    }, serverConfig.aiImageAnalysisVisionTimeoutMs);
+    }, Math.min(serverConfig.aiImageAnalysisVisionTimeoutMs, IMAGE_TOOL_ATTEMPT_TIMEOUT_MS), options.signal);
+    options.telemetry?.log('provider_response_received', { provider: 'local', model });
+    options.telemetry?.log('response_parsing_started', { provider: 'local', model });
     const payload = await readJson<OllamaChatResponse>(
       response,
       `Unable to complete the image analysis vision request for "${model}" on pass "${buildPassLabel(passName)}".`,
     );
+    options.telemetry?.log('response_parsing_completed', { provider: 'local', model });
     if (payload.error?.trim()) {
       throw buildStrictVisionError(model, passName, `failed: ${payload.error.trim()}`);
     }
@@ -173,25 +190,32 @@ async function requestImageAnalysisChat(
   }
 }
 
-async function askImageAnalysisModel(model: string, passName: string, imageBase64: string, prompt: string, keepAlive: string | number) {
+async function askImageAnalysisModel(
+  model: string,
+  passName: string,
+  imageBase64: string,
+  prompt: string,
+  keepAlive: string | number,
+  options: VisionRequestOptions = {},
+) {
   if (preferCpuImageAnalysisRequests) {
-    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true);
+    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true, options);
   }
   try {
-    return await requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, false);
+    return await requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, false, options);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (!isGpuKernelFailure(message)) {
       throw error;
     }
     preferCpuImageAnalysisRequests = true;
-    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true);
+    return requestImageAnalysisChat(model, passName, imageBase64, prompt, keepAlive, true, options);
   }
 }
 
-export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisVisionSession> {
-  const model = await ensureImageAnalysisModelReady();
-  await evictNonTargetModels(model);
+export async function createImageAnalysisVisionSession(options: VisionRequestOptions = {}): Promise<ImageAnalysisVisionSession> {
+  const model = await ensureImageAnalysisModelReady(options);
+  await evictNonTargetModels(model, options);
   let disposed = false;
   let shouldUnloadOnDispose = false;
 
@@ -203,7 +227,7 @@ export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisV
       }
       disposed = true;
       shouldUnloadOnDispose = false;
-      await unloadModel(model);
+      await unloadModel(model, options);
     },
     async queryJson<T>(passName, isFinalPass, imageBase64, instructions, parser) {
       if (disposed) {
@@ -218,6 +242,7 @@ export async function createImageAnalysisVisionSession(): Promise<ImageAnalysisV
           imageBase64,
           buildJsonPrompt(instructions, attempt, randomUUID()),
           isFinalPass ? 0 : warmKeepAlive,
+          options,
         );
         try {
           const value = parser(JSON.parse(raw) as unknown);

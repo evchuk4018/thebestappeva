@@ -7,7 +7,7 @@ import {
   upsertMessage,
 } from './helpers';
 import { mergeArtifactCardsFromToolResult } from './artifact-cards';
-import { AssistantAskUserTraceStep, AssistantMessage, Chat } from './types';
+import { AssistantAskUserTraceStep, AssistantMessage, Chat, ToolCallState } from './types';
 
 interface CreateAssistantLiveUpdaterOptions {
   chat: Chat;
@@ -55,6 +55,22 @@ export function createAssistantLiveUpdater({ chat, assistantMessageId, model, on
         invocation.createdAt,
       );
       return { assistantMessageId: baseMessage.id, stepId: nextStep.id };
+    },
+    updateToolCall(stepId: string, toolState: ToolCallState, replyModel?: string) {
+      const baseMessage = ensureAssistantMessage(replyModel);
+      const nextTrace = (baseMessage.trace ?? []).map((step) => (
+        step.id === stepId && step.kind === 'tool-call'
+          ? { ...step, toolState }
+          : step
+      ));
+      syncAssistantMessage(
+        {
+          ...baseMessage,
+          model: replyModel ?? baseMessage.model,
+          trace: nextTrace,
+        },
+        new Date().toISOString(),
+      );
     },
     appendToolResult(result: Parameters<typeof createToolResultTraceStep>[0], replyModel?: string) {
       activeThinkingStepId = null;

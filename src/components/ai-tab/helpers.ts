@@ -85,6 +85,10 @@ export function createToolCallTraceStep(invocation: ToolInvocation): AssistantTr
     kind: 'tool-call',
     createdAt: invocation.createdAt,
     invocation,
+    toolState: {
+      status: 'running',
+      attempt: 1,
+    },
   };
 }
 

@@ -17,6 +17,12 @@ export interface ToolResult {
   toolCallId?: string;
 }
 
+export interface ToolCallState {
+  status: 'running' | 'retrying';
+  attempt: number;
+  message?: string;
+}
+
 export interface AskUserChoice {
   id: string;
   label: string;
@@ -53,6 +59,7 @@ export interface AssistantToolCallTraceStep {
   id: string;
   kind: 'tool-call';
   invocation: ToolInvocation;
+  toolState?: ToolCallState;
   createdAt: string;
 }
 
@@ -118,6 +125,23 @@ function expectBoolean(value: unknown, field: string) {
   }
 
   return value;
+}
+
+function parseToolCallState(value: unknown, field: string): ToolCallState {
+  const record = expectRecord(value, field);
+  const status = expectString(record.status, `${field}.status`);
+  if (status !== 'running' && status !== 'retrying') {
+    throw new Error(`Invalid ${field}.status. Expected "running" or "retrying".`);
+  }
+  const attempt = record.attempt;
+  if (typeof attempt !== 'number' || !Number.isFinite(attempt)) {
+    throw new Error(`Invalid ${field}.attempt. Expected a finite number.`);
+  }
+  return {
+    status,
+    attempt,
+    message: expectOptionalString(record.message, `${field}.message`),
+  };
 }
 
 function expectStringRecord(value: unknown, field: string) {
@@ -200,7 +224,12 @@ export function parseTraceStep(value: unknown, field: string): AssistantTraceSte
     case 'thinking':
       return { ...base, kind: 'thinking', content: expectString(record.content, `${field}.content`) };
     case 'tool-call':
-      return { ...base, kind: 'tool-call', invocation: parseToolInvocation(record.invocation, `${field}.invocation`) };
+      return {
+        ...base,
+        kind: 'tool-call',
+        invocation: parseToolInvocation(record.invocation, `${field}.invocation`),
+        toolState: typeof record.toolState === 'undefined' ? undefined : parseToolCallState(record.toolState, `${field}.toolState`),
+      };
     case 'tool-result':
       return { ...base, kind: 'tool-result', result: parseToolResult(record.result, `${field}.result`) };
     case 'ask-user': {
