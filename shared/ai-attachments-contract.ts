@@ -1,3 +1,5 @@
+import { AiVisionMetadata, parseAiVisionMetadata } from './ai-vision-contract';
+
 export type AiAttachmentKind = 'document' | 'image';
 export type AiAttachmentParser = 'docling';
 export type AiImageSummaryStatus = 'ready';
@@ -34,6 +36,7 @@ export interface AiImageAttachmentReference extends AiAttachmentBase {
   summary: string;
   summaryModel: string;
   summaryStatus: AiImageSummaryStatus;
+  summaryMetadata?: AiVisionMetadata;
   analysisStatus?: AiImageAnalysisStatus;
   analysisVersion?: string;
   analysisUpdatedAt?: string;
@@ -168,6 +171,9 @@ export function parseAiAttachmentReference(value: unknown, field = 'AI attachmen
       summary: expectString(record.summary, `${field}.summary`),
       summaryModel: expectString(record.summaryModel, `${field}.summaryModel`),
       summaryStatus,
+      summaryMetadata: typeof record.summaryMetadata === 'undefined'
+        ? undefined
+        : parseAiVisionMetadata(record.summaryMetadata, `${field}.summaryMetadata`),
       analysisStatus: parseOptionalAnalysisStatus(record.analysisStatus, `${field}.analysisStatus`),
       analysisVersion: expectOptionalString(record.analysisVersion, `${field}.analysisVersion`),
       analysisUpdatedAt: expectOptionalString(record.analysisUpdatedAt, `${field}.analysisUpdatedAt`),

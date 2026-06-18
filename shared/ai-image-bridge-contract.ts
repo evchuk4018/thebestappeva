@@ -5,6 +5,7 @@ import {
   parseAiImageComparisonResult,
   parseAiImageSceneGraph,
 } from './ai-image-scene-contract';
+import { AiVisionMetadata, parseAiVisionMetadata } from './ai-vision-contract';
 
 export type { AiImageComparisonResult, AiImageSceneGraph } from './ai-image-scene-contract';
 export type { AiImageComparisonIssue, AiImageSceneObject } from './ai-image-scene-contract';
@@ -14,6 +15,14 @@ export interface AiImageQueryPayload {
   answer: string;
   question: string;
   model: string;
+  metadata: AiVisionMetadata;
+}
+
+export interface AiImageDescribePayload {
+  attachment: AiImageAttachment;
+  summary: string;
+  model: string;
+  metadata: AiVisionMetadata;
 }
 
 export type AiImageAnalysisDetail = 'layout' | 'semantic';
@@ -68,6 +77,17 @@ export function parseAiImageQueryPayload(value: unknown, field = 'AI image query
     answer: expectString(record.answer, `${field}.answer`),
     question: expectString(record.question, `${field}.question`),
     model: expectString(record.model, `${field}.model`),
+    metadata: parseAiVisionMetadata(record.metadata, `${field}.metadata`),
+  };
+}
+
+export function parseAiImageDescribePayload(value: unknown, field = 'AI image describe payload'): AiImageDescribePayload {
+  const record = expectRecord(value, field);
+  return {
+    attachment: parseImageAttachment(record.attachment, `${field}.attachment`),
+    summary: expectString(record.summary, `${field}.summary`),
+    model: expectString(record.model, `${field}.model`),
+    metadata: parseAiVisionMetadata(record.metadata, `${field}.metadata`),
   };
 }
 

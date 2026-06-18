@@ -37,6 +37,7 @@ test('memory refresh merges into the latest chat state before flushing', async (
       generatedUserMemory: overrides.generatedUserMemory ?? latestMemory,
       selectedProvider: 'ollama',
       selectedModel: 'qwen3.5:9b',
+      visionMode: 'offline',
       enabledTools: {},
       customSystemPrompt: '',
     }),

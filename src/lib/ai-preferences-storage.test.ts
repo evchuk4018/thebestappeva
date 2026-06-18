@@ -45,6 +45,7 @@ test('reads valid AI preferences from localStorage', () => {
   assert.deepEqual(readAiPreferencesFromLocalStorage(), {
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'offline',
   });
 });
 
@@ -59,6 +60,7 @@ test('normalizes stale providers and preserves the stored model', () => {
   assert.deepEqual(readAiPreferencesFromLocalStorage(), {
     selectedProvider: 'ollama',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'offline',
   });
 });
 
@@ -70,17 +72,20 @@ test('migrates server AI preferences into localStorage when the stored payload i
   const preferences = await loadAiPreferencesWithStorage(async () => ({
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'offline',
   }));
 
   assert.deepEqual(preferences, {
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'offline',
   });
   assert.equal(
     store.get(aiPreferencesStorageKey),
     JSON.stringify({
       selectedProvider: 'deepseek',
       selectedModel: 'deepseek-v4-flash',
+      visionMode: 'offline',
     }),
   );
 });
@@ -94,6 +99,7 @@ test('migrates server AI preferences once when localStorage is empty', async () 
     return {
       selectedProvider: 'deepseek',
       selectedModel: 'deepseek-v4-flash',
+      visionMode: 'offline',
     };
   });
   const second = await loadAiPreferencesWithStorage(async () => {
@@ -101,12 +107,14 @@ test('migrates server AI preferences once when localStorage is empty', async () 
     return {
       selectedProvider: 'ollama',
       selectedModel: 'qwen3.5:9b-q4_K_M',
+      visionMode: 'offline',
     };
   });
 
   assert.deepEqual(first, {
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'offline',
   });
   assert.deepEqual(second, first);
   assert.equal(fetchCount, 1);
@@ -117,6 +125,7 @@ test('prefers localStorage and skips migration once preferences are stored', asy
   saveAiPreferencesToLocalStorage({
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'online',
   });
 
   let fetchCount = 0;
@@ -125,12 +134,14 @@ test('prefers localStorage and skips migration once preferences are stored', asy
     return {
       selectedProvider: 'ollama',
       selectedModel: 'qwen3.5:9b-q4_K_M',
+      visionMode: 'offline',
     };
   });
 
   assert.deepEqual(preferences, {
     selectedProvider: 'deepseek',
     selectedModel: 'deepseek-v4-flash',
+    visionMode: 'online',
   });
   assert.equal(fetchCount, 0);
 });

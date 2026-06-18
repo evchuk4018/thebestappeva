@@ -20,6 +20,7 @@ test('workspace snapshots default to ollama when selectedProvider is missing', (
 
   assert.equal(snapshot.selectedProvider, 'ollama');
   assert.equal(snapshot.selectedModel, 'qwen3.5:9b-q4_K_M');
+  assert.equal(snapshot.visionMode, 'offline');
   assert.equal(snapshot.chats[0]?.titleStatus, 'finalized');
   assert.equal(snapshot.generatedUserMemory, '');
 });
@@ -32,6 +33,7 @@ test('preferences fall back to ollama for unknown providers', () => {
 
   assert.equal(preferences.selectedProvider, 'ollama');
   assert.equal(preferences.selectedModel, 'deepseek-v4-flash');
+  assert.equal(preferences.visionMode, 'offline');
 });
 
 test('workspace snapshots parse persisted chat title status', () => {

@@ -43,9 +43,10 @@ test('image prompts include structured scene extraction guidance for each image'
   const userMessage = messages[1]?.content ?? '';
   assert.match(userMessage, /User uploaded image image_map123/);
   assert.match(userMessage, /User uploaded image image_chart456/);
+  assert.match(userMessage, /call describe_image first/);
+  assert.match(userMessage, /call ask_image_model/);
   assert.match(userMessage, /call extract_image_scene with detail "layout"/);
   assert.match(userMessage, /Use compare_generated_image only after you have a candidate SVG/);
-  assert.doesNotMatch(userMessage, /ask_image_model/);
 });
 
 test('non-deepseek image prompts also include structured evidence instructions', async () => {
@@ -60,5 +61,5 @@ test('non-deepseek image prompts also include structured evidence instructions',
   const userMessage = messages[1]?.content ?? '';
   assert.match(userMessage, /Initial image summary:\s+A map with roads and labels\./);
   assert.match(userMessage, /Structured image evidence/);
-  assert.doesNotMatch(userMessage, /ask_image_model/);
+  assert.match(userMessage, /call ask_image_model/);
 });

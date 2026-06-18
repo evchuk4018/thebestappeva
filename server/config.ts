@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { normalizeModelProvider } from '../shared/ai-runtime-contract';
+import { normalizeVisionMode } from '../shared/ai-vision-contract';
 
 dotenv.config();
 
@@ -8,6 +9,12 @@ function readNumberEnv(name: string, fallback: number) {
   const raw = process.env[name];
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function readNonNegativeNumberEnv(name: string, fallback: number) {
+  const raw = process.env[name];
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function readStringEnv(name: string, fallback: string) {
@@ -52,6 +59,17 @@ export const serverConfig = {
   aiImageAnalysisVisionModel: readStringEnv('AI_IMAGE_ANALYSIS_VISION_MODEL', 'qwen3-vl:8b'),
   aiImageAnalysisVisionTimeoutMs: readNumberEnv('AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS', 600000),
   aiVisionModels: readStringListEnv('AI_VISION_MODELS').length ? readStringListEnv('AI_VISION_MODELS') : defaultVisionModels,
+  visionMode: normalizeVisionMode(process.env.VISION_MODE),
+  localVisionModel: readStringEnv('LOCAL_VISION_MODEL', ''),
+  onlineVisionProvider: readStringEnv('ONLINE_VISION_PROVIDER', 'gemini'),
+  onlineSummaryModel: readStringEnv('ONLINE_SUMMARY_MODEL', 'gemini-2.5-flash-lite'),
+  onlineDetailedModel: readStringEnv('ONLINE_DETAILED_MODEL', 'gemini-2.5-flash'),
+  visionTimeoutMs: readNumberEnv('VISION_TIMEOUT_MS', 45000),
+  visionMaxRetries: readNonNegativeNumberEnv('VISION_MAX_RETRIES', 1),
+  visionMaxOutputTokens: readNumberEnv('VISION_MAX_OUTPUT_TOKENS', 1024),
+  visionMaxCallsPerMessage: readNumberEnv('VISION_MAX_CALLS_PER_MESSAGE', 4),
+  geminiBaseUrl: readStringEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, ''),
+  geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',
   aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserCommand),
   aiPythonExecArgs: readStringListEnv('AI_PYTHON_EXEC_ARGS').length ? readStringListEnv('AI_PYTHON_EXEC_ARGS') : defaultParserArgs,
   aiPythonExecTimeoutMs: readNumberEnv('AI_PYTHON_EXEC_TIMEOUT_MS', 20000),

@@ -1,0 +1,141 @@
+import { serverConfig } from '../config';
+import { loadAiPreferences } from '../db/ai-workspace-repository';
+import { HttpError } from '../http';
+import type { AiVisionMetadata, AiVisionMode } from '../../shared/ai-vision-contract';
+import { createGeminiVisionProvider } from './gemini-vision-provider';
+import { createLocalVisionProvider } from './local-vision-provider';
+import type { ResolvedVisionResult, VisionProvider, VisionProviderResult, VisionRequestOptions } from './vision-provider-types';
+
+const localProvider = createLocalVisionProvider();
+const geminiProvider = createGeminiVisionProvider();
+const fallbackNotice = 'Online vision was unavailable. This image was analyzed using the local vision model.';
+let testHooks: Partial<{
+  mode: AiVisionMode;
+  localProvider: VisionProvider;
+  onlineProvider: VisionProvider;
+}> = {};
+
+function getEffectiveVisionMode(): AiVisionMode {
+  return testHooks.mode ?? loadAiPreferences().visionMode ?? serverConfig.visionMode;
+}
+
+function getOnlineProvider() {
+  if (testHooks.onlineProvider) {
+    return testHooks.onlineProvider;
+  }
+  if (serverConfig.onlineVisionProvider === 'gemini') {
+    return geminiProvider;
+  }
+  throw new HttpError(500, `Unsupported online vision provider "${serverConfig.onlineVisionProvider}".`);
+}
+
+function getLocalProvider() {
+  return testHooks.localProvider ?? localProvider;
+}
+
+function shouldRetryVisionError(error: unknown) {
+  return error instanceof HttpError && [429, 502, 503, 504].includes(error.statusCode);
+}
+
+async function runProviderWithRetries(
+  provider: VisionProvider,
+  action: (activeProvider: VisionProvider) => Promise<VisionProviderResult>,
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= serverConfig.visionMaxRetries; attempt += 1) {
+    try {
+      return await action(provider);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryVisionError(error) || attempt >= serverConfig.visionMaxRetries) {
+        throw lastError;
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new HttpError(502, 'The online vision provider failed.');
+}
+
+function buildMetadata(
+  mode: AiVisionMode,
+  result: VisionProviderResult,
+  startedAt: number,
+  fallbackUsed: boolean,
+  fallbackReason?: string,
+): AiVisionMetadata {
+  const metadata: AiVisionMetadata = {
+    mode,
+    provider: result.provider,
+    model: result.model,
+    fallbackUsed,
+    fallbackReason,
+    latencyMs: Date.now() - startedAt,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    totalTokens: result.totalTokens,
+    estimatedCostUsd: result.estimatedCostUsd,
+  };
+  if (fallbackUsed) {
+    metadata.notice = fallbackNotice;
+  }
+  return metadata;
+}
+
+function logVisionEvent(operation: 'describe' | 'question', metadata: AiVisionMetadata) {
+  console.info(JSON.stringify({
+    event: 'vision_request',
+    operation,
+    selectedMode: metadata.mode,
+    provider: metadata.provider,
+    model: metadata.model,
+    fallbackUsed: metadata.fallbackUsed,
+    fallbackReason: metadata.fallbackReason,
+    latencyMs: metadata.latencyMs,
+    inputTokens: metadata.inputTokens,
+    outputTokens: metadata.outputTokens,
+    totalTokens: metadata.totalTokens,
+    estimatedCostUsd: metadata.estimatedCostUsd,
+  }));
+}
+
+async function resolveVisionResult(
+  operation: 'describe' | 'question',
+  action: (provider: VisionProvider) => Promise<VisionProviderResult>,
+): Promise<ResolvedVisionResult> {
+  const mode = getEffectiveVisionMode();
+  const startedAt = Date.now();
+  if (mode === 'offline') {
+    const result = await action(getLocalProvider());
+    const metadata = buildMetadata(mode, result, startedAt, false);
+    logVisionEvent(operation, metadata);
+    return { text: result.text, metadata };
+  }
+
+  try {
+    const result = await runProviderWithRetries(getOnlineProvider(), action);
+    const metadata = buildMetadata(mode, result, startedAt, false);
+    logVisionEvent(operation, metadata);
+    return { text: result.text, metadata };
+  } catch (error) {
+    const fallbackResult = await action(getLocalProvider());
+    const fallbackReason = error instanceof Error ? error.message : 'The online vision provider was unavailable.';
+    const metadata = buildMetadata(mode, fallbackResult, startedAt, true, fallbackReason);
+    logVisionEvent(operation, metadata);
+    return { text: fallbackResult.text, metadata };
+  }
+}
+
+export async function describeImageWithVisionProvider(imageBase64: string, options: VisionRequestOptions = {}) {
+  return resolveVisionResult('describe', (provider) => provider.describeImage(imageBase64, options));
+}
+
+export async function answerImageQuestionWithVisionProvider(
+  imageBase64: string,
+  question: string,
+  options: VisionRequestOptions = {},
+) {
+  return resolveVisionResult('question', (provider) => provider.answerImageQuestion(imageBase64, question, options));
+}
+
+export function setVisionServiceTestHooksForTests(hooks: typeof testHooks) {
+  testHooks = hooks;
+}

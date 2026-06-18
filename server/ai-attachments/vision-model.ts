@@ -112,7 +112,7 @@ export async function queryVisionModelJson<T>(imageBase64: string, instructions:
   throw new HttpError(502, message);
 }
 
-export async function generateImageSummary(imageBase64: string) {
+export async function describeLocalImage(imageBase64: string) {
   const model = await ensureVisionModelReady();
   const summary = await askVisionModel(
     model,
@@ -126,7 +126,7 @@ export async function generateImageSummary(imageBase64: string) {
   return { model, summary };
 }
 
-export async function queryImageModel(imageBase64: string, question: string) {
+export async function answerLocalImageQuestion(imageBase64: string, question: string) {
   const model = await ensureVisionModelReady();
   const answer = await askVisionModel(
     model,
@@ -140,6 +140,9 @@ export async function queryImageModel(imageBase64: string, question: string) {
   );
   return { answer, model };
 }
+
+export const generateImageSummary = describeLocalImage;
+export const queryImageModel = answerLocalImageQuestion;
 
 export function resetVisionModelStateForTests() {
   preferCpuVisionRequests = false;

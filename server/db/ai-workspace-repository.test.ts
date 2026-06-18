@@ -34,6 +34,7 @@ test('workspace repository updates one chat summary without changing chat orderi
     generatedUserMemory: '',
     selectedProvider: 'ollama',
     selectedModel: null,
+    visionMode: 'offline',
     enabledTools: {},
     customSystemPrompt: '',
   });

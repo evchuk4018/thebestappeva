@@ -3,18 +3,20 @@ import { Settings, X } from 'lucide-react';
 import type { ChatMode, ModelProvider, OllamaModel, RuntimeProviderOption } from './types';
 import type { SystemPromptSection } from './system-prompt';
 import { groupModelsByProvider, sortModelsForDisplay } from './model-selection';
+import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 
 interface AiSettingsModalProps {
   availableModels: OllamaModel[];
   chatMode: ChatMode;
   currentModel: string | null;
   currentProvider: ModelProvider;
+  currentVisionMode: AiVisionMode;
   customPrompt: string;
   isOpen: boolean;
   providerOptions: RuntimeProviderOption[];
   sections: SystemPromptSection[];
   onClose: () => void;
-  onSave: (value: { customPrompt: string; provider: ModelProvider; model: string | null }) => void;
+  onSave: (value: { customPrompt: string; provider: ModelProvider; model: string | null; visionMode: AiVisionMode }) => void;
 }
 
 function getModeLabel(chatMode: ChatMode) {
@@ -26,6 +28,7 @@ export function AiSettingsModal({
   chatMode,
   currentModel,
   currentProvider,
+  currentVisionMode,
   customPrompt,
   isOpen,
   providerOptions,
@@ -36,14 +39,16 @@ export function AiSettingsModal({
   const [draftPrompt, setDraftPrompt] = useState(customPrompt);
   const [draftProvider, setDraftProvider] = useState<ModelProvider>(currentProvider);
   const [draftModel, setDraftModel] = useState<string | null>(currentModel);
+  const [draftVisionMode, setDraftVisionMode] = useState<AiVisionMode>(currentVisionMode);
 
   useEffect(() => {
     if (isOpen) {
       setDraftPrompt(customPrompt);
       setDraftProvider(currentProvider);
       setDraftModel(currentModel);
+      setDraftVisionMode(currentVisionMode);
     }
-  }, [currentModel, currentProvider, customPrompt, isOpen]);
+  }, [currentModel, currentProvider, currentVisionMode, customPrompt, isOpen]);
 
   const readOnlySections = sections.filter((section) => section.readOnly);
   const activeProvider = useMemo(
@@ -115,6 +120,17 @@ export function AiSettingsModal({
                   </select>
                 </label>
                 <label className="flex flex-col gap-2 text-xs text-zinc-400">
+                  <span>Vision Mode</span>
+                  <select
+                    value={draftVisionMode}
+                    onChange={(event) => setDraftVisionMode(event.target.value as AiVisionMode)}
+                    className="rounded-xl border border-[#33332d] bg-[#11110f] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#e2875e]/50"
+                  >
+                    <option value="offline">Offline</option>
+                    <option value="online">Online</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-2 text-xs text-zinc-400">
                   <span>Model</span>
                   <select
                     value={draftModel ?? ''}
@@ -154,6 +170,9 @@ export function AiSettingsModal({
                     {activeProvider.label} {activeProvider.status === 'ready' ? 'Configured' : activeProvider.status === 'missing-env' ? 'Missing env vars' : 'Unavailable'}
                   </p>
                   <p className="mt-1 leading-relaxed">{activeProvider.detail}</p>
+                  <p className="mt-2 leading-relaxed">
+                    Vision mode: {draftVisionMode === 'online' ? 'Online vision prefers Gemini and falls back to local if needed.' : 'Offline vision stays local and never uploads images.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -193,7 +212,7 @@ export function AiSettingsModal({
           </button>
           <button
             type="button"
-            onClick={() => onSave({ customPrompt: draftPrompt.trim(), provider: draftProvider, model: draftModel })}
+            onClick={() => onSave({ customPrompt: draftPrompt.trim(), provider: draftProvider, model: draftModel, visionMode: draftVisionMode })}
             className="rounded-xl bg-[#e2875e] px-4 py-2 text-sm font-medium text-[#121210] transition hover:bg-[#d67e5a]"
           >
             Save

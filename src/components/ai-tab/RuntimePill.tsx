@@ -1,14 +1,16 @@
 import { Bot, LoaderCircle, PackagePlus, ServerCrash } from 'lucide-react';
 import type { ModelProvider, OllamaAvailability } from './types';
+import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 
 interface RuntimePillProps {
   availability: OllamaAvailability;
   currentProvider: ModelProvider;
+  visionMode: AiVisionMode;
   modelCount: number;
   onOpenAddModels: () => void;
 }
 
-export function RuntimePill({ availability, currentProvider, modelCount, onOpenAddModels }: RuntimePillProps) {
+export function RuntimePill({ availability, currentProvider, visionMode, modelCount, onOpenAddModels }: RuntimePillProps) {
   const providerLabel = currentProvider === 'deepseek' ? 'DeepSeek' : 'Ollama';
   const config = {
     connecting: {
@@ -49,6 +51,8 @@ export function RuntimePill({ availability, currentProvider, modelCount, onOpenA
       <span>{config.label}</span>
       <span className="px-1 text-zinc-600">.</span>
       <span>{config.detail}</span>
+      <span className="px-1 text-zinc-600">.</span>
+      <span>Vision {visionMode}</span>
       {config.action && (
         <button type="button" onClick={onOpenAddModels} className="font-medium text-[#e2875e] hover:underline">
           {config.action}

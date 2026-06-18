@@ -5,6 +5,13 @@ interface MessageAttachmentListProps {
   attachments: AiAttachmentReference[];
 }
 
+function formatImageAttachmentDetail(attachment: Extract<AiAttachmentReference, { kind: 'image' }>) {
+  const preview = attachment.summary.slice(0, 40);
+  const suffix = attachment.summary.length > 40 ? '...' : '';
+  const fallback = attachment.summaryMetadata?.fallbackUsed ? 'online->local fallback | ' : '';
+  return `${attachment.id} | ${fallback}${preview}${suffix}`;
+}
+
 export function MessageAttachmentList({ attachments }: MessageAttachmentListProps) {
   if (!attachments.length) {
     return null;
@@ -17,7 +24,7 @@ export function MessageAttachmentList({ attachments }: MessageAttachmentListProp
           <Paperclip size={12} className="text-[#e2875e]" />
           <span className="max-w-52 truncate">{attachment.fileName}</span>
           <span className="text-zinc-500">{attachment.kind === 'image'
-            ? `${attachment.id} | ${attachment.summary.slice(0, 40)}${attachment.summary.length > 40 ? '…' : ''}`
+            ? formatImageAttachmentDetail(attachment)
             : attachment.pdfReaderMode === 'tool'
               ? `${attachment.pageCount ?? '?'} pages | PDF reader`
               : attachment.pdfReaderMode === 'inline'

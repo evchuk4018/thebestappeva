@@ -1,6 +1,7 @@
 import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachments-contract';
 import { ArtifactCardSummary, parseArtifactCardSummary } from './ai-artifacts-contract';
 import { ModelProvider, normalizeModelProvider } from './ai-runtime-contract';
+import { AiVisionMode, normalizeVisionMode } from './ai-vision-contract';
 import {
   AssistantTraceStep,
   ToolInvocation,
@@ -74,6 +75,7 @@ export interface AiWorkspaceSnapshot {
   generatedUserMemory: string;
   selectedProvider: ModelProvider;
   selectedModel: string | null;
+  visionMode: AiVisionMode;
   enabledTools: Record<string, boolean>;
   customSystemPrompt: string;
 }
@@ -81,6 +83,7 @@ export interface AiWorkspaceSnapshot {
 export interface AiPreferences {
   selectedProvider: ModelProvider;
   selectedModel: string | null;
+  visionMode: AiVisionMode;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -222,6 +225,7 @@ export function createEmptyAiWorkspaceSnapshot(): AiWorkspaceSnapshot {
     generatedUserMemory: '',
     selectedProvider: 'ollama',
     selectedModel: null,
+    visionMode: 'offline',
     enabledTools: {},
     customSystemPrompt: '',
   };
@@ -239,6 +243,7 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
     record.selectedModel === null || typeof record.selectedModel === 'undefined'
       ? null
       : expectString(record.selectedModel, `${field}.selectedModel`);
+  const visionMode = normalizeVisionMode(record.visionMode);
   const enabledTools = expectRecord(record.enabledTools, `${field}.enabledTools`);
   const normalizedEnabledTools = Object.fromEntries(
     Object.entries(enabledTools).map(([toolId, enabled]) => {
@@ -255,6 +260,7 @@ export function parseAiWorkspaceSnapshot(value: unknown, field = 'AI workspace s
     generatedUserMemory: expectOptionalString(record.generatedUserMemory, `${field}.generatedUserMemory`) ?? '',
     selectedProvider,
     selectedModel,
+    visionMode,
     enabledTools: normalizedEnabledTools,
     customSystemPrompt: expectString(record.customSystemPrompt, `${field}.customSystemPrompt`),
   };
@@ -268,5 +274,6 @@ export function parseAiPreferences(value: unknown, field = 'AI preferences'): Ai
       record.selectedModel === null || typeof record.selectedModel === 'undefined'
         ? null
         : expectString(record.selectedModel, `${field}.selectedModel`),
+    visionMode: normalizeVisionMode(record.visionMode),
   };
 }

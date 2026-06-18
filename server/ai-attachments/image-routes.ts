@@ -5,7 +5,7 @@ import { sendAttachmentRouteError } from './route-errors';
 import { getAttachmentSourcePath, readAttachmentRecord } from './storage';
 import { analyzeStoredImage } from './image-analysis-service';
 import { compareGeneratedImage } from './image-compare-service';
-import { queryImageModel } from './vision-model';
+import { answerImageQuestionWithVisionProvider, describeImageWithVisionProvider } from './vision-service';
 import fs from 'node:fs/promises';
 
 function readQuestion(request: Request) {
@@ -46,6 +46,34 @@ function readCompareRequest(request: Request) {
   } as const;
 }
 
+async function readStoredImageBase64(attachmentId: string, sourceExtension: string) {
+  const sourcePath = getAttachmentSourcePath(attachmentId, sourceExtension);
+  const imageBuffer = await fs.readFile(sourcePath);
+  return imageBuffer.toString('base64');
+}
+
+export async function handlePostAiImageDescribe(request: Request, response: Response) {
+  try {
+    const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
+    const record = await readAttachmentRecord(attachmentId);
+    if (!isStoredImageAttachmentRecord(record)) {
+      throw new HttpError(415, `"${attachmentId}" is not an image attachment.`);
+    }
+    const payload = await describeImageWithVisionProvider(
+      await readStoredImageBase64(attachmentId, record.sourceExtension),
+      { mediaType: record.attachment.mediaType },
+    );
+    response.json({
+      attachment: record.attachment,
+      summary: payload.text,
+      model: payload.metadata.model,
+      metadata: payload.metadata,
+    });
+  } catch (error) {
+    sendAttachmentRouteError(response, error, 'Unable to describe this image.');
+  }
+}
+
 export async function handlePostAiImageQuestion(request: Request, response: Response) {
   try {
     const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
@@ -55,14 +83,17 @@ export async function handlePostAiImageQuestion(request: Request, response: Resp
       throw new HttpError(415, `"${attachmentId}" is not an image attachment.`);
     }
 
-    const sourcePath = getAttachmentSourcePath(attachmentId, record.sourceExtension);
-    const imageBuffer = await fs.readFile(sourcePath);
-    const payload = await queryImageModel(imageBuffer.toString('base64'), question);
+    const payload = await answerImageQuestionWithVisionProvider(
+      await readStoredImageBase64(attachmentId, record.sourceExtension),
+      question,
+      { mediaType: record.attachment.mediaType },
+    );
     response.json({
       attachment: record.attachment,
-      answer: payload.answer,
+      answer: payload.text,
       question,
-      model: payload.model,
+      model: payload.metadata.model,
+      metadata: payload.metadata,
     });
   } catch (error) {
     sendAttachmentRouteError(response, error, 'Unable to inspect this image.');

@@ -1,16 +1,18 @@
 import { AlertTriangle, PackagePlus, Wifi, WifiOff } from 'lucide-react';
 import type { AiAttachmentHealth, ModelProvider, OllamaAvailability } from './types';
+import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 
 interface AiStatusBannerProps {
   availability: OllamaAvailability;
   currentProvider: ModelProvider;
+  visionMode: AiVisionMode;
   lastError: string | null;
   parserHealth: AiAttachmentHealth | null;
   persistenceError: string | null;
   onOpenAddModels: () => void;
 }
 
-export function AiStatusBanner({ availability, currentProvider, lastError, parserHealth, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
+export function AiStatusBanner({ availability, currentProvider, visionMode, lastError, parserHealth, persistenceError, onOpenAddModels }: AiStatusBannerProps) {
   if (availability === 'ready' && parserHealth?.available !== false && !lastError && !persistenceError) {
     return null;
   }
@@ -66,7 +68,7 @@ export function AiStatusBanner({ availability, currentProvider, lastError, parse
     unavailable: {
       icon: WifiOff,
       title: `${providerLabel} unavailable`,
-      description: lastError ?? 'The app will retry automatically every 10 seconds and whenever this window regains focus.',
+      description: lastError ?? `The app will retry automatically every 10 seconds and whenever this window regains focus. Vision mode is ${visionMode}.`,
       action: null,
     },
     ready: {

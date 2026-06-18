@@ -4,6 +4,7 @@ const STORAGE_KEY = 'thebestappeva.ai.preferences.v1';
 const defaultAiPreferences: AiPreferences = {
   selectedProvider: 'ollama',
   selectedModel: null,
+  visionMode: 'offline',
 };
 
 function canUseLocalStorage() {

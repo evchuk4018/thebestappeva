@@ -11,12 +11,13 @@ export function buildVisibleTools(
   selectedChatId: string | null,
   selectedChat: Chat | null,
   provider: ModelProvider,
+  maxVisionCallsPerMessage = 4,
 ) {
   const artifactTool = createArtifactWorkspaceTool(selectedChatId ?? 'draft-artifact-chat');
   const selectedPdfAttachments = selectedChat ? collectLongPdfAttachments(selectedChat.messages) : [];
   const selectedPdfTool = createPdfReaderTool(selectedPdfAttachments);
   const selectedImageAttachments = selectedChat ? collectImageAttachments(selectedChat.messages) : [];
-  const selectedImageTool = createImageBridgeTool(selectedImageAttachments);
+  const selectedImageTool = createImageBridgeTool(selectedImageAttachments, maxVisionCallsPerMessage);
 
   return baseEntries
     .filter(({ definition }) => !definition.internal)
@@ -36,6 +37,7 @@ export function getActiveToolEntriesForChat(
   baseEntries: ToolRegistryEntry[],
   enabledTools: Record<string, boolean>,
   provider: ModelProvider,
+  maxVisionCallsPerMessage = 4,
 ) {
   const enabledEntries = baseEntries.filter(
     ({ definition }) => definition.internal || (enabledTools[definition.id] ?? definition.enabledByDefault),
@@ -47,7 +49,7 @@ export function getActiveToolEntriesForChat(
     ...enabledEntries,
     ...artifactEntries,
     ...(pdfAttachments.length ? [createPdfReaderTool(pdfAttachments)] : []),
-    ...(imageAttachments.length ? [createImageBridgeTool(imageAttachments)] : []),
+    ...(imageAttachments.length ? [createImageBridgeTool(imageAttachments, maxVisionCallsPerMessage)] : []),
   ];
 }
 

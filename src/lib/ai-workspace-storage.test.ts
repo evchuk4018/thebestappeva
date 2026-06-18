@@ -36,6 +36,7 @@ test('loads chats from the workspace API while hydrating provider preferences fr
     [aiPreferencesStorageKey]: JSON.stringify({
       selectedProvider: 'deepseek',
       selectedModel: 'deepseek-v4-flash',
+      visionMode: 'online',
     }),
   });
 
@@ -77,5 +78,6 @@ test('loads chats from the workspace API while hydrating provider preferences fr
   assert.equal(workspace.customSystemPrompt, 'Keep it tight.');
   assert.equal(workspace.selectedProvider, 'deepseek');
   assert.equal(workspace.selectedModel, 'deepseek-v4-flash');
+  assert.equal(workspace.visionMode, 'online');
   assert.deepEqual(requests, ['/api/ai/workspace']);
 });

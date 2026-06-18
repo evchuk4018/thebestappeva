@@ -10,7 +10,7 @@ import { classifyPdfReaderMode } from './pdf-content';
 import { parseDocumentWithDocling, readParserHealth } from './parser';
 import { saveAttachmentRecord, saveAttachmentSource } from './storage';
 import { StoredAiAttachmentRecord } from './types';
-import { generateImageSummary } from './vision-model';
+import { describeImageWithVisionProvider } from './vision-service';
 
 interface ParseAttachmentRequestBody {
   base64Data?: string;
@@ -133,7 +133,7 @@ async function buildStoredImageRecord(args: {
   height?: number;
 }) {
   const createdAt = new Date().toISOString();
-  const { model, summary } = await generateImageSummary(args.base64Data);
+  const response = await describeImageWithVisionProvider(args.base64Data, { mediaType: args.mediaType });
   const attachment: AiImageAttachment = {
     id: args.id,
     kind: 'image',
@@ -143,9 +143,10 @@ async function buildStoredImageRecord(args: {
     fileSize: args.fileBuffer.length,
     width: args.width,
     height: args.height,
-    summary,
-    summaryModel: model,
+    summary: response.text,
+    summaryModel: response.metadata.model,
     summaryStatus: 'ready',
+    summaryMetadata: response.metadata,
     analysisStatus: 'idle',
   };
 

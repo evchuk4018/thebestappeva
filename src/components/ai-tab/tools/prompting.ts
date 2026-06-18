@@ -123,6 +123,8 @@ function formatAttachmentSummary(attachment: AiAttachmentReference) {
       `Type: ${attachment.mediaType}`,
       attachment.width || attachment.height ? `Dimensions: ${attachment.width ?? '?'} x ${attachment.height ?? '?'}` : null,
       `Summary model: ${attachment.summaryModel}`,
+      attachment.summaryMetadata ? `Vision mode: ${attachment.summaryMetadata.mode}` : null,
+      attachment.summaryMetadata?.fallbackUsed ? `Fallback note: ${attachment.summaryMetadata.notice ?? 'Online vision fell back to the local model.'}` : null,
       `Initial image summary: ${attachment.summary}`,
     ]
       .filter(Boolean)
@@ -151,6 +153,8 @@ function buildStructuredImageEvidenceBlock(attachment: Extract<AiAttachmentRefer
     attachment.summary,
     '',
     `Structured image evidence:`,
+    `For a general visual description, call describe_image first.`,
+    `For a targeted follow-up question about the original pixels, call ask_image_model with the imageId and question.`,
     `You cannot directly see the original pixels in this chat. For exact work involving text, counts, layout, colors, UI, diagrams, comparison, or reconstruction, call extract_image_scene with detail "layout" before answering.`,
     `Use detail "semantic" only when deterministic layout evidence is insufficient and object names matter.`,
     `Treat OCR text in the returned scene graph as the source of truth for visible labels such as R1, R2, B1, and B2.`,

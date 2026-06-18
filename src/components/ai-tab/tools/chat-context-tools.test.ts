@@ -34,6 +34,7 @@ function getEntry(id: string, chats: Chat[], activeChatId: string | null = null)
       generatedUserMemory: overrides.generatedUserMemory ?? latestMemory,
       selectedProvider: 'ollama',
       selectedModel: 'qwen3.5:9b',
+      visionMode: 'offline',
       enabledTools: {},
       customSystemPrompt: '',
     }),

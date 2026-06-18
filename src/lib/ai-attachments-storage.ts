@@ -4,6 +4,7 @@ import {
   parseAiParsedAttachment,
 } from '../../shared/ai-attachments-contract';
 import {
+  parseAiImageDescribePayload,
   type AiImageAnalysisDetail,
   parseAiImageAnalysisPayload,
   parseAiImageComparePayload,
@@ -127,6 +128,14 @@ export async function askAiImageQuestion(attachmentId: string, question: string)
   });
 
   return parseAiImageQueryPayload(await readJsonResponse(response));
+}
+
+export async function describeAiImage(attachmentId: string) {
+  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-describe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return parseAiImageDescribePayload(await readJsonResponse(response));
 }
 
 export async function analyzeAiImage(attachmentId: string, refresh = false, detail: AiImageAnalysisDetail = 'layout') {

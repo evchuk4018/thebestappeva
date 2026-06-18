@@ -30,6 +30,10 @@ function toReference(attachment: AiParsedAttachment): AiAttachmentReference {
       summary: attachment.summary,
       summaryModel: attachment.summaryModel,
       summaryStatus: attachment.summaryStatus,
+      summaryMetadata: attachment.summaryMetadata,
+      analysisStatus: attachment.analysisStatus,
+      analysisVersion: attachment.analysisVersion,
+      analysisUpdatedAt: attachment.analysisUpdatedAt,
     };
   }
 

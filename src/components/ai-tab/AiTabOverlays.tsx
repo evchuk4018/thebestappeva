@@ -4,6 +4,7 @@ import { buildSystemPromptSections } from './system-prompt';
 import type { ModelProvider, OllamaModel, PullProgress, RuntimeProviderOption } from './types';
 import type { ToolDefinition } from './tools/types';
 import type { ChatMode } from './types';
+import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 
 interface AiTabOverlaysProps {
   addModelsOpen: boolean;
@@ -12,6 +13,7 @@ interface AiTabOverlaysProps {
   chatMode: ChatMode;
   currentModel: string | null;
   currentProvider: ModelProvider;
+  visionMode: AiVisionMode;
   customSystemPrompt: string;
   isPullingModel: boolean;
   pullProgress: PullProgress | null;
@@ -21,7 +23,7 @@ interface AiTabOverlaysProps {
   onCloseAddModels: () => void;
   onCloseSettings: () => void;
   onPullModel: (modelName: string) => Promise<void>;
-  onSaveSettings: (value: { customPrompt: string; provider: ModelProvider; model: string | null }) => void;
+  onSaveSettings: (value: { customPrompt: string; provider: ModelProvider; model: string | null; visionMode: AiVisionMode }) => void;
 }
 
 export function AiTabOverlays({
@@ -31,6 +33,7 @@ export function AiTabOverlays({
   chatMode,
   currentModel,
   currentProvider,
+  visionMode,
   customSystemPrompt,
   isPullingModel,
   pullProgress,
@@ -65,6 +68,7 @@ export function AiTabOverlays({
         chatMode={chatMode}
         currentModel={currentModel}
         currentProvider={currentProvider}
+        currentVisionMode={visionMode}
         customPrompt={customSystemPrompt}
         isOpen={settingsOpen}
         providerOptions={providerOptions}

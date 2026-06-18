@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseAiImageAnalysisPayload, parseAiImageComparePayload } from './ai-image-bridge-contract';
+import { parseAiImageAnalysisPayload, parseAiImageComparePayload, parseAiImageDescribePayload, parseAiImageQueryPayload } from './ai-image-bridge-contract';
 
 const attachment = {
   id: 'image_abc123',
@@ -14,6 +14,13 @@ const attachment = {
   summary: 'A labeled road map with a highlighted route.',
   summaryModel: 'qwen2.5vl:7b',
   summaryStatus: 'ready' as const,
+  summaryMetadata: {
+    mode: 'offline' as const,
+    provider: 'local' as const,
+    model: 'qwen2.5vl:7b',
+    fallbackUsed: false,
+    latencyMs: 10,
+  },
   analysisStatus: 'ready' as const,
   analysisVersion: 'scene-graph-v1',
   analysisUpdatedAt: '2026-06-15T01:00:00.000Z',
@@ -69,6 +76,43 @@ test('parses image-analysis payloads with scene graphs', () => {
   assert.equal(payload.sceneGraph.objects[0]?.label, 'left_red_zone');
   assert.equal(payload.sceneGraph.diagnostics.objectCount, 2);
   assert.deepEqual(payload.sceneGraph.objects[1]?.line, [182, 80, 182, 500]);
+});
+
+test('parses image describe and question payloads with provider metadata', () => {
+  const describePayload = parseAiImageDescribePayload({
+    attachment,
+    summary: 'A map with a highlighted route.',
+    model: 'gemini-2.5-flash-lite',
+    metadata: {
+      mode: 'online',
+      provider: 'gemini',
+      model: 'gemini-2.5-flash-lite',
+      fallbackUsed: false,
+      latencyMs: 42,
+      inputTokens: 120,
+      outputTokens: 45,
+      totalTokens: 165,
+      estimatedCostUsd: 0.0000975,
+    },
+  });
+  const questionPayload = parseAiImageQueryPayload({
+    attachment,
+    answer: 'Yes, the route is highlighted in red.',
+    question: 'Is the route highlighted?',
+    model: 'qwen2.5vl:7b',
+    metadata: {
+      mode: 'online',
+      provider: 'local',
+      model: 'qwen2.5vl:7b',
+      fallbackUsed: true,
+      fallbackReason: 'Gemini timed out.',
+      latencyMs: 2150,
+      notice: 'Online vision was unavailable. This image was analyzed using the local vision model.',
+    },
+  });
+
+  assert.equal(describePayload.metadata.provider, 'gemini');
+  assert.equal(questionPayload.metadata.fallbackUsed, true);
 });
 
 test('parses image-compare payloads with patch guidance', () => {

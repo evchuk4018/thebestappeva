@@ -29,6 +29,7 @@ export async function loadAiWorkspace() {
     ...workspace,
     selectedProvider: preferences.selectedProvider,
     selectedModel: preferences.selectedModel,
+    visionMode: preferences.visionMode,
   };
 }
 

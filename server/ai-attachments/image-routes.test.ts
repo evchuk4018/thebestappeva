@@ -5,10 +5,11 @@ import path from 'node:path';
 import test from 'node:test';
 import type { AiImageSceneGraph } from '../../shared/ai-image-bridge-contract';
 import { serverConfig } from '../config';
-import { handlePostAiImageAnalysis, handlePostAiImageCompare, handlePostAiImageQuestion } from './image-routes';
+import { handlePostAiImageAnalysis, handlePostAiImageCompare, handlePostAiImageDescribe, handlePostAiImageQuestion } from './image-routes';
 import { saveAttachmentRecord, saveAttachmentSource } from './storage';
 import { setImageAnalysisTestHooksForTests } from './image-analysis-service';
 import { setRenderSvgHookForTests } from './image-compare-service';
+import { setVisionServiceTestHooksForTests } from './vision-service';
 
 function createResponseCapture() {
   return {
@@ -37,6 +38,13 @@ const imageAttachment = {
   summary: 'A street map.',
   summaryModel: 'qwen2.5vl:7b',
   summaryStatus: 'ready' as const,
+  summaryMetadata: {
+    mode: 'offline' as const,
+    provider: 'local' as const,
+    model: 'qwen2.5vl:7b',
+    fallbackUsed: false,
+    latencyMs: 12,
+  },
   analysisStatus: 'idle' as const,
 };
 
@@ -59,19 +67,27 @@ const sceneGraph: AiImageSceneGraph = {
 };
 
 test('image query route sends stored image bytes plus the question to Ollama', async () => {
-  const originalFetch = globalThis.fetch;
   const originalStoragePath = serverConfig.aiAttachmentStoragePath;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-query-'));
   serverConfig.aiAttachmentStoragePath = tempDir;
-  const fetchBodies: string[] = [];
-
-  globalThis.fetch = async (input, init) => {
-    fetchBodies.push(typeof init?.body === 'string' ? init.body : '');
-    if (String(input).endsWith('/api/tags')) {
-      return new Response(JSON.stringify({ models: [{ name: 'qwen2.5vl:7b' }] }), { headers: { 'Content-Type': 'application/json' } });
-    }
-    return new Response(JSON.stringify({ message: { content: 'Yes, it is a map.' } }), { headers: { 'Content-Type': 'application/json' } });
-  };
+  const calls: string[] = [];
+  setVisionServiceTestHooksForTests({
+    mode: 'offline',
+    localProvider: {
+      provider: 'local',
+      async healthCheck() {
+        return { available: true, provider: 'local', detail: 'ready' };
+      },
+      async describeImage() {
+        calls.push('describe');
+        return { provider: 'local', model: 'qwen2.5vl:7b', text: 'A street map.' };
+      },
+      async answerImageQuestion(_image, question) {
+        calls.push(question);
+        return { provider: 'local', model: 'qwen2.5vl:7b', text: 'Yes, it is a map.' };
+      },
+    },
+  });
 
   try {
     await saveAttachmentSource(imageAttachment.id, '.png', Buffer.from('fake-image'));
@@ -82,9 +98,55 @@ test('image query route sends stored image bytes plus the question to Ollama', a
 
     assert.equal(response.statusCode, 200);
     assert.equal((response.body as { answer?: string }).answer, 'Yes, it is a map.');
-    assert.match(fetchBodies[1] ?? '', /Is this image a map\?/);
+    assert.equal((response.body as { metadata: { provider: string } }).metadata.provider, 'local');
+    assert.equal(calls[0], 'Is this image a map?');
   } finally {
-    globalThis.fetch = originalFetch;
+    setVisionServiceTestHooksForTests({});
+    serverConfig.aiAttachmentStoragePath = originalStoragePath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('image describe route returns provider metadata', async () => {
+  const originalStoragePath = serverConfig.aiAttachmentStoragePath;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-describe-'));
+  serverConfig.aiAttachmentStoragePath = tempDir;
+  setVisionServiceTestHooksForTests({
+    mode: 'online',
+    onlineProvider: {
+      provider: 'gemini',
+      async healthCheck() {
+        return { available: true, provider: 'gemini', detail: 'ready' };
+      },
+      async describeImage() {
+        return {
+          provider: 'gemini',
+          model: 'gemini-2.5-flash-lite',
+          text: 'A map with a highlighted route.',
+          inputTokens: 120,
+          outputTokens: 30,
+          totalTokens: 150,
+          estimatedCostUsd: 0.000075,
+        };
+      },
+      async answerImageQuestion() {
+        throw new Error('Not used in this test.');
+      },
+    },
+  });
+
+  try {
+    await saveAttachmentSource(imageAttachment.id, '.png', Buffer.from('fake-image'));
+    await saveAttachmentRecord({ attachment: imageAttachment, sourceExtension: '.png' });
+
+    const response = createResponseCapture();
+    await handlePostAiImageDescribe({ params: { attachmentId: imageAttachment.id }, body: {} } as never, response as never);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal((response.body as { summary?: string }).summary, 'A map with a highlighted route.');
+    assert.equal((response.body as { metadata: { provider: string } }).metadata.provider, 'gemini');
+  } finally {
+    setVisionServiceTestHooksForTests({});
     serverConfig.aiAttachmentStoragePath = originalStoragePath;
     await fs.rm(tempDir, { recursive: true, force: true });
   }

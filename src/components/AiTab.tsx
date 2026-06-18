@@ -53,6 +53,7 @@ export default function AiTab() {
     chats,
     currentProvider,
     currentModel,
+    visionMode,
     customSystemPrompt,
     deleteChat,
     editAndResendMessage,
@@ -75,6 +76,7 @@ export default function AiTab() {
     setArtifactIncluded,
     setCustomSystemPrompt,
     setProvider,
+    setVisionMode,
     showTypingIndicator,
     systemPromptContext,
     switchUserMessageVersion,
@@ -189,13 +191,20 @@ export default function AiTab() {
           )}
 
           <div className="flex h-16 select-none items-center justify-center pt-3">
-            <RuntimePill availability={availability} currentProvider={currentProvider} modelCount={availableModels.length} onOpenAddModels={openAddModels} />
+            <RuntimePill
+              availability={availability}
+              currentProvider={currentProvider}
+              visionMode={visionMode}
+              modelCount={availableModels.length}
+              onOpenAddModels={openAddModels}
+            />
           </div>
 
           <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
             <AiStatusBanner
               availability={availability}
               currentProvider={currentProvider}
+              visionMode={visionMode}
               lastError={lastError}
               parserHealth={parserHealth}
               persistenceError={persistenceError}
@@ -250,6 +259,7 @@ export default function AiTab() {
         chatMode={chatMode}
         currentModel={currentModel}
         currentProvider={currentProvider}
+        visionMode={visionMode}
         customSystemPrompt={customSystemPrompt}
         isPullingModel={isPullingModel}
         pullProgress={pullProgress}
@@ -262,6 +272,7 @@ export default function AiTab() {
         onSaveSettings={(value) => {
           setCustomSystemPrompt(value.customPrompt);
           setProvider(value.provider, value.model);
+          setVisionMode(value.visionMode);
           setSettingsOpen(false);
         }}
       />

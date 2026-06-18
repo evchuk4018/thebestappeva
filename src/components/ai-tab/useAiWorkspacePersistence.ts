@@ -17,6 +17,7 @@ interface AiWorkspacePersistenceState {
   generatedUserMemory: string;
   currentProvider: AiWorkspaceSnapshot['selectedProvider'];
   currentModel: string | null;
+  visionMode: AiWorkspaceSnapshot['visionMode'];
   customSystemPrompt: string;
   enabledTools: Record<string, boolean>;
   hydrationStatus: HydrationStatus;
@@ -25,6 +26,7 @@ interface AiWorkspacePersistenceState {
   setGeneratedUserMemory: Dispatch<SetStateAction<string>>;
   setCurrentProvider: Dispatch<SetStateAction<AiWorkspaceSnapshot['selectedProvider']>>;
   setCurrentModel: Dispatch<SetStateAction<string | null>>;
+  setVisionMode: Dispatch<SetStateAction<AiWorkspaceSnapshot['visionMode']>>;
   setCustomSystemPrompt: Dispatch<SetStateAction<string>>;
   setEnabledTools: Dispatch<SetStateAction<Record<string, boolean>>>;
   getChats: () => Chat[];
@@ -42,6 +44,7 @@ function buildSnapshot(
   generatedUserMemory: string,
   currentProvider: AiWorkspaceSnapshot['selectedProvider'],
   currentModel: string | null,
+  visionMode: AiWorkspaceSnapshot['visionMode'],
   enabledTools: Record<string, boolean>,
   customSystemPrompt: string,
 ): AiWorkspaceSnapshot {
@@ -50,6 +53,7 @@ function buildSnapshot(
     generatedUserMemory,
     selectedProvider: currentProvider,
     selectedModel: currentModel,
+    visionMode,
     enabledTools,
     customSystemPrompt,
   };
@@ -60,6 +64,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const [generatedUserMemory, setGeneratedUserMemoryState] = useState('');
   const [currentProvider, setCurrentProvider] = useState<AiWorkspaceSnapshot['selectedProvider']>('ollama');
   const [currentModel, setCurrentModel] = useState<string | null>(null);
+  const [visionMode, setVisionMode] = useState<AiWorkspaceSnapshot['visionMode']>('offline');
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
   const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>({});
   const [hydrationStatus, setHydrationStatus] = useState<HydrationStatus>('loading');
@@ -70,6 +75,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const generatedUserMemoryRef = useRef('');
   const currentProviderRef = useRef<AiWorkspaceSnapshot['selectedProvider']>('ollama');
   const currentModelRef = useRef<string | null>(null);
+  const visionModeRef = useRef<AiWorkspaceSnapshot['visionMode']>('offline');
   const customSystemPromptRef = useRef('');
   const enabledToolsRef = useRef<Record<string, boolean>>({});
 
@@ -97,6 +103,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
       overrides.generatedUserMemory ?? generatedUserMemoryRef.current,
       overrides.selectedProvider ?? currentProviderRef.current,
       overrides.selectedModel ?? currentModelRef.current,
+      overrides.visionMode ?? visionModeRef.current,
       overrides.enabledTools ?? enabledToolsRef.current,
       overrides.customSystemPrompt ?? customSystemPromptRef.current,
     ));
@@ -106,18 +113,20 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     generatedUserMemoryRef.current = generatedUserMemory;
     currentProviderRef.current = currentProvider;
     currentModelRef.current = currentModel;
+    visionModeRef.current = visionMode;
     customSystemPromptRef.current = customSystemPrompt;
     enabledToolsRef.current = enabledTools;
-  }, [chats, generatedUserMemory, currentProvider, currentModel, customSystemPrompt, enabledTools]);
+  }, [chats, generatedUserMemory, currentProvider, currentModel, visionMode, customSystemPrompt, enabledTools]);
 
   const snapshot = useMemo<AiWorkspaceSnapshot>(() => buildSnapshot(
     chats,
     generatedUserMemory,
     currentProvider,
     currentModel,
+    visionMode,
     enabledTools,
     customSystemPrompt,
-  ), [chats, generatedUserMemory, currentProvider, currentModel, enabledTools, customSystemPrompt]);
+  ), [chats, generatedUserMemory, currentProvider, currentModel, visionMode, enabledTools, customSystemPrompt]);
   const serializedSnapshot = useMemo(() => JSON.stringify(snapshot), [snapshot]);
 
   const flushWorkspace = useEffectEvent(async (options: FlushWorkspaceOptions = {}) => {
@@ -155,12 +164,14 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
         generatedUserMemoryRef.current = nextSnapshot.generatedUserMemory;
         currentProviderRef.current = nextSnapshot.selectedProvider;
         currentModelRef.current = nextSnapshot.selectedModel;
+        visionModeRef.current = nextSnapshot.visionMode;
         enabledToolsRef.current = nextSnapshot.enabledTools;
         customSystemPromptRef.current = nextSnapshot.customSystemPrompt;
         setChatsState(nextSnapshot.chats);
         setGeneratedUserMemoryState(nextSnapshot.generatedUserMemory);
         setCurrentProvider(nextSnapshot.selectedProvider);
         setCurrentModel(nextSnapshot.selectedModel);
+        setVisionMode(nextSnapshot.visionMode);
         setEnabledTools(nextSnapshot.enabledTools);
         setCustomSystemPrompt(nextSnapshot.customSystemPrompt);
         setPersistenceError(null);
@@ -201,11 +212,12 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
       saveAiPreferencesToLocalStorage({
         selectedProvider: currentProvider,
         selectedModel: currentModel,
+        visionMode,
       });
     } catch (error) {
       setPersistenceError(toErrorMessage(error, 'Unable to save the local AI preferences.'));
     }
-  }, [currentModel, currentProvider, hydrationStatus]);
+  }, [currentModel, currentProvider, hydrationStatus, visionMode]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -221,6 +233,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     generatedUserMemory,
     currentProvider,
     currentModel,
+    visionMode,
     customSystemPrompt,
     enabledTools,
     hydrationStatus,
@@ -229,6 +242,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     setGeneratedUserMemory,
     setCurrentProvider,
     setCurrentModel,
+    setVisionMode,
     setCustomSystemPrompt,
     setEnabledTools,
     getChats,

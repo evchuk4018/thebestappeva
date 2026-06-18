@@ -1,6 +1,7 @@
 import type { AiMemoryRefreshResponse } from '../../../shared/ai-memory-contract';
 import type { AiWorkspaceSnapshot, Chat, ModelProvider } from './types';
 import { mergeMemoryRefreshIntoChats } from './memory-refresh';
+import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 
 export interface WorkspaceMemorySyncContext {
   getChats: () => Chat[];
@@ -16,6 +17,7 @@ export function buildWorkspaceSnapshot(
   generatedUserMemory: string,
   currentProvider: ModelProvider,
   currentModel: string | null,
+  visionMode: AiVisionMode,
   enabledTools: Record<string, boolean>,
   customSystemPrompt: string,
 ): AiWorkspaceSnapshot {
@@ -24,6 +26,7 @@ export function buildWorkspaceSnapshot(
     generatedUserMemory,
     selectedProvider: currentProvider,
     selectedModel: currentModel,
+    visionMode,
     enabledTools,
     customSystemPrompt,
   };

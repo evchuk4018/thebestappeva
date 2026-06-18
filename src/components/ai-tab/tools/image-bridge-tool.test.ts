@@ -82,6 +82,105 @@ test('extract_image_scene proxies the structured analysis route', async () => {
   }
 });
 
+test('describe_image and ask_image_model proxy the provider-independent image routes', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; body: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    requests.push({ url, body: typeof init?.body === 'string' ? init.body : '' });
+    if (url.endsWith('/image-describe')) {
+      return new Response(JSON.stringify({
+        attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
+        summary: 'A map with a highlighted route.',
+        model: 'gemini-2.5-flash-lite',
+        metadata: {
+          mode: 'online',
+          provider: 'gemini',
+          model: 'gemini-2.5-flash-lite',
+          fallbackUsed: false,
+          latencyMs: 42,
+        },
+      }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({
+      attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
+      answer: 'Yes, the route is highlighted.',
+      question: 'Is the route highlighted?',
+      model: 'qwen2.5vl:7b',
+      metadata: {
+        mode: 'online',
+        provider: 'local',
+        model: 'qwen2.5vl:7b',
+        fallbackUsed: true,
+        fallbackReason: 'Gemini timed out.',
+        latencyMs: 2050,
+        notice: 'Online vision was unavailable. This image was analyzed using the local vision model.',
+      },
+    }), { headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const tool = createImageBridgeTool([attachment]);
+    const describe = await tool.execute({
+      toolId: 'image-bridge',
+      functionName: 'describe_image',
+      args: { imageId: attachment.id },
+      createdAt: '2026-06-15T00:00:00.000Z',
+    }, {});
+    const answer = await tool.execute({
+      toolId: 'image-bridge',
+      functionName: 'ask_image_model',
+      args: { imageId: attachment.id, question: 'Is the route highlighted?' },
+      createdAt: '2026-06-15T00:00:00.000Z',
+    }, {});
+    if ('deferred' in describe || 'deferred' in answer) {
+      assert.fail('Expected immediate tool results.');
+    }
+    assert.equal((describe.data?.metadata as { provider: string } | undefined)?.provider, 'gemini');
+    assert.equal((answer.data?.metadata as { fallbackUsed: boolean } | undefined)?.fallbackUsed, true);
+    assert.match(requests[1]?.body ?? '', /Is the route highlighted\?/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('describe_image enforces the per-message vision call cap', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    attachment: { ...attachment, createdAt: '2026-06-15T00:00:00.000Z' },
+    summary: 'A map with a highlighted route.',
+    model: 'qwen2.5vl:7b',
+    metadata: {
+      mode: 'offline',
+      provider: 'local',
+      model: 'qwen2.5vl:7b',
+      fallbackUsed: false,
+      latencyMs: 20,
+    },
+  }), { headers: { 'Content-Type': 'application/json' } });
+
+  try {
+    const tool = createImageBridgeTool([attachment], 1);
+    await tool.execute({
+      toolId: 'image-bridge',
+      functionName: 'describe_image',
+      args: { imageId: attachment.id },
+      createdAt: '2026-06-15T00:00:00.000Z',
+    }, {});
+    await assert.rejects(
+      () => tool.execute({
+        toolId: 'image-bridge',
+        functionName: 'describe_image',
+        args: { imageId: attachment.id },
+        createdAt: '2026-06-15T00:00:00.000Z',
+      }, {}),
+      /per-message vision call limit/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('compare_generated_image proxies structured SVG comparison', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({

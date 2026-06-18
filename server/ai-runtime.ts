@@ -3,6 +3,7 @@ import { normalizeModelProvider } from '../shared/ai-runtime-contract';
 import type { AiRuntimeConfig, ModelChatMessage, ModelToolDefinition, RuntimeOptions } from '../shared/ai-runtime-contract';
 import { HttpError } from './http';
 import { getDefaultModelProviderId, getModelProvider, listModelProviders } from './model-providers';
+import { serverConfig } from './config';
 
 function expectRecord(value: unknown, field: string) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -61,6 +62,8 @@ export async function buildRuntimeConfig() {
     defaultProvider: getDefaultModelProviderId(),
     providerOptions: statuses.map((status) => status.option),
     modelOptions: statuses.flatMap((status) => status.models),
+    defaultVisionMode: serverConfig.visionMode,
+    visionMaxCallsPerMessage: serverConfig.visionMaxCallsPerMessage,
   } satisfies AiRuntimeConfig;
 }
 

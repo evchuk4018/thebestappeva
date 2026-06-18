@@ -30,6 +30,7 @@ export function useOllamaChat() {
     generatedUserMemory,
     currentProvider,
     currentModel,
+    visionMode,
     customSystemPrompt,
     enabledTools,
     hydrationStatus,
@@ -38,6 +39,7 @@ export function useOllamaChat() {
     setGeneratedUserMemory,
     setCurrentProvider,
     setCurrentModel,
+    setVisionMode,
     setCustomSystemPrompt,
     setEnabledTools,
     getChats,
@@ -57,32 +59,18 @@ export function useOllamaChat() {
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
   useChatTitleGeneration({ availableModels, chats, setChats });
   const autoMemoryRefresh = useAutoMemoryRefresh({ getChats, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats });
-  const toolRegistryEntries = [
-    ...getToolRegistryEntries(),
-    ...createChatContextToolEntries({
-      getChats,
-      activeChatId: selectedChatId,
-      getGeneratedUserMemory,
-      getWorkspaceSnapshot,
-      flushWorkspace,
-      setGeneratedUserMemory,
-      setChats,
-    }),
-  ];
+  const toolRegistryEntries = [...getToolRegistryEntries(), ...createChatContextToolEntries({
+    getChats, activeChatId: selectedChatId, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats,
+  })];
   const persistedSelectedChat = chats.find((chat) => chat.id === selectedChatId) ?? null;
   const selectedLiveChat = liveChat?.chatId === selectedChatId ? liveChat : null;
   const selectedChat = resolveActiveChat(persistedSelectedChat, selectedLiveChat);
-  const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat, currentProvider);
-  const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools, currentProvider);
+  const maxVisionCallsPerMessage = runtimeConfig?.visionMaxCallsPerMessage ?? 4;
+  const tools = buildVisibleTools(toolRegistryEntries, enabledTools, selectedChatId, persistedSelectedChat, currentProvider, maxVisionCallsPerMessage);
+  const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage);
   const chatMode = selectedChat?.mode ?? draftMode;
   const isBusy = isTyping || Boolean(pendingAskUserTurn);
-  const systemPromptContext: SystemPromptContext = {
-    generatedUserMemory,
-    customPrompt: customSystemPrompt,
-    mode: chatMode,
-    tools: activeToolEntries.map(({ definition }) => definition),
-    artifactContext: undefined,
-  };
+  const systemPromptContext: SystemPromptContext = { generatedUserMemory, customPrompt: customSystemPrompt, mode: chatMode, tools: activeToolEntries.map(({ definition }) => definition), artifactContext: undefined };
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
   useEffect(() => {
     if (!isTyping) {
@@ -98,12 +86,7 @@ export function useOllamaChat() {
       setPendingAskUserTurn(pendingPrompt);
     }
   }, [pendingAskUserTurn, persistedSelectedChat, selectedChat]);
-  function selectChat(chatId: string | null) {
-    setSelectedChatId(chatId);
-    if (!chatId) {
-      setDraftMode('thinking');
-    }
-  }
+  function selectChat(chatId: string | null) { setSelectedChatId(chatId); if (!chatId) setDraftMode('thinking'); }
   function setChatMode(mode: ChatMode) {
     if (selectedChatId) {
       setChats((currentChats) => updateChatMode(currentChats, selectedChatId, mode));
@@ -128,7 +111,7 @@ export function useOllamaChat() {
     const controller = new AbortController();
     activeTurnControllerRef.current = controller;
     try {
-      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools, currentProvider) : [];
+      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage) : [];
       const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
       const promptContext = {
         generatedUserMemory,
@@ -236,9 +219,7 @@ export function useOllamaChat() {
     setChats((currentChats) => currentChats.map((chat) => chat.id === selectedChatId ? setChatIncludedArtifactState(chat, artifactId, included) : chat));
   }
   async function submitAskUserResponse(messageId: string, stepId: string, response: AskUserResponse) {
-    if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) {
-      return;
-    }
+    if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) return;
     const targetChat = chats.find((chat) => chat.id === pendingAskUserTurn.chatId);
     if (!targetChat) {
       setPendingAskUserTurn(null);
@@ -258,6 +239,7 @@ export function useOllamaChat() {
     generatedUserMemory,
     currentProvider,
     currentModel,
+    visionMode,
     customSystemPrompt,
     activeChat: selectedChat,
     deleteChat,
@@ -274,6 +256,7 @@ export function useOllamaChat() {
     setCurrentModel,
     setCustomSystemPrompt,
     setProvider,
+    setVisionMode,
     selectChat,
     selectedChatId,
     activeArtifactId: selectedChat?.activeArtifactId ?? null,

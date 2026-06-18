@@ -1,3 +1,5 @@
+import { AiVisionMode } from './ai-vision-contract';
+
 export type ModelProvider = 'ollama' | 'deepseek';
 
 export interface RuntimeModel {
@@ -64,6 +66,8 @@ export interface AiRuntimeConfig {
   defaultProvider: ModelProvider;
   providerOptions: RuntimeProviderOption[];
   modelOptions: RuntimeModel[];
+  defaultVisionMode: AiVisionMode;
+  visionMaxCallsPerMessage: number;
 }
 
 export interface RuntimeOptions {

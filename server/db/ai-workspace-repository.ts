@@ -5,9 +5,12 @@ import { readJsonSetting, writeJsonSetting } from './app-settings-repository';
 
 const selectedModelKey = 'ai.selected-model';
 const selectedProviderKey = 'ai.selected-provider';
+const visionModeKey = 'ai.vision-mode';
 const enabledToolsKey = 'ai.enabled-tools';
 const customSystemPromptKey = 'ai.custom-system-prompt';
 const generatedUserMemoryKey = 'ai.generated-user-memory';
+
+const defaultAiPreferences = { selectedProvider: 'ollama' as const, selectedModel: null, visionMode: 'offline' as const };
 
 function parseStoredChat(payloadJson: string, chatId: string) {
   const parsed = JSON.parse(payloadJson);
@@ -54,8 +57,9 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
       return {
         chats: selectStoredChats(),
         generatedUserMemory: loadGeneratedUserMemory(),
-        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedProvider,
-        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedModel,
+        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
+        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
+        visionMode: readJsonSetting(database, visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
         enabledTools: readJsonSetting(
           database,
           enabledToolsKey,
@@ -72,8 +76,9 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
     },
     loadAiPreferences(): AiPreferences {
       return {
-        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedProvider,
-        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, { selectedProvider: 'ollama', selectedModel: null }).selectedModel,
+        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
+        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
+        visionMode: readJsonSetting(database, visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
       };
     },
     loadGeneratedUserMemory,
@@ -119,6 +124,7 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
 
         writeJsonSetting(database, selectedProviderKey, { selectedProvider: nextSnapshot.selectedProvider });
         writeJsonSetting(database, selectedModelKey, { selectedModel: nextSnapshot.selectedModel });
+        writeJsonSetting(database, visionModeKey, { visionMode: nextSnapshot.visionMode });
         writeJsonSetting(database, enabledToolsKey, nextSnapshot.enabledTools);
         writeJsonSetting(database, customSystemPromptKey, nextSnapshot.customSystemPrompt);
         writeJsonSetting(database, generatedUserMemoryKey, nextSnapshot.generatedUserMemory);

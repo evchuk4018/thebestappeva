@@ -27,7 +27,7 @@ export function PendingAttachmentTray({ attachments, onRemove }: PendingAttachme
           {attachment.status === 'ready' && attachment.attachment && (
             <span className="text-[10px] text-zinc-500">
               {attachment.attachment.kind === 'image'
-                ? `${attachment.attachment.id} | summary ready`
+                ? `${attachment.attachment.id} | ${attachment.attachment.summaryMetadata?.fallbackUsed ? 'online->local fallback | ' : ''}summary ready`
                 : attachment.attachment.pdfReaderMode === 'tool'
                   ? `${attachment.attachment.pageCount ?? '?'} pages | PDF reader`
                   : attachment.attachment.pdfReaderMode === 'inline'

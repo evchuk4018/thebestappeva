@@ -140,7 +140,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
-- the AI sidebar footer now opens a settings modal where custom system instructions persist in the local SQLite workspace, while the selected AI provider/model persist in browser localStorage and the built-in Markdown and tool guidance stay visible as read-only runtime context
+- the AI sidebar footer now opens a settings modal where custom system instructions and the selected vision mode persist in the local SQLite workspace, while the selected AI provider/model persist in browser localStorage and the built-in Markdown and tool guidance stay visible as read-only runtime context
 - DeepSeek BYOK models are discovered from the server-side `GET /models` API and appear in the same model picker as local Ollama models
 
 Implementation notes:
@@ -148,11 +148,12 @@ Implementation notes:
 - Runtime: local Ollama HTTP API at `http://127.0.0.1:11434`
 - DeepSeek BYOK runtime: server-side `GET /models` and `POST /chat/completions` against `https://api.deepseek.com` with `DEEPSEEK_API_KEY`
 - AI-ready dev bootstrap: `npm run ai:dev`, which starts or connects to Ollama, ensures `qwen3.5:9b`, requires SearXNG readiness, and then launches the local app server
-- Image upload summaries and generic image questions prefer local `qwen3-vl:8b`, then `qwen2.5vl:7b`, followed by smaller `qwen3-vl` and `internvl3` fallbacks; override that shared order with `AI_VISION_MODELS`, and `qwen3vl:*` aliases are normalized automatically
+- Vision mode defaults to `VISION_MODE=offline`; `online` prefers Gemini for upload summaries and direct image Q&A, then falls back to the local Ollama vision stack when Gemini is unavailable
+- Local upload summaries and image Q&A use `LOCAL_VISION_MODEL` when set, otherwise they reuse the `AI_VISION_MODELS` fallback order; `qwen3vl:*` aliases are normalized automatically
 - Structured `image-analysis` layout mode is local deterministic OpenCV/RapidOCR work and does not call a VLM. Semantic mode uses one annotated contact-sheet request to `AI_IMAGE_ANALYSIS_VISION_MODEL`, enforces `AI_IMAGE_ANALYSIS_VISION_TIMEOUT_MS`, evicts other loaded Ollama models before analysis, retries CUDA/kernel failures once on CPU, and unloads the pinned model again when the session ends
-- Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection mirrored server-side but sourced from browser localStorage on the client
+- Local persistence API: same-origin `GET /api/ai/workspace`, `PUT /api/ai/workspace`, and `GET /api/ai/preferences`, with AI provider/model selection and vision mode mirrored server-side but sourced from browser localStorage on the client
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using fixed local Ollama `qwen3.5:9b` with `think: true` to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
-- Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
+- Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-describe`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
 - Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
 - Local attachment storage: `.local-data/ai-attachments`
