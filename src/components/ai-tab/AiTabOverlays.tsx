@@ -5,6 +5,7 @@ import type { ModelProvider, OllamaModel, PullProgress, RuntimeProviderOption } 
 import type { ToolDefinition } from './tools/types';
 import type { ChatMode } from './types';
 import type { AiVisionMode } from '../../../shared/ai-vision-contract';
+import type { SkillSummary } from '../../../shared/skills-contract';
 
 interface AiTabOverlaysProps {
   addModelsOpen: boolean;
@@ -19,6 +20,7 @@ interface AiTabOverlaysProps {
   pullProgress: PullProgress | null;
   providerOptions: RuntimeProviderOption[];
   settingsOpen: boolean;
+  skills: SkillSummary[];
   tools: ToolDefinition[];
   onCloseAddModels: () => void;
   onCloseSettings: () => void;
@@ -39,6 +41,7 @@ export function AiTabOverlays({
   pullProgress,
   providerOptions,
   settingsOpen,
+  skills,
   tools,
   onCloseAddModels,
   onCloseSettings,
@@ -51,6 +54,7 @@ export function AiTabOverlays({
     mode: chatMode,
     tools,
     artifactContext: undefined,
+    skills,
   });
 
   return (

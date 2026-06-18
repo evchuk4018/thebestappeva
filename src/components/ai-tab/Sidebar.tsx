@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Wrench, X } from 'lucide-react';
+import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Sparkles, Wrench, X } from 'lucide-react';
 import { Chat } from './types';
 import { searchChats } from './chat-search';
 import { SidebarChatsPanel } from './SidebarChatsPanel';
+import { SkillsPanel } from './skills/SkillsPanel';
 import { ToolsPanel } from './ToolsPanel';
 import { ToolDefinition } from './tools/types';
+import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../shared/skills-contract';
 
-type SidebarPanel = 'chats' | 'tools';
+type SidebarPanel = 'chats' | 'tools' | 'skills';
 type HydrationStatus = 'loading' | 'ready' | 'error';
 
 interface SidebarTool extends ToolDefinition {
@@ -20,6 +22,9 @@ interface SidebarProps {
   selectedChatId: string | null;
   sidebarOpen: boolean;
   tools: SidebarTool[];
+  skills: SkillSummary[];
+  skillsLoading: boolean;
+  skillsError: string | null;
   hydrationStatus?: HydrationStatus;
   persistenceError?: string | null;
   onClose: () => void;
@@ -30,11 +35,16 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onSelectPanel: (panel: SidebarPanel) => void;
   onToggleTool: (toolId: string, enabled: boolean) => void;
+  onCreateSkill: (request: CreateSkillRequest) => Promise<unknown>;
+  onUpdateSkill: (id: string, request: UpdateSkillRequest) => Promise<unknown>;
+  onToggleSkill: (id: string, enabled: boolean) => Promise<unknown>;
+  onDeleteSkill: (id: string) => Promise<unknown>;
 }
 
 const panelItems = [
   { icon: MessageSquare, label: 'Chats', value: 'chats' },
   { icon: Wrench, label: 'Tools', value: 'tools' },
+  { icon: Sparkles, label: 'Skills', value: 'skills' },
 ] as const;
 
 export function Sidebar({
@@ -44,6 +54,9 @@ export function Sidebar({
   selectedChatId,
   sidebarOpen,
   tools,
+  skills,
+  skillsLoading,
+  skillsError,
   hydrationStatus = 'ready',
   persistenceError = null,
   onClose,
@@ -54,6 +67,10 @@ export function Sidebar({
   onSelectChat,
   onSelectPanel,
   onToggleTool,
+  onCreateSkill,
+  onUpdateSkill,
+  onToggleSkill,
+  onDeleteSkill,
 }: SidebarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,7 +171,7 @@ export function Sidebar({
 
         <div className="mt-3 px-3">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Workspace</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {panelItems.map(({ icon: Icon, label, value }) => {
               const isActive = activePanel === value;
               return (
@@ -191,8 +208,18 @@ export function Sidebar({
               onSelectChat(chatId);
             }}
           />
-        ) : (
+        ) : activePanel === 'tools' ? (
           <ToolsPanel tools={tools} onToggleTool={onToggleTool} />
+        ) : (
+          <SkillsPanel
+            skills={skills}
+            loading={skillsLoading}
+            error={skillsError}
+            onCreate={onCreateSkill}
+            onUpdate={onUpdateSkill}
+            onToggle={onToggleSkill}
+            onDelete={onDeleteSkill}
+          />
         )}
       </div>
 

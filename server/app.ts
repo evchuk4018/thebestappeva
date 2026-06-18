@@ -46,6 +46,15 @@ import { handleUrlFetch } from './url-fetch';
 import { handlePythonExec, handlePythonExecFileDownload } from './python-exec';
 import { handleWebSearch } from './web-search';
 import {
+  handleCreateSkill,
+  handleDeleteSkill,
+  handleGetSkill,
+  handleGetSkillByName,
+  handleListSkills,
+  handlePutSkill,
+  handleToggleSkill,
+} from './skills';
+import {
   handleCreateDoc,
   handleCreateDocVersion,
   handleDeleteDoc,
@@ -178,6 +187,13 @@ function registerApiRoutes(app: Express) {
   app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
   app.post('/api/python-exec', (req, res) => void handlePythonExec(req, res));
   app.get('/api/ai/chats/:chatId/python-exec/files/*', (req, res) => void handlePythonExecFileDownload(req, res));
+  app.get('/api/skills', (req, res) => void handleListSkills(req, res));
+  app.post('/api/skills', (req, res) => void handleCreateSkill(req, res));
+  app.get('/api/skills/by-name/:name', (req, res) => void handleGetSkillByName(req, res));
+  app.get('/api/skills/:skillId', (req, res) => void handleGetSkill(req, res));
+  app.put('/api/skills/:skillId', (req, res) => void handlePutSkill(req, res));
+  app.delete('/api/skills/:skillId', (req, res) => void handleDeleteSkill(req, res));
+  app.post('/api/skills/:skillId/toggle', (req, res) => void handleToggleSkill(req, res));
 }
 
 function registerErrorHandler(app: Express) {

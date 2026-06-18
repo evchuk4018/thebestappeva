@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react';
 import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import { ChatComposer } from './ChatComposer';
 import type { PendingAttachment } from './useAiAttachments';
+import type { SkillSummary } from '../../../shared/skills-contract';
 
 interface AiActiveComposerProps {
   availability: OllamaAvailability;
@@ -16,6 +17,7 @@ interface AiActiveComposerProps {
   isUploadingAttachments: boolean;
   models: OllamaModel[];
   pendingAttachments: PendingAttachment[];
+  skills: SkillSummary[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -46,6 +48,7 @@ export function AiActiveComposer(props: AiActiveComposerProps) {
           isUploadingAttachments={props.isUploadingAttachments}
           models={props.models}
           pendingAttachments={props.pendingAttachments}
+          skills={props.skills}
           onAddModels={props.onAddModels}
           onInputChange={props.onInputChange}
           onKeyDown={props.onKeyDown}

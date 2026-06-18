@@ -4,6 +4,7 @@ import { PromptSuggestions } from './PromptSuggestions';
 import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import type { PendingAttachment } from './useAiAttachments';
 import { pickWorkStatusMessage } from './work-status-messages';
+import type { SkillSummary } from '../../../shared/skills-contract';
 
 interface EmptyStateProps {
   availability: OllamaAvailability;
@@ -18,6 +19,7 @@ interface EmptyStateProps {
   isUploadingAttachments: boolean;
   models: OllamaModel[];
   pendingAttachments: PendingAttachment[];
+  skills: SkillSummary[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -69,6 +71,7 @@ export function EmptyState(props: EmptyStateProps) {
         isUploadingAttachments={props.isUploadingAttachments}
         models={props.models}
         pendingAttachments={props.pendingAttachments}
+        skills={props.skills}
         onAddModels={props.onAddModels}
         onInputChange={props.onInputChange}
         onKeyDown={props.onKeyDown}

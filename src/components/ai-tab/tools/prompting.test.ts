@@ -29,6 +29,7 @@ const promptContext = {
   customPrompt: '',
   mode: 'thinking' as const,
   tools: [],
+  skills: [],
 };
 
 test('image prompts include structured scene extraction guidance for each image', async () => {

@@ -2,6 +2,9 @@ import { AiAttachmentReference, parseAiAttachmentReference } from './ai-attachme
 import { ArtifactCardSummary, parseArtifactCardSummary } from './ai-artifacts-contract';
 import { ModelProvider, normalizeModelProvider } from './ai-runtime-contract';
 import { AiVisionMode, normalizeVisionMode } from './ai-vision-contract';
+import { ChatMode } from './chat-mode';
+export type { ChatMode } from './chat-mode';
+export { CHAT_MODES, isChatMode } from './chat-mode';
 import {
   AssistantTraceStep,
   ToolInvocation,
@@ -55,7 +58,6 @@ export interface AssistantMessage {
 }
 
 export type AiMessage = UserMessage | AssistantMessage;
-export type ChatMode = 'thinking' | 'flash';
 export type ChatTitleStatus = 'pending' | 'generated' | 'finalized';
 
 export interface Chat {

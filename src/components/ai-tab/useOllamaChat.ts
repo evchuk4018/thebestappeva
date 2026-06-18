@@ -18,6 +18,7 @@ import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
 import { useAutoMemoryRefresh } from './use-auto-memory-refresh';
+import { useSkills } from './skills/useSkills';
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -57,8 +58,12 @@ export function useOllamaChat() {
     setAvailability,
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
-  useChatTitleGeneration({ availableModels, chats, setChats });
+useChatTitleGeneration({ availableModels, chats, setChats });
   const autoMemoryRefresh = useAutoMemoryRefresh({ getChats, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats });
+  const skillsHook = useSkills();
+  const skills = skillsHook.skills;
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
   const toolRegistryEntries = [...getToolRegistryEntries(), ...createChatContextToolEntries({
     getChats, activeChatId: selectedChatId, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats,
   })];
@@ -70,7 +75,7 @@ export function useOllamaChat() {
   const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage);
   const chatMode = selectedChat?.mode ?? draftMode;
   const isBusy = isTyping || Boolean(pendingAskUserTurn);
-  const systemPromptContext: SystemPromptContext = { generatedUserMemory, customPrompt: customSystemPrompt, mode: chatMode, tools: activeToolEntries.map(({ definition }) => definition), artifactContext: undefined };
+  const systemPromptContext: SystemPromptContext = { generatedUserMemory, customPrompt: customSystemPrompt, mode: chatMode, tools: activeToolEntries.map(({ definition }) => definition), artifactContext: undefined, skills };
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
   useEffect(() => {
     if (!isTyping) {
@@ -119,6 +124,7 @@ export function useOllamaChat() {
         mode: effectiveMode,
         tools: turnToolEntries.map(({ definition }) => definition),
         artifactContext,
+        skills: skillsRef.current,
       } satisfies SystemPromptContext;
       const resolvedTurn =
         effectiveMode === 'flash'
@@ -230,7 +236,7 @@ export function useOllamaChat() {
     setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: messageId });
     autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(nextChat, nextChat.mode, messageId));
   }
-  return {
+return {
     activeProviderOption,
     availableModels,
     availability,
@@ -263,6 +269,8 @@ export function useOllamaChat() {
     activeAskUserStepId: pendingAskUserTurn?.stepId ?? null,
     includedArtifactIds: selectedChat?.includedArtifactIds ?? [],
     showTypingIndicator: shouldShowTypingIndicator(isTyping, selectedLiveChat),
+    skills,
+    skillsControls: skillsHook,
     sendMessage,
     setActiveArtifact,
     setArtifactIncluded,

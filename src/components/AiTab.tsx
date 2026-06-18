@@ -20,7 +20,7 @@ import { useAiAttachments } from './ai-tab/useAiAttachments';
 import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
 
-type SidebarPanel = 'chats' | 'tools';
+type SidebarPanel = 'chats' | 'tools' | 'skills';
 
 export default function AiTab() {
   const navigate = useNavigate();
@@ -57,7 +57,7 @@ export default function AiTab() {
     customSystemPrompt,
     deleteChat,
     editAndResendMessage,
-    hydrationStatus,
+hydrationStatus,
     isBusy,
     isTyping,
     lastError,
@@ -78,6 +78,8 @@ export default function AiTab() {
     setProvider,
     setVisionMode,
     showTypingIndicator,
+    skills,
+    skillsControls,
     systemPromptContext,
     switchUserMessageVersion,
     toggleChatMode,
@@ -131,6 +133,7 @@ export default function AiTab() {
     isUploadingAttachments,
     models: availableModels,
     pendingAttachments,
+    skills,
     onAddModels: openAddModels,
     onInputChange: setInputValue,
     onKeyDown: handleKeyDown,
@@ -165,6 +168,9 @@ export default function AiTab() {
         selectedChatId={selectedChatId}
         sidebarOpen={sidebarOpen}
         tools={tools}
+        skills={skills}
+        skillsLoading={skillsControls.loading}
+        skillsError={skillsControls.error}
         hydrationStatus={hydrationStatus}
         persistenceError={persistenceError}
         onClose={() => setSidebarOpen(false)}
@@ -178,6 +184,10 @@ export default function AiTab() {
         }}
         onSelectPanel={setActivePanel}
         onToggleTool={toggleTool}
+        onCreateSkill={(request) => skillsControls.create(request)}
+        onUpdateSkill={(id, request) => skillsControls.update(id, request)}
+        onToggleSkill={(id, enabled) => skillsControls.toggle(id, enabled)}
+        onDeleteSkill={(id) => skillsControls.remove(id)}
       />
 
       <div ref={workspaceRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -267,6 +277,7 @@ export default function AiTab() {
         pullProgress={pullProgress}
         providerOptions={runtimeConfig?.providerOptions ?? (activeProviderOption ? [activeProviderOption] : [])}
         settingsOpen={settingsOpen}
+        skills={skills}
         tools={systemPromptContext.tools}
         onCloseAddModels={() => setAddModelsOpen(false)}
         onCloseSettings={() => setSettingsOpen(false)}

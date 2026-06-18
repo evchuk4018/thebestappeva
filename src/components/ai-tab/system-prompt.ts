@@ -1,5 +1,6 @@
 import { ChatMode } from './types';
 import { ToolDefinition } from './tools/types';
+import type { SkillSummary } from '../../../shared/skills-contract';
 
 export interface SystemPromptContext {
   generatedUserMemory: string;
@@ -7,10 +8,11 @@ export interface SystemPromptContext {
   mode: ChatMode;
   tools: ToolDefinition[];
   artifactContext?: string;
+  skills?: SkillSummary[];
 }
 
 export interface SystemPromptSection {
-  id: 'memory' | 'custom' | 'formatting' | 'workflow' | 'tools' | 'artifacts';
+  id: 'memory' | 'custom' | 'formatting' | 'workflow' | 'skills' | 'tools' | 'artifacts';
   title: string;
   content: string;
   readOnly: boolean;
@@ -81,12 +83,27 @@ function buildArtifactPromptContent(context: string | undefined) {
   return context?.trim() ? context.trim() : null;
 }
 
+function buildSkillsPromptContent(skills: SkillSummary[] | undefined, mode: ChatMode): string | null {
+  const applicable = (skills ?? []).filter((skill) => skill.enabled && (skill.compatibleModes === null || skill.compatibleModes.includes(mode)));
+  if (!applicable.length) return null;
+
+  const lines = [
+    '<available_skills>',
+    ...applicable.map((skill) => `- ${skill.name}: ${skill.description}`),
+    '</available_skills>',
+    '',
+    'To use a skill, call the view_skill tool with the skill name. If the user references /<skill-name> in their message, treat it as an explicit request to load that skill via view_skill before responding. You may also proactively load a skill when its description matches the user\'s intent.',
+  ];
+  return lines.join('\n');
+}
+
 export function buildSystemPromptSections(context: SystemPromptContext) {
   const generatedUserMemory = context.generatedUserMemory.trim();
   const customPrompt = context.customPrompt.trim();
   const sections: SystemPromptSection[] = [];
   const workflowPrompt = buildWorkflowPromptContent(context.mode);
   const artifactPrompt = buildArtifactPromptContent(context.artifactContext);
+  const skillsPrompt = buildSkillsPromptContent(context.skills, context.mode);
 
   if (generatedUserMemory) {
     sections.push({
@@ -118,6 +135,14 @@ export function buildSystemPromptSections(context: SystemPromptContext) {
           id: 'workflow' as const,
           title: 'Thinking workflow',
           content: workflowPrompt,
+          readOnly: true,
+        }]
+      : []),
+    ...(skillsPrompt
+      ? [{
+          id: 'skills' as const,
+          title: 'Skills',
+          content: skillsPrompt,
           readOnly: true,
         }]
       : []),

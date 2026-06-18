@@ -17,12 +17,14 @@ test('thinking mode includes workflow guidance alongside tool guidance', () => {
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
+    skills: [],
   });
   const content = buildSystemPromptContent({
     generatedUserMemory: '',
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
+    skills: [],
   });
 
   assert(sections.some((section) => section.id === 'workflow'));
@@ -42,12 +44,14 @@ test('flash mode excludes thinking workflow guidance', () => {
     customPrompt: '',
     mode: 'flash',
     tools: [weatherTool],
+    skills: [],
   });
   const content = buildSystemPromptContent({
     generatedUserMemory: '',
     customPrompt: '',
     mode: 'flash',
     tools: [weatherTool],
+    skills: [],
   });
 
   assert(!sections.some((section) => section.id === 'workflow'));
@@ -62,6 +66,7 @@ test('artifact guidance requires create_artifact for content requested in an art
     customPrompt: '',
     mode: 'thinking',
     tools: [weatherTool],
+    skills: [],
   });
 
   assert.match(content, /When the user asks for content in an artifact, call create_artifact/i);
@@ -73,8 +78,43 @@ test('generated memory is injected before custom prompt content', () => {
     customPrompt: 'Call out tradeoffs.',
     mode: 'thinking',
     tools: [weatherTool],
+    skills: [],
   });
 
   assert.equal(sections[0]?.id, 'memory');
   assert.equal(sections[1]?.id, 'custom');
+});
+
+test('skills section lists enabled skills and references view_skill', () => {
+  const sections = buildSystemPromptSections({
+    generatedUserMemory: '',
+    customPrompt: '',
+    mode: 'thinking',
+    tools: [],
+    skills: [
+      { id: 's1', name: 'skill-creator', description: 'Create reusable skills.', enabled: true, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+      { id: 's2', name: 'disabled-one', description: 'off', enabled: false, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+    ],
+  });
+
+  const skillsSection = sections.find((section) => section.id === 'skills');
+  assert.ok(skillsSection, 'expected a skills section');
+  assert.match(skillsSection.content, /<available_skills>/);
+  assert.match(skillsSection.content, /skill-creator: Create reusable skills\./);
+  assert.doesNotMatch(skillsSection.content, /disabled-one/);
+  assert.match(skillsSection.content, /view_skill tool/);
+});
+
+test('skills section is omitted when no skills apply to the current mode', () => {
+  const sections = buildSystemPromptSections({
+    generatedUserMemory: '',
+    customPrompt: '',
+    mode: 'flash',
+    tools: [],
+    skills: [
+      { id: 's1', name: 'thinking-only', description: 'd', enabled: true, compatibleModes: ['thinking'], requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+    ],
+  });
+
+  assert.ok(!sections.some((section) => section.id === 'skills'));
 });

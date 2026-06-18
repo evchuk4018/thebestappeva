@@ -5,6 +5,9 @@ import { ModelPicker } from './ModelPicker';
 import type { ChatMode, ModelProvider, OllamaAvailability, OllamaModel } from './types';
 import { PendingAttachmentTray } from './PendingAttachmentTray';
 import type { PendingAttachment } from './useAiAttachments';
+import type { SkillSummary } from '../../../shared/skills-contract';
+import { SkillAutocompleteMenu } from './skills/SkillAutocompleteMenu';
+import { useSkillAutocomplete } from './skills/useSkillAutocomplete';
 
 interface ChatComposerProps {
   availability: OllamaAvailability;
@@ -20,6 +23,7 @@ interface ChatComposerProps {
   isUploadingAttachments: boolean;
   models: OllamaModel[];
   pendingAttachments: PendingAttachment[];
+  skills: SkillSummary[];
   onAddModels: () => void;
   onInputChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -71,6 +75,7 @@ export function ChatComposer({
   isUploadingAttachments,
   models,
   pendingAttachments,
+  skills,
   onAddModels,
   onInputChange,
   onKeyDown,
@@ -83,12 +88,31 @@ export function ChatComposer({
   onToggleModelDropdown,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const autocomplete = useSkillAutocomplete(skills, (nextInput, caret) => {
+    onInputChange(nextInput);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (el) el.setSelectionRange(caret, caret);
+    });
+  });
   const hasReadyAttachments = pendingAttachments.some((attachment) => attachment.status === 'ready');
   const runtimeUnavailable = availability !== 'ready';
   const isDisabled = (!inputValue.trim() && !hasReadyAttachments) || isBusy || !currentModel || isUploadingAttachments || runtimeUnavailable;
   const isInputDisabled = isBusy || !currentModel || runtimeUnavailable;
   const placeholder = getPlaceholder(availability, currentModel);
   const handlePickFiles = () => fileInputRef.current?.click();
+
+  const handleChange = (value: string) => {
+    onInputChange(value);
+    const el = inputRef.current;
+    autocomplete.update(value, el ? el.selectionStart ?? value.length : value.length);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (autocomplete.handleKeyDown(event)) return;
+    onKeyDown(event);
+  };
 
   if (compact) {
     return (
@@ -106,15 +130,22 @@ export function ChatComposer({
             event.currentTarget.value = '';
           }}
         />
-        <PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+<PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
+        <div className="relative flex flex-col gap-2 md:flex-row md:items-center">
           <div className="min-w-0 flex-1">
+            <SkillAutocompleteMenu
+              isOpen={autocomplete.isOpen}
+              suggestions={autocomplete.suggestions}
+              highlighted={autocomplete.highlighted}
+              onSelect={autocomplete.select}
+            />
             <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
               type="text"
               value={inputValue}
               disabled={isInputDisabled}
-              onChange={(event) => onInputChange(event.target.value)}
-              onKeyDown={onKeyDown}
+              onChange={(event) => handleChange(event.target.value)}
+              onKeyDown={handleKeyDown}
               onPaste={(event) => {
                 const files = readPastedImageFiles(event);
                 if (files.length) {
@@ -182,22 +213,31 @@ export function ChatComposer({
           event.currentTarget.value = '';
         }}
       />
-      <PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
-      <textarea
-        value={inputValue}
-        disabled={isInputDisabled}
-        onChange={(event) => onInputChange(event.target.value)}
-        onKeyDown={onKeyDown}
-        onPaste={(event) => {
-          const files = readPastedImageFiles(event);
-          if (files.length) {
-            event.preventDefault();
-            void onSelectFiles(files);
-          }
-        }}
-        placeholder={placeholder}
-        className="min-h-[76px] w-full resize-none border-none bg-transparent py-1 text-left text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-600"
-      />
+<PendingAttachmentTray attachments={pendingAttachments} onRemove={onRemoveAttachment} />
+      <div className="relative">
+        <SkillAutocompleteMenu
+          isOpen={autocomplete.isOpen}
+          suggestions={autocomplete.suggestions}
+          highlighted={autocomplete.highlighted}
+          onSelect={autocomplete.select}
+        />
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          value={inputValue}
+          disabled={isInputDisabled}
+          onChange={(event) => handleChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={(event) => {
+            const files = readPastedImageFiles(event);
+            if (files.length) {
+              event.preventDefault();
+              void onSelectFiles(files);
+            }
+          }}
+          placeholder={placeholder}
+          className="min-h-[76px] w-full resize-none border-none bg-transparent py-1 text-left text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:text-zinc-600"
+        />
+      </div>
 
       <div className="flex items-center justify-between border-t border-[#292925] pt-2">
         <div className="flex items-center gap-1 text-zinc-500">

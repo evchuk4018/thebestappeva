@@ -4,6 +4,7 @@ import { localeTool } from './locale-tool';
 import { locationTool } from './location-tool';
 import { onlineStatusTool } from './online-status-tool';
 import { pythonExecTool } from './python-exec-tool';
+import { skillTool } from './skill-tool';
 import { timezoneTool } from './timezone-tool';
 import { webSearchTool } from './web-search-tool';
 import { weatherTool } from './weather-tool';
@@ -19,6 +20,7 @@ const toolRegistry: ToolRegistryEntry[] = [
   onlineStatusTool,
   webSearchTool,
   pythonExecTool,
+  skillTool,
 ];
 
 export function getToolRegistryEntries() {
