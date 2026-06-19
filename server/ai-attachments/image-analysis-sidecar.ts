@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { parseAiImageSceneGraph, type AiImageSceneGraph } from '../../shared/ai-image-scene-contract';
 import { serverConfig } from '../config';
 import { HttpError } from '../http';
+import { withHiddenWindows } from '../hidden-child-process';
 import { IMAGE_TOOL_ATTEMPT_TIMEOUT_MS, type ImageToolTelemetry } from './image-tool-runtime';
 
 const sidecarScriptPath = path.resolve(process.cwd(), 'python', 'image_analysis_sidecar.py');
@@ -68,7 +69,7 @@ function runSidecar(args: string[]) {
     const child = spawn(
       serverConfig.aiImageAnalysisPythonCommand,
       [...serverConfig.aiImageAnalysisPythonArgs, sidecarScriptPath, ...args],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+      withHiddenWindows({ stdio: ['ignore', 'pipe', 'pipe'] }),
     );
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -137,7 +138,7 @@ function createWorker() {
   const child = spawn(
     serverConfig.aiImageAnalysisPythonCommand,
     [...serverConfig.aiImageAnalysisPythonArgs, sidecarScriptPath, '--worker'],
-    { stdio: ['pipe', 'pipe', 'pipe'] },
+    withHiddenWindows({ stdio: ['pipe', 'pipe', 'pipe'] }),
   );
   const workerState: ImageAnalysisWorker = {
     child,

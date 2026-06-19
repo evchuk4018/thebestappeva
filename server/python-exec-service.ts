@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { HttpError } from './http';
 import { serverConfig } from './config';
+import { withHiddenWindows } from './hidden-child-process';
 import { collectGeneratedFiles, ensureChatWorkspace } from './python-exec-paths';
 import type { PythonExecRequest, PythonExecResponse, PythonExecSessionStatus, PythonExecStagedFile } from '../shared/ai-python-exec-contract';
 
@@ -143,7 +144,7 @@ export function parsePythonExecRequest(value: unknown): PythonExecRequest {
 
 export function runPythonExecProcess({ args, command, stdin, timeoutMs }: PythonExecRunnerInput) {
   return new Promise<{ stderr: string; stdout: string }>((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, withHiddenWindows({ stdio: ['pipe', 'pipe', 'pipe'] }));
     const stdout: string[] = [];
     const stderr: string[] = [];
     const timeoutId = setTimeout(() => {

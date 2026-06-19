@@ -3,14 +3,17 @@ import { spawn } from 'node:child_process';
 import { HttpError } from '../http';
 import { serverConfig } from '../config';
 import { ParsedDocumentPayload } from './types';
+import { withHiddenWindows } from '../hidden-child-process';
 
 const parserScriptPath = path.resolve(process.cwd(), 'python', 'docling_sidecar.py');
 
 function runParserCommand(args: string[]) {
   return new Promise<{ stderr: string; stdout: string }>((resolve, reject) => {
-    const child = spawn(serverConfig.aiParserPythonCommand, [...serverConfig.aiParserPythonArgs, parserScriptPath, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      serverConfig.aiParserPythonCommand,
+      [...serverConfig.aiParserPythonArgs, parserScriptPath, ...args],
+      withHiddenWindows({ stdio: ['ignore', 'pipe', 'pipe'] }),
+    );
     const stdout: string[] = [];
     const stderr: string[] = [];
     const timeoutId = setTimeout(() => {
