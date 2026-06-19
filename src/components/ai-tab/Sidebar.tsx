@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Sparkles, Wrench, X } from 'lucide-react';
 import { Chat } from './types';
 import { searchChats } from './chat-search';
@@ -51,7 +51,7 @@ export function Sidebar({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const showSearch = searchOpen && activePanel === 'chats';
+  const showSearch = searchOpen;
   const filteredChats = useMemo(
     () => (showSearch ? searchChats(chats, searchQuery) : chats),
     [chats, searchQuery, showSearch],
@@ -62,16 +62,7 @@ export function Sidebar({
     setSearchQuery('');
   };
 
-  useEffect(() => {
-    if (activePanel !== 'chats') {
-      resetSearch();
-    }
-  }, [activePanel]);
-
   const toggleSearch = () => {
-    if (activePanel !== 'chats') {
-      onSelectPanel('chats');
-    }
     setSearchOpen((prev) => {
       if (prev) {
         setSearchQuery('');
@@ -173,28 +164,22 @@ export function Sidebar({
           </div>
         </div>
 
-        {activePanel === 'chats' ? (
-          <SidebarChatsPanel
-            chats={filteredChats}
-            isMobile={isMobile}
-            selectedChatId={selectedChatId}
-            status={hydrationStatus}
-            errorMessage={persistenceError}
-            searchActive={showSearch && searchQuery.trim().length > 0}
-            searchQuery={searchQuery}
-            totalChats={chats.length}
-            onClose={onClose}
-            onDeleteChat={onDeleteChat}
-            onSelectChat={(chatId) => {
-              resetSearch();
-              onSelectChat(chatId);
-            }}
-          />
-        ) : activePanel === 'skills' ? (
-          <div className="mt-5 px-4 text-xs text-zinc-500">Skills open in the main workspace.</div>
-        ) : (
-          <div className="mt-5 px-4 text-xs text-zinc-500">Tools open in the main workspace.</div>
-        )}
+        <SidebarChatsPanel
+          chats={filteredChats}
+          isMobile={isMobile}
+          selectedChatId={selectedChatId}
+          status={hydrationStatus}
+          errorMessage={persistenceError}
+          searchActive={showSearch && searchQuery.trim().length > 0}
+          searchQuery={searchQuery}
+          totalChats={chats.length}
+          onClose={onClose}
+          onDeleteChat={onDeleteChat}
+          onSelectChat={(chatId) => {
+            resetSearch();
+            onSelectChat(chatId);
+          }}
+        />
       </div>
 
       <div className="flex flex-col gap-2 border-t border-[#242422]/60 bg-[#11110f] p-3">
