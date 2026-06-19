@@ -10,6 +10,8 @@ export interface SkillRecord {
   name: string;
   description: string;
   instructions: string;
+  source: SkillSource;
+  readOnly: boolean;
   enabled: boolean;
   compatibleModes: ChatMode[] | null;
   requiredTools: string[];
@@ -18,6 +20,7 @@ export interface SkillRecord {
   updatedAt: string;
 }
 
+export type SkillSource = 'builtin' | 'user';
 export type SkillSummary = Omit<SkillRecord, 'instructions'>;
 
 export interface CreateSkillRequest {
@@ -67,6 +70,13 @@ function expectBoolean(value: unknown, field: string): boolean {
   return value;
 }
 
+function parseSkillSource(value: unknown, field: string): SkillSource {
+  if (value !== 'builtin' && value !== 'user') {
+    throw new Error(`Invalid ${field}. Expected "builtin" or "user".`);
+  }
+  return value;
+}
+
 function expectStringArray(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) throw new Error(`Invalid ${field}. Expected an array.`);
   return value.map((entry, index) => {
@@ -109,12 +119,19 @@ export function toSkillSummary(skill: SkillRecord): SkillSummary {
 
 export function parseSkill(value: unknown, field = 'Skill'): SkillRecord {
   const record = expectRecord(value, field);
-  const metadata = parseMetadata(record.metadata, `${field}.metadata`);
+  const metadata = record.metadata === undefined
+    ? {
+        requiredTools: record.requiredTools === undefined ? [] : expectStringArray(record.requiredTools, `${field}.requiredTools`),
+        disabledTools: record.disabledTools === undefined ? [] : expectStringArray(record.disabledTools, `${field}.disabledTools`),
+      }
+    : parseMetadata(record.metadata, `${field}.metadata`);
   return {
     id: expectString(record.id, `${field}.id`),
     name: expectBoundedString(record.name, `${field}.name`, SKILL_NAME_MAX_LENGTH),
     description: expectBoundedString(record.description, `${field}.description`, SKILL_DESCRIPTION_MAX_LENGTH),
     instructions: expectBoundedString(record.instructions, `${field}.instructions`, SKILL_INSTRUCTIONS_MAX_LENGTH),
+    source: parseSkillSource(record.source, `${field}.source`),
+    readOnly: expectBoolean(record.readOnly, `${field}.readOnly`),
     enabled: expectBoolean(record.enabled, `${field}.enabled`),
     compatibleModes: parseCompatibleModes(record.compatibleModes, `${field}.compatibleModes`),
     requiredTools: metadata.requiredTools,
@@ -125,7 +142,26 @@ export function parseSkill(value: unknown, field = 'Skill'): SkillRecord {
 }
 
 export function parseSkillSummary(value: unknown, field = 'Skill summary'): SkillSummary {
-  return toSkillSummary(parseSkill(value, field));
+  const record = expectRecord(value, field);
+  const metadata = record.metadata === undefined
+    ? {
+        requiredTools: record.requiredTools === undefined ? [] : expectStringArray(record.requiredTools, `${field}.requiredTools`),
+        disabledTools: record.disabledTools === undefined ? [] : expectStringArray(record.disabledTools, `${field}.disabledTools`),
+      }
+    : parseMetadata(record.metadata, `${field}.metadata`);
+  return {
+    id: expectString(record.id, `${field}.id`),
+    name: expectBoundedString(record.name, `${field}.name`, SKILL_NAME_MAX_LENGTH),
+    description: expectBoundedString(record.description, `${field}.description`, SKILL_DESCRIPTION_MAX_LENGTH),
+    source: parseSkillSource(record.source, `${field}.source`),
+    readOnly: expectBoolean(record.readOnly, `${field}.readOnly`),
+    enabled: expectBoolean(record.enabled, `${field}.enabled`),
+    compatibleModes: parseCompatibleModes(record.compatibleModes, `${field}.compatibleModes`),
+    requiredTools: metadata.requiredTools,
+    disabledTools: metadata.disabledTools,
+    createdAt: expectString(record.createdAt, `${field}.createdAt`),
+    updatedAt: expectString(record.updatedAt, `${field}.updatedAt`),
+  };
 }
 
 export function parseCreateSkillRequest(value: unknown, field = 'Create skill request'): CreateSkillRequest {

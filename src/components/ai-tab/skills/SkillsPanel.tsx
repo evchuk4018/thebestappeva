@@ -62,6 +62,11 @@ export function SkillsPanel({ skills, loading, error, onCreate, onUpdate, onTogg
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate text-sm font-semibold text-[#efeae4]">{skill.name}</h3>
+                  {skill.readOnly && (
+                    <span className="rounded-full border border-[#3b3328] bg-[#211b16] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#e2875e]">
+                      Built-in
+                    </span>
+                  )}
                   <span className="rounded border border-[#2a3d54] bg-[#16202a] px-1.5 py-0.5 font-mono text-[10px] text-[#8db4d0]">
                     /{skill.name}
                   </span>
@@ -76,32 +81,40 @@ export function SkillsPanel({ skills, loading, error, onCreate, onUpdate, onTogg
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEditing({ mode: 'edit', skill })}
-                  title="Edit skill"
-                  className="rounded p-1.5 text-zinc-400 hover:bg-[#20201e] hover:text-zinc-200"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { if (confirm(`Delete skill "${skill.name}"?`)) void onDelete(skill.id); }}
-                  title="Delete skill"
-                  className="rounded p-1.5 text-zinc-400 hover:bg-[#7f3b31] hover:text-[#fff2eb]"
-                >
-                  <Trash2 size={14} />
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={skill.enabled}
-                  onClick={() => void onToggle(skill.id, !skill.enabled)}
-                  className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition ${
-                    skill.enabled ? 'bg-[#e2875e]' : 'bg-[#2a2a27]'
-                  }`}
-                >
-                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${skill.enabled ? 'left-6' : 'left-1'}`} />
-                </button>
+                {skill.readOnly ? (
+                  <span className="rounded-full border border-[#2a2a27] bg-[#11110f] px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Read only
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ mode: 'edit', skill })}
+                      title="Edit skill"
+                      className="rounded p-1.5 text-zinc-400 hover:bg-[#20201e] hover:text-zinc-200"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { if (confirm(`Delete skill "${skill.name}"?`)) void onDelete(skill.id); }}
+                      title="Delete skill"
+                      className="rounded p-1.5 text-zinc-400 hover:bg-[#7f3b31] hover:text-[#fff2eb]"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={skill.enabled}
+                      onClick={() => void onToggle(skill.id, !skill.enabled)}
+                      className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition ${
+                        skill.enabled ? 'bg-[#e2875e]' : 'bg-[#2a2a27]'
+                      }`}
+                    >
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${skill.enabled ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

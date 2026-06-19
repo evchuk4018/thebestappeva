@@ -32,6 +32,8 @@ test('supports skill CRUD, toggle, and lookup', () => {
     disabledTools: [],
   });
   assert.equal(created.enabled, true);
+  assert.equal(created.source, 'user');
+  assert.equal(created.readOnly, false);
   assert.equal(created.compatibleModes?.length, 1);
   assert.equal(repository.getSkillByName('skill-creator')?.id, created.id);
 

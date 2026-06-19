@@ -8,6 +8,8 @@ function skill(name: string, enabled = true): SkillSummary {
     id: name,
     name,
     description: 'd',
+    source: 'user',
+    readOnly: false,
     enabled,
     compatibleModes: null,
     requiredTools: [],

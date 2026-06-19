@@ -14,6 +14,8 @@ function baseSkillPayload() {
     name: 'skill-creator',
     description: 'Create reusable skills.',
     instructions: 'Load SKILL.md then draft a new skill.',
+    source: 'user',
+    readOnly: false,
     enabled: true,
     compatibleModes: ['thinking'],
     metadata: { requiredTools: ['web-search'], disabledTools: [] },
@@ -25,6 +27,8 @@ function baseSkillPayload() {
 test('parseSkill round-trips a full record', () => {
   const parsed = parseSkill(baseSkillPayload());
   assert.equal(parsed.id, 'skill-1');
+  assert.equal(parsed.source, 'user');
+  assert.equal(parsed.readOnly, false);
   assert.equal(parsed.enabled, true);
   assert.deepEqual(parsed.requiredTools, ['web-search']);
   assert.deepEqual(parsed.disabledTools, []);
@@ -35,6 +39,20 @@ test('parseSkill accepts null compatibleModes and missing tool metadata', () => 
   const parsed = parseSkill({ ...baseSkillPayload(), compatibleModes: null, metadata: {} });
   assert.equal(parsed.compatibleModes, null);
   assert.deepEqual(parsed.requiredTools, []);
+});
+
+test('parseSkill accepts builtin metadata', () => {
+  const parsed = parseSkill({ ...baseSkillPayload(), source: 'builtin', readOnly: true });
+  assert.equal(parsed.source, 'builtin');
+  assert.equal(parsed.readOnly, true);
+});
+
+test('parseSkill also accepts top-level tool fields from the local API', () => {
+  const payload = { ...baseSkillPayload(), requiredTools: ['skill'], disabledTools: ['weather'] };
+  delete (payload as { metadata?: unknown }).metadata;
+  const parsed = parseSkill(payload);
+  assert.deepEqual(parsed.requiredTools, ['skill']);
+  assert.deepEqual(parsed.disabledTools, ['weather']);
 });
 
 test('parseSkill rejects unknown compatible modes', () => {
@@ -69,7 +87,9 @@ test('parseUpdateSkillRequest rejects empty names', () => {
 });
 
 test('parseSkillListResponse parses an array of summaries', () => {
-  const parsed = parseSkillListResponse({ skills: [baseSkillPayload()] });
+  const summaryPayload = { ...baseSkillPayload() };
+  delete (summaryPayload as { instructions?: unknown }).instructions;
+  const parsed = parseSkillListResponse({ skills: [summaryPayload] });
   assert.equal(parsed.skills.length, 1);
   assert.equal('instructions' in parsed.skills[0], false);
   assert.equal(parsed.skills[0].id, 'skill-1');

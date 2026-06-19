@@ -19,6 +19,15 @@ export interface UseSkillsResult {
   remove: (id: string) => Promise<void>;
 }
 
+function sortSkills(skills: SkillSummary[]) {
+  return [...skills].sort((left, right) => {
+    if (left.source !== right.source) {
+      return left.source === 'builtin' ? -1 : 1;
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+
 export function useSkills(): UseSkillsResult {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +39,7 @@ export function useSkills(): UseSkillsResult {
     try {
       setLoading(true);
       const next = await fetchSkills();
-      setSkills(next);
+      setSkills(sortSkills(next));
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Unable to load skills.');
@@ -45,19 +54,19 @@ export function useSkills(): UseSkillsResult {
 
   const create = useCallback(async (request: CreateSkillRequest) => {
     const skill = await createSkill(request);
-    setSkills((current) => [...current, toSkillSummary(skill)]);
+    setSkills((current) => sortSkills([...current, toSkillSummary(skill)]));
     return skill;
   }, []);
 
   const update = useCallback(async (id: string, request: UpdateSkillRequest) => {
     const skill = await updateSkill(id, request);
-    setSkills((current) => current.map((entry) => (entry.id === id ? toSkillSummary(skill) : entry)));
+    setSkills((current) => sortSkills(current.map((entry) => (entry.id === id ? toSkillSummary(skill) : entry))));
     return skill;
   }, []);
 
   const toggle = useCallback(async (id: string, enabled: boolean) => {
     const skill = await toggleSkill(id, enabled);
-    setSkills((current) => current.map((entry) => (entry.id === id ? { ...toSkillSummary(skill), enabled } : entry)));
+    setSkills((current) => sortSkills(current.map((entry) => (entry.id === id ? { ...toSkillSummary(skill), enabled } : entry))));
     return skill;
   }, []);
 

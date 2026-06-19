@@ -92,8 +92,8 @@ test('skills section lists enabled skills and references view_skill', () => {
     mode: 'thinking',
     tools: [],
     skills: [
-      { id: 's1', name: 'skill-creator', description: 'Create reusable skills.', enabled: true, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
-      { id: 's2', name: 'disabled-one', description: 'off', enabled: false, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+      { id: 's1', name: 'skill-creator', description: 'Create reusable skills.', source: 'builtin', readOnly: true, enabled: true, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+      { id: 's2', name: 'disabled-one', description: 'off', source: 'user', readOnly: false, enabled: false, compatibleModes: null, requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
     ],
   });
 
@@ -112,7 +112,7 @@ test('skills section is omitted when no skills apply to the current mode', () =>
     mode: 'flash',
     tools: [],
     skills: [
-      { id: 's1', name: 'thinking-only', description: 'd', enabled: true, compatibleModes: ['thinking'], requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
+      { id: 's1', name: 'thinking-only', description: 'd', source: 'user', readOnly: false, enabled: true, compatibleModes: ['thinking'], requiredTools: [], disabledTools: [], createdAt: '', updatedAt: '' },
     ],
   });
 
