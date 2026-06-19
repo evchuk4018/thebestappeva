@@ -8,6 +8,7 @@ import type { PythonExecBackend, PythonExecRawResult, PythonExecExecOptions, Pyt
 import { PythonExecSessionManager } from './python-exec-sessions';
 import { ensureChatWorkspace, detectFileKind, validateWorkspaceRelativePath } from './python-exec-paths';
 import { HttpError } from './http';
+import { runPythonExecWithFallback } from './python-exec';
 
 interface FakeBackendSession extends PythonExecSession {
   chatId: string;
@@ -148,4 +149,116 @@ test('each chat workspace is isolated on disk', async () => {
       /must stay inside the chat workspace/i,
     );
   });
+});
+
+test('persistent startup failure falls back to one-shot chat execution', async () => {
+  let fallbackCalled = false;
+  const backend: PythonExecBackend = {
+    available: true,
+    async openSession() {
+      throw new HttpError(503, 'Docker daemon unavailable.');
+    },
+  };
+  const result = await runPythonExecWithFallback(
+    { code: 'print(1)', chatId: 'chat-fallback-start' },
+    {
+      backend,
+      sessionManager: new PythonExecSessionManager({ backend, idleMs: 100000 }),
+      runFallback: async () => {
+        fallbackCalled = true;
+        return {
+          chatId: 'chat-fallback-start',
+          durationMs: 1,
+          exitCode: 0,
+          generatedFiles: [],
+          stagedFiles: [],
+          stderr: '',
+          stderrTruncated: false,
+          stdout: '1\n',
+          stdoutTruncated: false,
+          sessionStatus: 'fallback',
+        };
+      },
+    },
+  );
+  assert.equal(fallbackCalled, true);
+  assert.equal(result.sessionStatus, 'fallback');
+  assert.equal(result.stdout, '1\n');
+});
+
+test('dead persistent session is evicted before one-shot fallback', async () => {
+  const deadSession: PythonExecSession & { killed: boolean; aliveValue: boolean } = {
+    chatId: 'chat-fallback-dead',
+    killed: false,
+    aliveValue: true,
+    get alive() {
+      return this.aliveValue;
+    },
+    async exec() {
+      return {
+        ok: false,
+        exitCode: 1,
+        stdout: '',
+        stderr: 'The Python sandbox exited unexpectedly.',
+        durationMs: 0,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        error: 'The Python sandbox exited unexpectedly.',
+      };
+    },
+    async reset() {},
+    async kill() {
+      this.killed = true;
+      this.aliveValue = false;
+    },
+  };
+  const backend: PythonExecBackend = {
+    available: true,
+    async openSession() {
+      return deadSession;
+    },
+  };
+  const manager = new PythonExecSessionManager({ backend, idleMs: 100000 });
+  const result = await runPythonExecWithFallback(
+    { code: 'print(2)', chatId: 'chat-fallback-dead' },
+    {
+      backend,
+      sessionManager: manager,
+      runFallback: async () => ({
+        chatId: 'chat-fallback-dead',
+        durationMs: 1,
+        exitCode: 0,
+        generatedFiles: [],
+        stagedFiles: [],
+        stderr: '',
+        stderrTruncated: false,
+        stdout: '2\n',
+        stdoutTruncated: false,
+        sessionStatus: 'fallback',
+      }),
+    },
+  );
+  assert.equal(deadSession.killed, true);
+  assert.equal(manager.has('chat-fallback-dead'), false);
+  assert.equal(result.sessionStatus, 'fallback');
+});
+
+test('persistent timeout and abort do not use fallback', async () => {
+  for (const [code, statusCode] of [['TIMEOUT', 504], ['ABORT', 499]] as const) {
+    const { backend } = createFakeBackend();
+    const manager = new PythonExecSessionManager({ backend, idleMs: 100000 });
+    await assert.rejects(
+      () => runPythonExecWithFallback(
+        { code, chatId: `chat-no-fallback-${code.toLowerCase()}` },
+        {
+          backend,
+          sessionManager: manager,
+          runFallback: async () => {
+            throw new Error('fallback should not run');
+          },
+        },
+      ),
+      (error: unknown) => error instanceof HttpError && error.statusCode === statusCode,
+    );
+  }
 });

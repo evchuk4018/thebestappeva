@@ -32,7 +32,7 @@ test('generated files describe images, text, and downloads', () => {
 test('python exec responses expose session status and chat id', () => {
   const response: PythonExecResponse = {
     chatId: 'chat-1',
-    sessionStatus: 'recovered',
+    sessionStatus: 'fallback',
     durationMs: 12,
     exitCode: 0,
     generatedFiles: [],
@@ -42,6 +42,6 @@ test('python exec responses expose session status and chat id', () => {
     stdout: 'ok\n',
     stdoutTruncated: false,
   };
-  assert.equal(response.sessionStatus, 'recovered');
+  assert.equal(response.sessionStatus, 'fallback');
   assert.equal(response.chatId, 'chat-1');
 });

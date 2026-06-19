@@ -4,7 +4,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { HttpError } from './http';
 import { serverConfig } from './config';
-import type { PythonExecRequest, PythonExecResponse, PythonExecStagedFile } from '../shared/ai-python-exec-contract';
+import { collectGeneratedFiles, ensureChatWorkspace } from './python-exec-paths';
+import type { PythonExecRequest, PythonExecResponse, PythonExecSessionStatus, PythonExecStagedFile } from '../shared/ai-python-exec-contract';
 
 const blockedRoots = new Set(['.git', '.local-data', '.vite', 'dist', 'node_modules']);
 const sidecarScriptPath = path.resolve(process.cwd(), 'python', 'exec_sidecar.py');
@@ -17,8 +18,15 @@ interface PythonExecRunnerInput {
 }
 
 interface PythonExecServiceOptions {
+  chatId?: string;
+  inputsRoot?: string;
+  preserveSandbox?: boolean;
   projectRoot?: string;
   runProcess?: (input: PythonExecRunnerInput) => Promise<{ stderr: string; stdout: string }>;
+  sandboxRoot?: string;
+  sessionStatus?: PythonExecSessionStatus;
+  workDir?: string;
+  workspaceRoot?: string;
 }
 
 function expectRecord(value: unknown, field: string) {
@@ -59,8 +67,7 @@ function validateRequestedFilePath(projectRoot: string, requestedPath: string) {
   return { normalized, resolvedPath };
 }
 
-async function stageRequestedFiles(projectRoot: string, requestedFiles: string[], sandboxRoot: string) {
-  const inputsRoot = path.join(sandboxRoot, 'inputs');
+async function stageRequestedFiles(projectRoot: string, requestedFiles: string[], inputsRoot: string) {
   const stagedFiles: PythonExecStagedFile[] = [];
 
   for (const requestedPath of requestedFiles) {
@@ -163,14 +170,17 @@ export function runPythonExecProcess({ args, command, stdin, timeoutMs }: Python
 }
 
 export async function runPythonExecRequest(request: PythonExecRequest, options: PythonExecServiceOptions = {}) {
-  const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'python-exec-'));
+  const temporaryRoot = options.sandboxRoot ? undefined : await fs.mkdtemp(path.join(os.tmpdir(), 'python-exec-'));
+  const sandboxRoot = options.sandboxRoot ?? temporaryRoot!;
+  const inputsRoot = options.inputsRoot ?? path.join(sandboxRoot, 'inputs');
+  const workDir = options.workDir ?? path.join(sandboxRoot, 'work');
   const projectRoot = options.projectRoot ?? process.cwd();
   const runProcess = options.runProcess ?? runPythonExecProcess;
 
   try {
-    const stagedFiles = await stageRequestedFiles(projectRoot, request.files ?? [], sandboxRoot);
-    const workDir = path.join(sandboxRoot, 'work');
+    await fs.mkdir(inputsRoot, { recursive: true });
     await fs.mkdir(workDir, { recursive: true });
+    const stagedFiles = await stageRequestedFiles(projectRoot, request.files ?? [], inputsRoot);
     const { stdout } = await runProcess({
       command: serverConfig.aiPythonExecCommand,
       args: [...serverConfig.aiPythonExecArgs, sidecarScriptPath],
@@ -186,8 +196,38 @@ export async function runPythonExecRequest(request: PythonExecRequest, options: 
       }),
     });
 
-    return parseResponse(stdout);
+    const payload = parseResponse(stdout);
+    if (options.chatId) {
+      const previewLimit = Math.max(120, Math.min(2000, Math.floor(serverConfig.aiPythonExecMaxOutputChars / 4)));
+      const maxGeneratedFiles = Math.max(1, serverConfig.aiPythonExecMaxFiles * 4);
+      return {
+        ...payload,
+        chatId: options.chatId,
+        generatedFiles: await collectGeneratedFiles(workDir, previewLimit, maxGeneratedFiles, options.chatId),
+        sessionStatus: options.sessionStatus,
+      };
+    }
+    return payload;
   } finally {
-    await fs.rm(sandboxRoot, { recursive: true, force: true }).catch(() => undefined);
+    if (!options.preserveSandbox && temporaryRoot) {
+      await fs.rm(temporaryRoot, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
+}
+
+export async function runPythonExecChatFallback(
+  request: PythonExecRequest & { chatId: string },
+  options: PythonExecServiceOptions = {},
+) {
+  const workspaceRoot = options.workspaceRoot ?? serverConfig.aiPythonExecWorkspaceRoot;
+  const { root, inputs, work } = await ensureChatWorkspace(workspaceRoot, request.chatId);
+  return runPythonExecRequest(request, {
+    ...options,
+    chatId: request.chatId,
+    inputsRoot: inputs,
+    preserveSandbox: true,
+    sandboxRoot: root,
+    sessionStatus: 'fallback',
+    workDir: work,
+  });
 }

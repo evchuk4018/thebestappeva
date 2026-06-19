@@ -47,6 +47,7 @@ class LineProtocolSession implements PythonExecSession {
   private readonly pending = new Map<number, (value: PythonExecRawResult) => void>();
   private nextId = 1;
   private buffer = '';
+  private stderr = '';
   private readonly workDir: string;
   private _alive = true;
 
@@ -60,15 +61,17 @@ class LineProtocolSession implements PythonExecSession {
     });
     this.child.stdout?.setEncoding('utf8');
     this.child.stdout?.on('data', (chunk: string) => this.onData(chunk));
+    this.child.stderr?.setEncoding('utf8');
+    this.child.stderr?.on('data', (chunk: string) => this.onStderr(chunk));
     this.child.once('close', () => {
       this._alive = false;
-      for (const resolve of this.pending.values()) {
-        resolve({ ok: false, exitCode: 1, stdout: '', stderr: 'The Python sandbox exited unexpectedly.', durationMs: 0, stdoutTruncated: false, stderrTruncated: false, error: 'The Python sandbox exited unexpectedly.' });
-      }
-      this.pending.clear();
+      const error = this.stderr.trim() || 'The Python sandbox exited unexpectedly.';
+      this.resolvePending({ ok: false, exitCode: 1, stdout: '', stderr: error, durationMs: 0, stdoutTruncated: false, stderrTruncated: false, error });
     });
-    this.child.once('error', () => {
+    this.child.once('error', (error) => {
       this._alive = false;
+      const message = `Unable to start the isolated Python sandbox: ${error.message}`;
+      this.resolvePending({ ok: false, exitCode: 1, stdout: '', stderr: message, durationMs: 0, stdoutTruncated: false, stderrTruncated: false, error: message });
     });
   }
 
@@ -90,6 +93,17 @@ class LineProtocolSession implements PythonExecSession {
     }
   }
 
+  private onStderr(chunk: string) {
+    this.stderr = `${this.stderr}${chunk}`.slice(-4000);
+  }
+
+  private resolvePending(result: PythonExecRawResult) {
+    for (const resolve of this.pending.values()) {
+      resolve(result);
+    }
+    this.pending.clear();
+  }
+
   private dispatch(line: string) {
     let payload: PythonExecRawResult;
     try {
@@ -105,6 +119,30 @@ class LineProtocolSession implements PythonExecSession {
       this.pending.delete(id);
       resolve(payload);
     }
+  }
+
+  async ping(timeoutMs: number): Promise<PythonExecRawResult> {
+    if (!this.alive) {
+      const error = this.stderr.trim() || 'The Python sandbox is not running.';
+      return { ok: false, exitCode: 1, stdout: '', stderr: error, durationMs: 0, stdoutTruncated: false, stderrTruncated: false, error };
+    }
+    const id = this.nextId;
+    this.nextId += 1;
+    let resolveFn: (value: PythonExecRawResult) => void = () => undefined;
+    const promise = new Promise<PythonExecRawResult>((resolve) => {
+      resolveFn = resolve;
+    });
+    this.pending.set(id, resolveFn);
+    const timeoutId = setTimeout(() => {
+      if (this.pending.delete(id)) {
+        this.kill();
+        const error = `The Python sandbox did not become ready within ${timeoutMs}ms.`;
+        resolveFn({ ok: false, exitCode: 1, stdout: '', stderr: error, durationMs: timeoutMs, stdoutTruncated: false, stderrTruncated: false, error });
+      }
+    }, timeoutMs);
+    void promise.finally(() => clearTimeout(timeoutId));
+    this.child.stdin?.write(`${JSON.stringify({ id, type: 'ping' })}\n`);
+    return promise;
   }
 
   async exec(code: string, options: PythonExecExecOptions): Promise<PythonExecRawResult> {
@@ -195,8 +233,10 @@ export class DockerPythonExecBackend implements PythonExecBackend {
       serverConfig.aiPythonExecDockerImage,
     ];
     const session = new LineProtocolSession(chatId, workDir, { command: 'docker', args, env: { PYTHON_EXEC_INPUTS_DIR: '/inputs' } });
-    if (!session.alive) {
-      throw new HttpError(503, 'Unable to start the isolated Python sandbox.');
+    const startup = await session.ping(Math.min(5000, serverConfig.aiPythonExecSmokeTimeoutMs));
+    if (!startup.ok || startup.pong !== true) {
+      await session.kill().catch(() => undefined);
+      throw new HttpError(503, startup.stderr.trim() || startup.error || 'Unable to start the isolated Python sandbox.');
     }
     return session;
   }

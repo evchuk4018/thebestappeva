@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { HttpError } from './http';
-import { parsePythonExecRequest, runPythonExecProcess, runPythonExecRequest } from './python-exec-service';
+import { parsePythonExecRequest, runPythonExecChatFallback, runPythonExecProcess, runPythonExecRequest } from './python-exec-service';
 
 test('parses a valid python exec request', () => {
   const request = parsePythonExecRequest({ code: 'print("hello")', files: ['README.md'] });
@@ -59,6 +62,47 @@ test('surfaces controlled timeout failures', async () => {
     }),
     /timed out/i,
   );
+});
+
+test('chat fallback preserves generated files with download metadata', async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'python-exec-fallback-'));
+  try {
+    const result = await runPythonExecChatFallback(
+      { code: 'make files', chatId: 'chat-files' },
+      {
+        workspaceRoot,
+        runProcess: async ({ stdin }) => {
+          const payload = JSON.parse(stdin) as { stagedFiles: unknown[]; workDir: string };
+          await fs.writeFile(path.join(payload.workDir, 'report.pdf'), 'PDFDATA');
+          await fs.writeFile(path.join(payload.workDir, 'data.csv'), 'a,b\n1,2\n');
+          return {
+            stderr: '',
+            stdout: JSON.stringify({
+              exitCode: 0,
+              stdout: 'done\n',
+              stderr: '',
+              durationMs: 9,
+              stagedFiles: payload.stagedFiles,
+              generatedFiles: [],
+              stdoutTruncated: false,
+              stderrTruncated: false,
+            }),
+          };
+        },
+      },
+    );
+
+    const pdf = result.generatedFiles.find((file) => file.path === 'report.pdf');
+    const csv = result.generatedFiles.find((file) => file.path === 'data.csv');
+    assert.equal(result.sessionStatus, 'fallback');
+    assert.equal(pdf?.kind, 'binary');
+    assert.equal(pdf?.mediaType, 'application/pdf');
+    assert.match(pdf?.downloadUrl ?? '', /\/api\/ai\/chats\/chat-files\/python-exec\/files\/report\.pdf/);
+    assert.equal(csv?.kind, 'text');
+    assert.equal(csv?.preview, 'a,b\n1,2\n');
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
 });
 
 test('actual python sandbox truncates oversized stdout when Python is available', async (t) => {

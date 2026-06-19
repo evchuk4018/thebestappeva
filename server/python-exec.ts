@@ -2,13 +2,20 @@ import fs from 'node:fs/promises';
 import type { Request, Response } from 'express';
 import { serverConfig } from './config';
 import { HttpError } from './http';
-import { DockerPythonExecBackend } from './python-exec-backend';
+import { DockerPythonExecBackend, type PythonExecBackend } from './python-exec-backend';
 import { runChatPythonExecRequest } from './python-exec-chat';
 import { validateWorkspaceRelativePath, detectMediaType } from './python-exec-paths';
-import { parsePythonExecRequest, runPythonExecRequest } from './python-exec-service';
-import { getDefaultSessionManager } from './python-exec-sessions';
+import { parsePythonExecRequest, runPythonExecChatFallback, runPythonExecRequest } from './python-exec-service';
+import { getDefaultSessionManager, type PythonExecSessionManager } from './python-exec-sessions';
+import type { PythonExecRequest, PythonExecResponse } from '../shared/ai-python-exec-contract';
 
 const dockerBackend = new DockerPythonExecBackend();
+
+interface PythonExecRunOptions {
+  backend?: PythonExecBackend;
+  sessionManager?: PythonExecSessionManager;
+  runFallback?: (request: PythonExecRequest & { chatId: string }) => Promise<PythonExecResponse>;
+}
 
 function resolveChatId(request: Request): string | undefined {
   const bodyChatId = (request.body as { chatId?: unknown } | undefined)?.chatId;
@@ -21,17 +28,63 @@ function resolveChatId(request: Request): string | undefined {
   return undefined;
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function shouldFallbackFromPersistentError(error: unknown) {
+  if (!(error instanceof HttpError)) {
+    return false;
+  }
+  if (error.statusCode === 503) {
+    return true;
+  }
+  return error.statusCode === 502 && /sandbox (exited unexpectedly|is not running|did not become ready)|unable to start/i.test(error.message);
+}
+
+function buildCombinedRuntimeError(persistentError: unknown, fallbackError: unknown) {
+  const statusCode = fallbackError instanceof HttpError ? fallbackError.statusCode : 503;
+  const persistentMessage = errorMessage(persistentError, 'The persistent Python sandbox failed.');
+  const fallbackMessage = errorMessage(fallbackError, 'The one-shot Python sandbox failed.');
+  return new HttpError(
+    statusCode,
+    `Persistent Python sandbox failed: ${persistentMessage} One-shot Python sandbox also failed: ${fallbackMessage}`,
+  );
+}
+
+export async function runPythonExecWithFallback(
+  parsed: PythonExecRequest,
+  options: PythonExecRunOptions = {},
+) {
+  const backend = options.backend ?? dockerBackend;
+  if (parsed.chatId) {
+    if (backend.available) {
+      const sessionManager = options.sessionManager ?? getDefaultSessionManager(backend);
+      try {
+        return await runChatPythonExecRequest({ ...parsed, chatId: parsed.chatId }, { backend, sessionManager });
+      } catch (error) {
+        if (!shouldFallbackFromPersistentError(error)) {
+          throw error;
+        }
+        await sessionManager.evict(parsed.chatId).catch(() => undefined);
+        try {
+          return await (options.runFallback ?? runPythonExecChatFallback)({ ...parsed, chatId: parsed.chatId });
+        } catch (fallbackError) {
+          throw buildCombinedRuntimeError(error, fallbackError);
+        }
+      }
+    }
+    return (options.runFallback ?? runPythonExecChatFallback)({ ...parsed, chatId: parsed.chatId });
+  }
+  return runPythonExecRequest(parsed);
+}
+
 export async function handlePythonExec(request: Request, response: Response) {
   try {
     const parsed = parsePythonExecRequest(request.body);
-    if (parsed.chatId && dockerBackend.available) {
-      const sessionManager = getDefaultSessionManager(dockerBackend);
-      response.status(200).json(await runChatPythonExecRequest({ ...parsed, chatId: parsed.chatId }, { backend: dockerBackend, sessionManager }));
-      return;
-    }
-    response.status(200).json(await runPythonExecRequest(parsed));
+    response.status(200).json(await runPythonExecWithFallback(parsed));
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Python execution failed.';
+    const message = errorMessage(error, 'Python execution failed.');
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     response.status(statusCode).json({ ok: false, error: message });
   }
@@ -57,7 +110,7 @@ export async function handlePythonExecFileDownload(request: Request, response: R
     const stream = await fs.open(absolutePath, 'r');
     stream.createReadStream().pipe(response);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to download the generated file.';
+    const message = errorMessage(error, 'Unable to download the generated file.');
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     response.status(statusCode).json({ ok: false, error: message });
   }

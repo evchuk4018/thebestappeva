@@ -1,5 +1,5 @@
 export type PythonExecGeneratedFileKind = 'image' | 'text' | 'binary';
-export type PythonExecSessionStatus = 'ready' | 'reset' | 'recovered';
+export type PythonExecSessionStatus = 'ready' | 'reset' | 'recovered' | 'fallback';
 
 export interface PythonExecRequest {
   code: string;
