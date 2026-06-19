@@ -6,11 +6,13 @@ import { AiStatusBanner } from './AiStatusBanner';
 import { AiWorkspaceLoadingState } from './AiWorkspaceLoadingState';
 import { EmptyState } from './EmptyState';
 import { RuntimePill } from './RuntimePill';
+import { SkillsPanel } from './skills/SkillsPanel';
 import { ToolsPanel } from './ToolsPanel';
 import type { AskUserResponse, Chat, ModelProvider, OllamaAvailability } from './types';
 import type { ToolDefinition } from './tools/types';
 import type { AiAttachmentHealth } from '../../../shared/ai-attachments-contract';
 import type { AiVisionMode } from '../../../shared/ai-vision-contract';
+import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../shared/skills-contract';
 
 type SidebarPanel = 'chats' | 'tools' | 'skills';
 type HydrationStatus = 'loading' | 'ready' | 'error';
@@ -40,6 +42,9 @@ interface AiWorkspacePanelProps {
   persistenceError: string | null;
   showTypingIndicator: boolean;
   sidebarOpen: boolean;
+  skills: SkillSummary[];
+  skillsError: string | null;
+  skillsLoading: boolean;
   tools: WorkspaceTool[];
   visionMode: AiVisionMode;
   onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
@@ -52,7 +57,11 @@ interface AiWorkspacePanelProps {
   onSelectSuggestion: (label: string) => void;
   onSubmitAskUser: (messageId: string, stepId: string, response: AskUserResponse) => Promise<void> | void;
   onSwitchUserMessageVersion: (messageId: string, direction: 'previous' | 'next') => void;
+  onCreateSkill: (request: CreateSkillRequest) => Promise<unknown>;
+  onDeleteSkill: (id: string) => Promise<unknown>;
+  onToggleSkill: (id: string, enabled: boolean) => Promise<unknown>;
   onToggleTool: (toolId: string, enabled: boolean) => void;
+  onUpdateSkill: (id: string, request: UpdateSkillRequest) => Promise<unknown>;
 }
 
 export function AiWorkspacePanel(props: AiWorkspacePanelProps) {
@@ -93,6 +102,16 @@ export function AiWorkspacePanel(props: AiWorkspacePanelProps) {
         />
         {props.activePanel === 'tools' ? (
           <ToolsPanel tools={props.tools} onToggleTool={props.onToggleTool} />
+        ) : props.activePanel === 'skills' ? (
+          <SkillsPanel
+            skills={props.skills}
+            loading={props.skillsLoading}
+            error={props.skillsError}
+            onCreate={props.onCreateSkill}
+            onUpdate={props.onUpdateSkill}
+            onToggle={props.onToggleSkill}
+            onDelete={props.onDeleteSkill}
+          />
         ) : props.hydrationStatus === 'loading' ? (
           <AiWorkspaceLoadingState />
         ) : props.activeChat ? (

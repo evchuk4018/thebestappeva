@@ -110,6 +110,12 @@ hydrationStatus,
     setPullProgress,
   });
   const handleKeyDown = createHandleKeyDown(handleSend);
+  const handleSelectPanel = (panel: SidebarPanel) => {
+    setActivePanel(panel);
+    if (panel === 'tools') {
+      setSidebarOpen(false);
+    }
+  };
   const openAddModels = () => {
     if (currentProvider !== 'ollama') {
       return;
@@ -164,9 +170,6 @@ hydrationStatus,
         sessionTitle={sessionTitle}
         selectedChatId={selectedChatId}
         sidebarOpen={sidebarOpen}
-        skills={skills}
-        skillsLoading={skillsControls.loading}
-        skillsError={skillsControls.error}
         hydrationStatus={hydrationStatus}
         persistenceError={persistenceError}
         onClose={() => setSidebarOpen(false)}
@@ -178,11 +181,7 @@ hydrationStatus,
           setActivePanel('chats');
           selectChat(chatId);
         }}
-        onSelectPanel={setActivePanel}
-        onCreateSkill={(request) => skillsControls.create(request)}
-        onUpdateSkill={(id, request) => skillsControls.update(id, request)}
-        onToggleSkill={(id, enabled) => skillsControls.toggle(id, enabled)}
-        onDeleteSkill={(id) => skillsControls.remove(id)}
+        onSelectPanel={handleSelectPanel}
       />
 
       <div ref={workspaceRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -206,6 +205,9 @@ hydrationStatus,
           persistenceError={persistenceError}
           showTypingIndicator={showTypingIndicator}
           sidebarOpen={sidebarOpen}
+          skills={skills}
+          skillsError={skillsControls.error}
+          skillsLoading={skillsControls.loading}
           tools={tools}
           visionMode={visionMode}
           onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
@@ -218,7 +220,11 @@ hydrationStatus,
           onSelectSuggestion={handleSuggestionClick}
           onSubmitAskUser={submitAskUserResponse}
           onSwitchUserMessageVersion={switchUserMessageVersion}
+          onCreateSkill={(request) => skillsControls.create(request)}
+          onDeleteSkill={(id) => skillsControls.remove(id)}
+          onToggleSkill={(id, enabled) => skillsControls.toggle(id, enabled)}
           onToggleTool={toggleTool}
+          onUpdateSkill={(id, request) => skillsControls.update(id, request)}
         />
 
         <AiArtifactsWorkspace
