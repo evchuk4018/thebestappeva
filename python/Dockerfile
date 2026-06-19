@@ -20,10 +20,10 @@ RUN pip install --no-cache-dir \
 
 RUN useradd --create-home --shell /bin/false pyworker
 WORKDIR /work
-RUN mkdir -p /inputs && chmod 0o555 /inputs
+RUN mkdir -p /inputs && chmod 0555 /inputs
 
 COPY exec_worker.py /opt/exec_worker.py
-RUN chmod 0o555 /opt/exec_worker.py
+RUN chmod 0555 /opt/exec_worker.py
 
 USER pyworker
 
