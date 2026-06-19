@@ -112,9 +112,6 @@ hydrationStatus,
   const handleKeyDown = createHandleKeyDown(handleSend);
   const handleSelectPanel = (panel: SidebarPanel) => {
     setActivePanel(panel);
-    if (panel === 'tools') {
-      setSidebarOpen(false);
-    }
   };
   const openAddModels = () => {
     if (currentProvider !== 'ollama') {
