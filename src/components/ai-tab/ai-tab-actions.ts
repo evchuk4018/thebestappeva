@@ -26,7 +26,7 @@ interface EditMessageOptions {
 interface NewChatOptions {
   isMobile: boolean;
   selectChat: (chatId: string | null) => void;
-  setActivePanel: Dispatch<SetStateAction<'chats' | 'tools'>>;
+  setActivePanel: Dispatch<SetStateAction<'chats' | 'tools' | 'skills'>>;
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
 }
 

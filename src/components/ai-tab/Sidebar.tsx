@@ -1,27 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Sparkles, Wrench, X } from 'lucide-react';
 import { Chat } from './types';
 import { searchChats } from './chat-search';
 import { SidebarChatsPanel } from './SidebarChatsPanel';
 import { SkillsPanel } from './skills/SkillsPanel';
-import { ToolsPanel } from './ToolsPanel';
-import { ToolDefinition } from './tools/types';
 import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../shared/skills-contract';
 
 type SidebarPanel = 'chats' | 'tools' | 'skills';
 type HydrationStatus = 'loading' | 'ready' | 'error';
 
-interface SidebarTool extends ToolDefinition {
-  enabled: boolean;
-}
-
 interface SidebarProps {
   activePanel: SidebarPanel;
   chats: Chat[];
   isMobile: boolean;
+  sessionTitle: string;
   selectedChatId: string | null;
   sidebarOpen: boolean;
-  tools: SidebarTool[];
   skills: SkillSummary[];
   skillsLoading: boolean;
   skillsError: string | null;
@@ -34,7 +28,6 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onSelectChat: (chatId: string) => void;
   onSelectPanel: (panel: SidebarPanel) => void;
-  onToggleTool: (toolId: string, enabled: boolean) => void;
   onCreateSkill: (request: CreateSkillRequest) => Promise<unknown>;
   onUpdateSkill: (id: string, request: UpdateSkillRequest) => Promise<unknown>;
   onToggleSkill: (id: string, enabled: boolean) => Promise<unknown>;
@@ -51,9 +44,9 @@ export function Sidebar({
   activePanel,
   chats,
   isMobile,
+  sessionTitle,
   selectedChatId,
   sidebarOpen,
-  tools,
   skills,
   skillsLoading,
   skillsError,
@@ -66,7 +59,6 @@ export function Sidebar({
   onOpenSettings,
   onSelectChat,
   onSelectPanel,
-  onToggleTool,
   onCreateSkill,
   onUpdateSkill,
   onToggleSkill,
@@ -85,6 +77,12 @@ export function Sidebar({
     setSearchOpen(false);
     setSearchQuery('');
   };
+
+  useEffect(() => {
+    if (activePanel !== 'chats') {
+      resetSearch();
+    }
+  }, [activePanel]);
 
   const toggleSearch = () => {
     if (activePanel !== 'chats') {
@@ -106,7 +104,7 @@ export function Sidebar({
     >
       <div className="flex h-0 flex-1 flex-col overflow-y-auto">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
-          <span className="font-serif text-2xl font-medium tracking-wide text-[#efeae4]">Ollama</span>
+          <span className="font-serif text-2xl font-medium tracking-wide text-[#efeae4]">{sessionTitle}</span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -174,16 +172,23 @@ export function Sidebar({
           <div className="grid grid-cols-3 gap-2">
             {panelItems.map(({ icon: Icon, label, value }) => {
               const isActive = activePanel === value;
+              const isSkills = value === 'skills';
               return (
                 <button
                   key={value}
                   type="button"
                   onClick={() => onSelectPanel(value)}
                   className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
-                    isActive ? 'bg-[#1f262f] text-[#efeae4]' : 'bg-[#171715] text-zinc-400 hover:bg-[#1a1a18] hover:text-zinc-200'
+                    isSkills && isActive
+                      ? 'border border-[#e2875e]/35 bg-[#2a201a] text-[#fff1e8] shadow-[0_0_18px_rgba(226,135,94,0.08)]'
+                      : isSkills
+                        ? 'border border-[#3b2f28] bg-[#1b1714] text-[#d8b7a4] hover:border-[#e2875e]/30 hover:bg-[#211a16] hover:text-[#fff1e8]'
+                        : isActive
+                          ? 'bg-[#1f262f] text-[#efeae4]'
+                          : 'bg-[#171715] text-zinc-400 hover:bg-[#1a1a18] hover:text-zinc-200'
                   }`}
                 >
-                  <Icon size={15} className={isActive ? 'text-[#8db4d0]' : 'text-zinc-500'} />
+                  <Icon size={15} className={isSkills ? 'text-[#e2875e]' : isActive ? 'text-[#8db4d0]' : 'text-zinc-500'} />
                   <span>{label}</span>
                 </button>
               );
@@ -208,9 +213,7 @@ export function Sidebar({
               onSelectChat(chatId);
             }}
           />
-        ) : activePanel === 'tools' ? (
-          <ToolsPanel tools={tools} onToggleTool={onToggleTool} />
-        ) : (
+        ) : activePanel === 'skills' ? (
           <SkillsPanel
             skills={skills}
             loading={skillsLoading}
@@ -220,6 +223,8 @@ export function Sidebar({
             onToggle={onToggleSkill}
             onDelete={onDeleteSkill}
           />
+        ) : (
+          <div className="mt-5 px-4 text-xs text-zinc-500">Tools open in the main workspace.</div>
         )}
       </div>
 

@@ -52,11 +52,7 @@ export function EmptyState(props: EmptyStateProps) {
       <h1 className="mb-3 font-serif text-3xl font-normal tracking-normal text-[#efeae4] md:text-5xl">
         {workStatusMessage}
       </h1>
-      <p className="mb-8 max-w-xl text-sm leading-relaxed text-zinc-400">
-        {props.currentProvider === 'deepseek'
-          ? 'Use the server-side DeepSeek API key from .env while keeping chat, tools, and streaming in the same workspace.'
-          : 'Detect installed models, switch between them, and download new ones without leaving the app.'}
-      </p>
+      <div className="mb-8" />
 
       <ChatComposer
         availability={props.availability}

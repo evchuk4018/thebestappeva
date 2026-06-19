@@ -34,14 +34,14 @@ export function SidebarChatsPanel({
   const showEmpty = !showLoading && !showError && chats.length === 0;
 
   return (
-    <div className="mt-5 flex flex-1 flex-col px-2 pb-4">
+    <div className="mt-5 flex min-h-0 flex-1 flex-col px-2 pb-4">
       <div className="mb-1.5 flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
         <span>{searchActive ? 'Results' : 'Recents'}</span>
         <button type="button" className="rounded p-0.5 text-zinc-600 hover:text-zinc-400">
           <Sliders size={11} />
         </button>
       </div>
-      <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto pr-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-1">
         {showLoading && (
           <div className="px-3 py-4 text-xs italic text-zinc-500">Loading chats…</div>
         )}

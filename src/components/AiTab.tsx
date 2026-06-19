@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { PanelLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ActiveChatView } from './ai-tab/ActiveChatView';
-import { AiActiveComposer } from './ai-tab/AiActiveComposer';
 import { AiTabOverlays } from './ai-tab/AiTabOverlays';
-import { AiStatusBanner } from './ai-tab/AiStatusBanner';
-import { AiWorkspaceLoadingState } from './ai-tab/AiWorkspaceLoadingState';
+import { AiWorkspacePanel } from './ai-tab/AiWorkspacePanel';
 import { copyTextToClipboard } from './ai-tab/clipboard';
-import { EmptyState } from './ai-tab/EmptyState';
 import { MobileHeader } from './ai-tab/MobileHeader';
 import { pullModel } from './ai-tab/ollama-client';
-import { RuntimePill } from './ai-tab/RuntimePill';
+import { pickSessionTitle } from './ai-tab/session-title';
 import { Sidebar } from './ai-tab/Sidebar';
 import { AiArtifactsWorkspace } from './ai-tab/AiArtifactsWorkspace';
 import { createHandleCopyMessage, createHandleDeleteChat, createHandleEditUserMessage, createHandleKeyDown, createHandleNewChat, createHandlePullModel, createHandleSelectModel, createHandleSend, createSuggestionHandler } from './ai-tab/ai-tab-actions';
@@ -35,6 +30,7 @@ export default function AiTab() {
   const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sessionTitle] = useState(pickSessionTitle);
   const {
     addFiles,
     clearReadyAttachments,
@@ -148,7 +144,7 @@ hydrationStatus,
 
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden bg-[#1b1b19] font-sans text-[#efeae4]">
-      <MobileHeader sidebarOpen={sidebarOpen} onNewChat={handleNewChat} onToggleSidebar={() => setSidebarOpen((open) => !open)} />
+      <MobileHeader sessionTitle={sessionTitle} sidebarOpen={sidebarOpen} onNewChat={handleNewChat} onToggleSidebar={() => setSidebarOpen((open) => !open)} />
       <AnimatePresence>
         {isMobile && sidebarOpen && (
           <motion.div
@@ -165,9 +161,9 @@ hydrationStatus,
         activePanel={activePanel}
         chats={chats}
         isMobile={isMobile}
+        sessionTitle={sessionTitle}
         selectedChatId={selectedChatId}
         sidebarOpen={sidebarOpen}
-        tools={tools}
         skills={skills}
         skillsLoading={skillsControls.loading}
         skillsError={skillsControls.error}
@@ -183,7 +179,6 @@ hydrationStatus,
           selectChat(chatId);
         }}
         onSelectPanel={setActivePanel}
-        onToggleTool={toggleTool}
         onCreateSkill={(request) => skillsControls.create(request)}
         onUpdateSkill={(id, request) => skillsControls.update(id, request)}
         onToggleSkill={(id, enabled) => skillsControls.toggle(id, enabled)}
@@ -191,67 +186,40 @@ hydrationStatus,
       />
 
       <div ref={workspaceRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {!sidebarOpen && !isMobile && (
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="absolute left-4 top-4 z-20 rounded-xl border border-[#2c2c28] bg-[#20201e] p-2 text-zinc-300 shadow-xl duration-200 hover:text-white"
-            >
-              <PanelLeft size={18} />
-            </button>
-          )}
-
-          <div className="flex h-16 select-none items-center justify-center pt-3">
-            <RuntimePill
-              availability={availability}
-              currentProvider={currentProvider}
-              visionMode={visionMode}
-              modelCount={availableModels.length}
-              onOpenAddModels={openAddModels}
-            />
-          </div>
-
-          <div ref={chatContainerRef} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-32 pt-2 md:px-8">
-            <AiStatusBanner
-              availability={availability}
-              currentProvider={currentProvider}
-              visionMode={visionMode}
-              lastError={lastError}
-              parserHealth={parserHealth}
-              persistenceError={persistenceError}
-              onOpenAddModels={openAddModels}
-            />
-            {hydrationStatus === 'loading' ? (
-              <AiWorkspaceLoadingState />
-            ) : activeChat ? (
-              <ActiveChatView
-                activeChat={activeChat}
-                activeAskUserStepId={activeAskUserStepId}
-                busy={isBusy}
-                currentProvider={currentProvider}
-                currentModel={currentModel}
-                liveAssistantMessageId={liveAssistantMessageId}
-                showTypingIndicator={showTypingIndicator}
-                onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
-                onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
-                onSubmitAskUser={submitAskUserResponse}
-                onRegenerateAssistantMessage={regenerateAssistantMessage}
-                onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
-                onEditUserMessage={handleEditUserMessage}
-                onSwitchUserMessageVersion={switchUserMessageVersion}
-              />
-            ) : (
-              <EmptyState
-                {...composerProps}
-                isTyping={isTyping}
-                onSelectSuggestion={handleSuggestionClick}
-              />
-            )}
-          </div>
-
-          {activeChat && <AiActiveComposer {...composerProps} isBusy={isBusy} isTyping={isTyping} />}
-        </div>
+        <AiWorkspacePanel
+          activePanel={activePanel}
+          activeAskUserStepId={activeAskUserStepId}
+          activeChat={activeChat}
+          availability={availability}
+          chatContainerRef={chatContainerRef}
+          composerProps={composerProps}
+          currentModel={currentModel}
+          currentProvider={currentProvider}
+          hydrationStatus={hydrationStatus}
+          isBusy={isBusy}
+          isMobile={isMobile}
+          isTyping={isTyping}
+          lastError={lastError}
+          liveAssistantMessageId={liveAssistantMessageId}
+          modelCount={availableModels.length}
+          parserHealth={parserHealth}
+          persistenceError={persistenceError}
+          showTypingIndicator={showTypingIndicator}
+          sidebarOpen={sidebarOpen}
+          tools={tools}
+          visionMode={visionMode}
+          onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
+          onCopyUserMessage={(messageId) => handleCopyMessage(messageId, 'user')}
+          onEditUserMessage={handleEditUserMessage}
+          onOpenAddModels={openAddModels}
+          onOpenArtifact={(artifactId) => setActiveArtifact(artifactId)}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onRegenerateAssistantMessage={regenerateAssistantMessage}
+          onSelectSuggestion={handleSuggestionClick}
+          onSubmitAskUser={submitAskUserResponse}
+          onSwitchUserMessageVersion={switchUserMessageVersion}
+          onToggleTool={toggleTool}
+        />
 
         <AiArtifactsWorkspace
           activeArtifactId={activeArtifactId}

@@ -104,11 +104,11 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - automatic post-turn memory refresh now runs as a background queue instead of part of the visible reply flow, so completed assistant answers settle immediately; text-only turns can overlap with that queue, while image-bearing turns pause and abort queued background refresh work until the foreground turn finishes
 - new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b-q8_0`; if that model is unavailable, the heuristic title remains
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
-- the left sidebar now has `Chats` and `Tools` panels
+- the left sidebar now has `Chats`, `Tools`, and `Skills` workspace switches; `Tools` opens in the main chat workspace so its controls have full-width room
 - each chat has a mode toggle beside the model picker:
   - `Thinking` enables Ollama thinking, streams a collapsible `Thinking Progress` trace live, nudges long turns into explicit task/progress blocks, and keeps the final answer in the main reply bubble
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
-- the `Tools` panel lists installed tools, their functions, and an enable/disable toggle
+- the main `Tools` workspace lists installed tools, their functions, and an enable/disable toggle
 - local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids, an immediate local vision summary, and on-demand structured scene-graph analysis
