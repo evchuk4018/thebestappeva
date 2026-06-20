@@ -6,15 +6,17 @@ import { AiStatusBanner } from './AiStatusBanner';
 import { AiWorkspaceLoadingState } from './AiWorkspaceLoadingState';
 import { EmptyState } from './EmptyState';
 import { RuntimePill } from './RuntimePill';
+import { AutomationsPanel } from './automations/AutomationsPanel';
 import { SkillsPanel } from './skills/SkillsPanel';
 import { ToolsPanel } from './ToolsPanel';
 import type { AskUserResponse, Chat, ModelProvider, OllamaAvailability } from './types';
 import type { ToolDefinition } from './tools/types';
 import type { AiAttachmentHealth } from '../../../shared/ai-attachments-contract';
+import type { AutomationSummary, CreateAutomationRequest, UpdateAutomationRequest } from '../../../shared/automations-contract';
 import type { AiVisionMode } from '../../../shared/ai-vision-contract';
 import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../shared/skills-contract';
 
-type SidebarPanel = 'chats' | 'tools' | 'skills';
+type SidebarPanel = 'chats' | 'tools' | 'skills' | 'automations';
 type HydrationStatus = 'loading' | 'ready' | 'error';
 type ComposerProps = Omit<ComponentProps<typeof EmptyState>, 'isTyping' | 'onSelectSuggestion'>;
 
@@ -45,6 +47,9 @@ interface AiWorkspacePanelProps {
   skills: SkillSummary[];
   skillsError: string | null;
   skillsLoading: boolean;
+  automations: AutomationSummary[];
+  automationsError: string | null;
+  automationsLoading: boolean;
   tools: WorkspaceTool[];
   visionMode: AiVisionMode;
   onCopyAssistantMessage: (messageId: string) => Promise<void> | void;
@@ -58,9 +63,13 @@ interface AiWorkspacePanelProps {
   onSubmitAskUser: (messageId: string, stepId: string, response: AskUserResponse) => Promise<void> | void;
   onSwitchUserMessageVersion: (messageId: string, direction: 'previous' | 'next') => void;
   onCreateSkill: (request: CreateSkillRequest) => Promise<unknown>;
+  onCreateAutomation: (request: CreateAutomationRequest) => Promise<unknown>;
+  onDeleteAutomation: (id: string) => Promise<unknown>;
   onDeleteSkill: (id: string) => Promise<unknown>;
+  onToggleAutomation: (id: string, enabled: boolean) => Promise<unknown>;
   onToggleSkill: (id: string, enabled: boolean) => Promise<unknown>;
   onToggleTool: (toolId: string, enabled: boolean) => void;
+  onUpdateAutomation: (id: string, request: UpdateAutomationRequest) => Promise<unknown>;
   onUpdateSkill: (id: string, request: UpdateSkillRequest) => Promise<unknown>;
 }
 
@@ -102,6 +111,17 @@ export function AiWorkspacePanel(props: AiWorkspacePanelProps) {
         />
         {props.activePanel === 'tools' ? (
           <ToolsPanel tools={props.tools} onToggleTool={props.onToggleTool} />
+        ) : props.activePanel === 'automations' ? (
+          <AutomationsPanel
+            automations={props.automations}
+            loading={props.automationsLoading}
+            error={props.automationsError}
+            skills={props.skills}
+            onCreate={props.onCreateAutomation}
+            onUpdate={props.onUpdateAutomation}
+            onToggle={props.onToggleAutomation}
+            onDelete={props.onDeleteAutomation}
+          />
         ) : props.activePanel === 'skills' ? (
           <SkillsPanel
             skills={props.skills}

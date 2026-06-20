@@ -18,9 +18,11 @@ test('lists built-in skills before user skills and supports lookup by id and nam
   service.createSkill({ name: 'writer', description: 'Draft writing help.', instructions: 'Write clearly.' });
 
   const skills = service.listSkills();
-  assert.deepEqual(skills.map((skill) => `${skill.source}:${skill.name}`), ['builtin:skill-creator', 'user:writer']);
+  assert.deepEqual(skills.map((skill) => `${skill.source}:${skill.name}`), ['builtin:automation-creator', 'builtin:skill-creator', 'user:writer']);
   assert.equal(service.getSkill('builtin:skill-creator')?.readOnly, true);
+  assert.equal(service.getSkill('builtin:automation-creator')?.readOnly, true);
   assert.equal(service.getSkillByName('skill-creator')?.source, 'builtin');
+  assert.equal(service.getSkillByName('automation-creator')?.source, 'builtin');
   assert.equal(service.getSkillByName('writer')?.source, 'user');
 });
 

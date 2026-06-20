@@ -38,9 +38,13 @@ export function getActiveToolEntriesForChat(
   enabledTools: Record<string, boolean>,
   provider: ModelProvider,
   maxVisionCallsPerMessage = 4,
+  forcedEnabledToolIds: string[] = [],
+  forcedDisabledToolIds: string[] = [],
 ) {
+  const forcedEnabled = new Set(forcedEnabledToolIds);
+  const forcedDisabled = new Set(forcedDisabledToolIds);
   const enabledEntries = baseEntries.filter(
-    ({ definition }) => definition.internal || (enabledTools[definition.id] ?? definition.enabledByDefault),
+    ({ definition }) => definition.internal || (forcedEnabled.has(definition.id) || ((enabledTools[definition.id] ?? definition.enabledByDefault) && !forcedDisabled.has(definition.id))),
   );
   const artifactEntries = chat && (enabledTools['artifact-workspace'] ?? true) ? [createArtifactWorkspaceTool(chat.id)] : [];
   const pdfAttachments = chat ? collectLongPdfAttachments(chat.messages) : [];

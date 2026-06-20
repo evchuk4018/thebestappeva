@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { appendMessage, createNewChat, createUserMessage } from './helpers';
 import { TurnAbortedError } from './abort-utils';
 import { replaceChat, updateChatMode } from './chat-helpers';
+import { defaultAutomationTurnConfig, matchConversationAutomations, resolveAutomationTurnConfig, type AutomationTurnConfig } from './automations/automation-turns';
+import { runScheduledAutomationTurn } from './automations/scheduled-automation-run';
+import { useAutomations } from './automations/useAutomations';
 import { buildDefaultAttachmentPrompt, resolveTurnMode } from './attachment-behavior';
 import { sendFlashTurn } from './flash-turn';
 import { LiveChatState, resolveActiveChat, shouldShowTypingIndicator } from './live-turn';
@@ -18,7 +21,10 @@ import { useAiWorkspacePersistence } from './useAiWorkspacePersistence';
 import { useChatTitleGeneration } from './useChatTitleGeneration';
 import { sendThinkingReply } from './chat-turn-helpers';
 import { useAutoMemoryRefresh } from './use-auto-memory-refresh';
+import { fetchSkill } from './skills/skills-api';
 import { useSkills } from './skills/useSkills';
+
+interface TurnOverrides { automationContext?: string | null; forcedEnabledToolIds?: string[]; forcedDisabledToolIds?: string[]; }
 export function useOllamaChat() {
   const [draftMode, setDraftMode] = useState<ChatMode>('thinking');
   const [isTyping, setIsTyping] = useState(false);
@@ -61,6 +67,8 @@ export function useOllamaChat() {
 useChatTitleGeneration({ availableModels, chats, setChats });
   const autoMemoryRefresh = useAutoMemoryRefresh({ getChats, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats });
   const skillsHook = useSkills();
+  const automationsHook = useAutomations();
+  const automationsRef = useRef(automationsHook.automations); automationsRef.current = automationsHook.automations;
   const skills = skillsHook.skills;
   const skillsRef = useRef(skills);
   skillsRef.current = skills;
@@ -75,21 +83,13 @@ useChatTitleGeneration({ availableModels, chats, setChats });
   const activeToolEntries = getActiveToolEntriesForChat(persistedSelectedChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage);
   const chatMode = selectedChat?.mode ?? draftMode;
   const isBusy = isTyping || Boolean(pendingAskUserTurn);
-  const systemPromptContext: SystemPromptContext = { generatedUserMemory, customPrompt: customSystemPrompt, mode: chatMode, tools: activeToolEntries.map(({ definition }) => definition), artifactContext: undefined, skills };
+  const systemPromptContext: SystemPromptContext = { generatedUserMemory, customPrompt: customSystemPrompt, mode: chatMode, tools: activeToolEntries.map(({ definition }) => definition), artifactContext: undefined, automationContext: undefined, skills };
   useEffect(() => () => activeTurnControllerRef.current?.abort(new TurnAbortedError()), []);
+  useEffect(() => { if (!isTyping) void flushWorkspace(); }, [flushWorkspace, isTyping]);
   useEffect(() => {
-    if (!isTyping) {
-      void flushWorkspace();
-    }
-  }, [flushWorkspace, isTyping]);
-  useEffect(() => {
-    if (pendingAskUserTurn || !persistedSelectedChat) {
-      return;
-    }
+    if (pendingAskUserTurn || !persistedSelectedChat) return;
     const pendingPrompt = selectedChat ? findPendingAskUserState(selectedChat) : null;
-    if (pendingPrompt) {
-      setPendingAskUserTurn(pendingPrompt);
-    }
+    if (pendingPrompt) setPendingAskUserTurn(pendingPrompt);
   }, [pendingAskUserTurn, persistedSelectedChat, selectedChat]);
   function selectChat(chatId: string | null) { setSelectedChatId(chatId); if (!chatId) setDraftMode('thinking'); }
   function setChatMode(mode: ChatMode) {
@@ -104,7 +104,7 @@ useChatTitleGeneration({ availableModels, chats, setChats });
     void refreshModels(provider, preferredModel);
   }
   function toggleChatMode() { setChatMode(chatMode === 'thinking' ? 'flash' : 'thinking'); }
-  async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null) {
+  async function runModelTurn(baseChat: Chat, nextChatMode: ChatMode, assistantMessageId?: string | null, overrides: TurnOverrides = {}) {
     if (!currentModel || activeTurnControllerRef.current) return null;
     const effectiveMode = resolveTurnMode(baseChat, currentProvider, nextChatMode);
     const turnChat = effectiveMode === baseChat.mode ? baseChat : { ...baseChat, mode: effectiveMode };
@@ -116,7 +116,9 @@ useChatTitleGeneration({ availableModels, chats, setChats });
     const controller = new AbortController();
     activeTurnControllerRef.current = controller;
     try {
-      const turnToolEntries = effectiveMode === 'thinking' ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage) : [];
+      const turnToolEntries = effectiveMode === 'thinking'
+        ? getActiveToolEntriesForChat(turnChat, toolRegistryEntries, enabledTools, currentProvider, maxVisionCallsPerMessage, overrides.forcedEnabledToolIds ?? [], overrides.forcedDisabledToolIds ?? [])
+        : [];
       const artifactContext = turnChat.includedArtifactIds.length ? await buildArtifactContext(turnChat) : undefined;
       const promptContext = {
         generatedUserMemory,
@@ -124,28 +126,13 @@ useChatTitleGeneration({ availableModels, chats, setChats });
         mode: effectiveMode,
         tools: turnToolEntries.map(({ definition }) => definition),
         artifactContext,
+        automationContext: overrides.automationContext ?? undefined,
         skills: skillsRef.current,
       } satisfies SystemPromptContext;
-      const resolvedTurn =
-        effectiveMode === 'flash'
-          ? await sendFlashTurn({
-              chat: turnChat,
-              model: currentModel,
-              provider: currentProvider,
-              promptContext,
-              onProgress: (nextChat, nextAssistantMessageId) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: nextAssistantMessageId }),
-              signal: controller.signal,
-            })
-          : await sendThinkingReply(
-              turnChat,
-              currentProvider,
-              currentModel,
-              promptContext,
-              turnToolEntries,
-              (nextChat, nextAssistantMessageId) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: nextAssistantMessageId }),
-              assistantMessageId,
-              controller.signal,
-            );
+      const onProgress = (nextChat: Chat, nextAssistantMessageId: string | null) => setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: nextAssistantMessageId });
+      const resolvedTurn = effectiveMode === 'flash'
+        ? await sendFlashTurn({ chat: turnChat, model: currentModel, provider: currentProvider, promptContext, onProgress, signal: controller.signal })
+        : await sendThinkingReply(turnChat, currentProvider, currentModel, promptContext, turnToolEntries, onProgress, assistantMessageId, controller.signal);
       const nextChats = replaceChat(getChats(), resolvedTurn.chat);
       setChats(nextChats);
       setAvailability(resolvedTurn.availability);
@@ -153,9 +140,7 @@ useChatTitleGeneration({ availableModels, chats, setChats });
       setPendingAskUserTurn(resolvedTurn.status === 'paused' ? resolvedTurn.pendingAskUser : null);
       return resolvedTurn;
     } finally {
-      if (activeTurnControllerRef.current === controller) {
-        activeTurnControllerRef.current = null;
-      }
+      if (activeTurnControllerRef.current === controller) activeTurnControllerRef.current = null;
       setLiveChat(null);
       setIsTyping(false);
     }
@@ -163,18 +148,21 @@ useChatTitleGeneration({ availableModels, chats, setChats });
   async function sendMessage(content: string, attachments: AiAttachmentReference[] = []) {
     const normalizedContent = content.trim() || (attachments.length ? buildDefaultAttachmentPrompt(attachments) : '');
     if (!currentModel || activeTurnControllerRef.current || pendingAskUserTurn || !normalizedContent) return;
+    const matchedAutomations = matchConversationAutomations(automationsRef.current, normalizedContent);
+    const automationConfig = matchedAutomations.length ? await resolveAutomationTurnConfig(matchedAutomations, (skillId) => fetchSkill(skillId)) : defaultAutomationTurnConfig;
+    if (automationConfig.error) {
+      setLastError(automationConfig.error);
+      return;
+    }
     const hasImageAttachments = attachments.some((attachment) => attachment.kind === 'image');
     const userMessage = createUserMessage(normalizedContent, attachments);
     const appendedChat = persistedSelectedChat ? appendMessage(persistedSelectedChat, userMessage) : createNewChat(userMessage, chatMode);
-    const nextChatMode = resolveTurnMode(appendedChat, currentProvider, chatMode);
+    const nextChatMode = automationConfig.forceThinking ? 'thinking' : resolveTurnMode(appendedChat, currentProvider, chatMode);
     const baseChat = { ...appendedChat, mode: nextChatMode };
-    if (!selectedChat) {
-      setSelectedChatId(baseChat.id);
-      setDraftMode('thinking');
-    }
+    if (!selectedChat) { setSelectedChatId(baseChat.id); setDraftMode('thinking'); }
     autoMemoryRefresh.startForegroundTurn(hasImageAttachments);
     try {
-      autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, nextChatMode));
+      autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, nextChatMode, undefined, automationConfig));
     } finally {
       autoMemoryRefresh.finishForegroundTurn(hasImageAttachments);
     }
@@ -192,9 +180,7 @@ useChatTitleGeneration({ availableModels, chats, setChats });
     autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(baseChat, selectedChat.mode));
   }
   function switchUserMessageVersion(messageId: string, direction: BranchDirection) {
-    if (!selectedChatId || activeTurnControllerRef.current || pendingAskUserTurn) {
-      return;
-    }
+    if (!selectedChatId || activeTurnControllerRef.current || pendingAskUserTurn) return;
     setChats((currentChats) => {
       const chat = currentChats.find((candidate) => candidate.id === selectedChatId);
       return chat ? replaceChat(currentChats, switchUserMessageBranch(chat, messageId, direction)) : currentChats;
@@ -206,12 +192,8 @@ useChatTitleGeneration({ availableModels, chats, setChats });
     if (liveChat?.chatId === chatId) {
       setLiveChat(null);
     }
-    if (pendingAskUserTurn?.chatId === chatId) {
-      setPendingAskUserTurn(null);
-    }
-    if (selectedChatId === chatId) {
-      selectChat(null);
-    }
+    if (pendingAskUserTurn?.chatId === chatId) setPendingAskUserTurn(null);
+    if (selectedChatId === chatId) selectChat(null);
   }
   function toggleTool(toolId: string, enabled: boolean) {
     setEnabledTools((current) => ({ ...current, [toolId]: enabled }));
@@ -227,14 +209,20 @@ useChatTitleGeneration({ availableModels, chats, setChats });
   async function submitAskUserResponse(messageId: string, stepId: string, response: AskUserResponse) {
     if (!currentModel || activeTurnControllerRef.current || !pendingAskUserTurn) return;
     const targetChat = chats.find((chat) => chat.id === pendingAskUserTurn.chatId);
-    if (!targetChat) {
-      setPendingAskUserTurn(null);
-      return;
-    }
+    if (!targetChat) { setPendingAskUserTurn(null); return; }
     const nextChat = updateAskUserStepInChat(targetChat, messageId, stepId, response);
     setChats((currentChats) => replaceChat(currentChats, nextChat));
     setLiveChat({ chatId: nextChat.id, chat: nextChat, assistantMessageId: messageId });
     autoMemoryRefresh.queueCompletedTurnRefresh(await runModelTurn(nextChat, nextChat.mode, messageId));
+  }
+  async function runScheduledAutomation(automation: typeof automationsHook.automations[number], claimedRunAt: string) {
+    if (!currentModel || activeTurnControllerRef.current) {
+      return { status: 'error' as const, error: currentModel ? 'The AI runtime is busy.' : 'No AI model is selected.', summary: null, chatId: null };
+    }
+    const automationConfig = await resolveAutomationTurnConfig([automation], (skillId) => fetchSkill(skillId));
+    return automationConfig.error
+      ? { status: 'error' as const, error: automationConfig.error, summary: null, chatId: null }
+      : runScheduledAutomationTurn({ automation, claimedRunAt, runModelTurn, queueCompletedTurnRefresh: autoMemoryRefresh.queueCompletedTurnRefresh }, automationConfig);
   }
 return {
     activeProviderOption,
@@ -271,7 +259,10 @@ return {
     showTypingIndicator: shouldShowTypingIndicator(isTyping, selectedLiveChat),
     skills,
     skillsControls: skillsHook,
+    automations: automationsHook.automations,
+    automationsControls: automationsHook,
     sendMessage,
+    runScheduledAutomation,
     setActiveArtifact,
     setArtifactIncluded,
     systemPromptContext,

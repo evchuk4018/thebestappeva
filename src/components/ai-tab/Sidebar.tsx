@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Sparkles, Wrench, X } from 'lucide-react';
+import { BotMessageSquare, ChevronUp, MessageSquare, PanelLeftClose, Plus, Search, Settings, Sparkles, Wrench, X } from 'lucide-react';
 import { Chat } from './types';
 import { searchChats } from './chat-search';
 import { SidebarChatsPanel } from './SidebarChatsPanel';
 
-type SidebarPanel = 'chats' | 'tools' | 'skills';
+type SidebarPanel = 'chats' | 'tools' | 'skills' | 'automations';
 type HydrationStatus = 'loading' | 'ready' | 'error';
 
 interface SidebarProps {
@@ -29,6 +29,7 @@ const panelItems = [
   { icon: MessageSquare, label: 'Chats', value: 'chats' },
   { icon: Wrench, label: 'Tools', value: 'tools' },
   { icon: Sparkles, label: 'Skills', value: 'skills' },
+  { icon: BotMessageSquare, label: 'Automations', value: 'automations' },
 ] as const;
 
 export function Sidebar({
@@ -144,7 +145,7 @@ export function Sidebar({
 
         <div className="mt-3 px-3">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Workspace</div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {panelItems.map(({ icon: Icon, label, value }) => {
               const isActive = activePanel === value;
               return (

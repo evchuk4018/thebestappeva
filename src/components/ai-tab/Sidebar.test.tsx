@@ -17,7 +17,7 @@ function chat(id: string, title: string): Chat {
   };
 }
 
-function render(activePanel: 'chats' | 'tools' | 'skills') {
+function render(activePanel: 'chats' | 'tools' | 'skills' | 'automations') {
   return renderToStaticMarkup(
     <Sidebar
       activePanel={activePanel}
@@ -49,4 +49,10 @@ test('keeps chat history visible while skills are active', () => {
   assert.match(html, /Meal plan/);
   assert.match(html, /Workout split/);
   assert.doesNotMatch(html, /Skills open in the main workspace/);
+});
+
+test('keeps chat history visible while automations are active', () => {
+  const html = render('automations');
+  assert.match(html, /Meal plan/);
+  assert.match(html, /Workout split/);
 });

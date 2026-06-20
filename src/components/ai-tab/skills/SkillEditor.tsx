@@ -3,20 +3,12 @@ import { X } from 'lucide-react';
 import type { ChatMode } from '../../../../shared/chat-mode';
 import { CHAT_MODES } from '../../../../shared/chat-mode';
 import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../../shared/skills-contract';
-import { getToolRegistryEntries } from '../tools/registry';
+import { selectableTools, toggleToolSelection } from '../tools/selectable-tools';
 
 interface SkillEditorProps {
   skill: SkillSummary | null;
   onCancel: () => void;
   onSubmit: (request: CreateSkillRequest | UpdateSkillRequest) => void | Promise<void>;
-}
-
-const selectableTools = getToolRegistryEntries()
-  .filter((entry) => !entry.definition.internal && !entry.definition.automatic)
-  .map((entry) => ({ id: entry.definition.id, label: entry.definition.label }));
-
-function toggleArrayItem(array: string[], item: string, include: boolean): string[] {
-  return include ? Array.from(new Set([...array, item])) : array.filter((entry) => entry !== item);
 }
 
 export function SkillEditor({ skill, onCancel, onSubmit }: SkillEditorProps) {
@@ -158,7 +150,7 @@ function ToolCheckboxes({ title, selected, onChange }: { title: string; selected
             <input
               type="checkbox"
               checked={selected.includes(tool.id)}
-              onChange={(event) => onChange(toggleArrayItem(selected, tool.id, event.target.checked))}
+              onChange={(event) => onChange(toggleToolSelection(selected, tool.id, event.target.checked))}
             />
             <span>{tool.label}</span>
           </label>

@@ -104,12 +104,15 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - automatic post-turn memory refresh now runs as a background queue instead of part of the visible reply flow, so completed assistant answers settle immediately; text-only turns can overlap with that queue, while image-bearing turns pause and abort queued background refresh work until the foreground turn finishes
 - new chats start with a heuristic sidebar title immediately, then attempt a one-time async retitle after the first completed exchange using local `qwen3.5:0.8b-q8_0`; if that model is unavailable, the heuristic title remains
 - the selected model preference is also reused by `/docs` for local selected-text rewrite actions
-- the left sidebar has `Chats`, `Tools`, and `Skills` workspace switches; chat history stays visible while only the main workspace changes
+- the left sidebar has `Chats`, `Tools`, `Skills`, and `Automations` workspace switches; chat history stays visible while only the main workspace changes
 - each chat has a mode toggle beside the model picker:
   - `Thinking` enables Ollama thinking, streams a collapsible `Thinking Progress` trace live, nudges long turns into explicit task/progress blocks, and keeps the final answer in the main reply bubble
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the main `Tools` workspace lists installed tools, their functions, and an enable/disable toggle
-- local starter tools now include `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
+- local starter tools now include `/automation`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
+- the new `Automations` workspace stores scheduled runs and conversation triggers, supports optional linked skills plus tool overrides, and persists run status such as next run, last run summary, last error, and linked chat id
+- scheduled automations run from an app-wide background runner whenever the SPA is open on any route, create a fresh `Thinking` chat for each occurrence, and perform a single catch-up run on the next open if a schedule was missed while the app was closed
+- conversation automations match simple case-insensitive phrases in the latest user message, inject extra automation instructions into that turn, and can promote a `Flash` send to `Thinking` when linked skills or tool overrides are required
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`
 - pasted or uploaded images now store as first-class `/ai` attachments with `image_*` ids, an immediate local vision summary, and on-demand structured scene-graph analysis
 - image chats that ask for exact text, counts, colors, layout, UI, diagrams, comparison, or SVG reconstruction automatically switch into `Thinking`, receive structured-evidence guidance, and can call `extract_image_scene` before layout-sensitive reasoning
@@ -165,6 +168,7 @@ Implementation notes:
 - Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
+- Automation APIs: same-origin `GET/POST /api/automations`, `GET/PUT/DELETE /api/automations/:automationId`, `POST /api/automations/:automationId/toggle`, `POST /api/automations/claim-due`, and `POST /api/automations/:automationId/report-run`
 - Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
 - Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
 - PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback

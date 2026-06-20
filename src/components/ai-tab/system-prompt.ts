@@ -8,11 +8,12 @@ export interface SystemPromptContext {
   mode: ChatMode;
   tools: ToolDefinition[];
   artifactContext?: string;
+  automationContext?: string;
   skills?: SkillSummary[];
 }
 
 export interface SystemPromptSection {
-  id: 'memory' | 'custom' | 'formatting' | 'workflow' | 'skills' | 'tools' | 'artifacts';
+  id: 'memory' | 'custom' | 'formatting' | 'workflow' | 'skills' | 'tools' | 'artifacts' | 'automations';
   title: string;
   content: string;
   readOnly: boolean;
@@ -83,6 +84,10 @@ function buildArtifactPromptContent(context: string | undefined) {
   return context?.trim() ? context.trim() : null;
 }
 
+function buildAutomationPromptContent(context: string | undefined) {
+  return context?.trim() ? context.trim() : null;
+}
+
 function buildSkillsPromptContent(skills: SkillSummary[] | undefined, mode: ChatMode): string | null {
   const applicable = (skills ?? []).filter((skill) => skill.enabled && (skill.compatibleModes === null || skill.compatibleModes.includes(mode)));
   if (!applicable.length) return null;
@@ -103,6 +108,7 @@ export function buildSystemPromptSections(context: SystemPromptContext) {
   const sections: SystemPromptSection[] = [];
   const workflowPrompt = buildWorkflowPromptContent(context.mode);
   const artifactPrompt = buildArtifactPromptContent(context.artifactContext);
+  const automationPrompt = buildAutomationPromptContent(context.automationContext);
   const skillsPrompt = buildSkillsPromptContent(context.skills, context.mode);
 
   if (generatedUserMemory) {
@@ -143,6 +149,14 @@ export function buildSystemPromptSections(context: SystemPromptContext) {
           id: 'skills' as const,
           title: 'Skills',
           content: skillsPrompt,
+          readOnly: true,
+        }]
+      : []),
+    ...(automationPrompt
+      ? [{
+          id: 'automations' as const,
+          title: 'Active automations',
+          content: automationPrompt,
           readOnly: true,
         }]
       : []),

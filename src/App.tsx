@@ -18,6 +18,8 @@ import NotesPage from './components/NotesPage';
 import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
+import { AiAutomationRuntime } from './components/ai-tab/AiAutomationRuntime';
+import { AiControllerProvider } from './components/ai-tab/AiControllerContext';
 
 function AppContent() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null);
@@ -163,7 +165,10 @@ function AppContent() {
 export default function App() {
   return (
     <Router>
-      <AppContent />
+      <AiControllerProvider>
+        <AiAutomationRuntime />
+        <AppContent />
+      </AiControllerProvider>
     </Router>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { AiTabOverlays } from './ai-tab/AiTabOverlays';
+import { useAiController } from './ai-tab/AiControllerContext';
 import { AiWorkspacePanel } from './ai-tab/AiWorkspacePanel';
 import { copyTextToClipboard } from './ai-tab/clipboard';
 import { MobileHeader } from './ai-tab/MobileHeader';
@@ -12,10 +13,9 @@ import { AiArtifactsWorkspace } from './ai-tab/AiArtifactsWorkspace';
 import { createHandleCopyMessage, createHandleDeleteChat, createHandleEditUserMessage, createHandleKeyDown, createHandleNewChat, createHandlePullModel, createHandleSelectModel, createHandleSend, createSuggestionHandler } from './ai-tab/ai-tab-actions';
 import { PullProgress } from './ai-tab/types';
 import { useAiAttachments } from './ai-tab/useAiAttachments';
-import { useOllamaChat } from './ai-tab/useOllamaChat';
 import { useResponsiveSidebar } from './ai-tab/useResponsiveSidebar';
 
-type SidebarPanel = 'chats' | 'tools' | 'skills';
+type SidebarPanel = 'chats' | 'tools' | 'skills' | 'automations';
 
 export default function AiTab() {
   const navigate = useNavigate();
@@ -76,6 +76,8 @@ hydrationStatus,
     showTypingIndicator,
     skills,
     skillsControls,
+    automations,
+    automationsControls,
     systemPromptContext,
     switchUserMessageVersion,
     toggleChatMode,
@@ -84,7 +86,7 @@ hydrationStatus,
     stopMessage,
     toggleTool,
     tools,
-  } = useOllamaChat();
+  } = useAiController();
   useResponsiveSidebar({ setIsMobile, setSidebarOpen });
 
   useEffect(() => {
@@ -205,6 +207,9 @@ hydrationStatus,
           skills={skills}
           skillsError={skillsControls.error}
           skillsLoading={skillsControls.loading}
+          automations={automations}
+          automationsError={automationsControls.error}
+          automationsLoading={automationsControls.loading}
           tools={tools}
           visionMode={visionMode}
           onCopyAssistantMessage={(messageId) => handleCopyMessage(messageId, 'assistant')}
@@ -218,9 +223,13 @@ hydrationStatus,
           onSubmitAskUser={submitAskUserResponse}
           onSwitchUserMessageVersion={switchUserMessageVersion}
           onCreateSkill={(request) => skillsControls.create(request)}
+          onCreateAutomation={(request) => automationsControls.create(request)}
+          onDeleteAutomation={(id) => automationsControls.remove(id)}
           onDeleteSkill={(id) => skillsControls.remove(id)}
+          onToggleAutomation={(id, enabled) => automationsControls.toggle(id, enabled)}
           onToggleSkill={(id, enabled) => skillsControls.toggle(id, enabled)}
           onToggleTool={toggleTool}
+          onUpdateAutomation={(id, request) => automationsControls.update(id, request)}
           onUpdateSkill={(id, request) => skillsControls.update(id, request)}
         />
 

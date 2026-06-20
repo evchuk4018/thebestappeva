@@ -46,6 +46,16 @@ import { handleUrlFetch } from './url-fetch';
 import { handlePythonExec, handlePythonExecFileDownload } from './python-exec';
 import { handleWebSearch } from './web-search';
 import {
+  handleClaimDueAutomations,
+  handleCreateAutomation,
+  handleDeleteAutomation,
+  handleGetAutomation,
+  handleListAutomations,
+  handlePutAutomation,
+  handleReportAutomationRun,
+  handleToggleAutomation,
+} from './automations';
+import {
   handleCreateSkill,
   handleDeleteSkill,
   handleGetSkill,
@@ -187,6 +197,14 @@ function registerApiRoutes(app: Express) {
   app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
   app.post('/api/python-exec', (req, res) => void handlePythonExec(req, res));
   app.get('/api/ai/chats/:chatId/python-exec/files/*', (req, res) => void handlePythonExecFileDownload(req, res));
+  app.get('/api/automations', (req, res) => void handleListAutomations(req, res));
+  app.post('/api/automations', (req, res) => void handleCreateAutomation(req, res));
+  app.post('/api/automations/claim-due', (req, res) => void handleClaimDueAutomations(req, res));
+  app.get('/api/automations/:automationId', (req, res) => void handleGetAutomation(req, res));
+  app.put('/api/automations/:automationId', (req, res) => void handlePutAutomation(req, res));
+  app.delete('/api/automations/:automationId', (req, res) => void handleDeleteAutomation(req, res));
+  app.post('/api/automations/:automationId/toggle', (req, res) => void handleToggleAutomation(req, res));
+  app.post('/api/automations/:automationId/report-run', (req, res) => void handleReportAutomationRun(req, res));
   app.get('/api/skills', (req, res) => void handleListSkills(req, res));
   app.post('/api/skills', (req, res) => void handleCreateSkill(req, res));
   app.get('/api/skills/by-name/:name', (req, res) => void handleGetSkillByName(req, res));
