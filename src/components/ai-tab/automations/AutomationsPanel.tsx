@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { AutomationRecord, AutomationSummary, CreateAutomationRequest, UpdateAutomationRequest } from '../../../../shared/automations-contract';
 import type { SkillSummary } from '../../../../shared/skills-contract';
+import { WorkspaceSearchInput } from '../WorkspaceSearchInput';
+import { filterAutomationsForWorkspaceSearch } from '../workspace-search';
 import { AutomationEditor } from './AutomationEditor';
 
 interface AutomationsPanelProps {
@@ -21,6 +23,9 @@ function formatNextRun(automation: AutomationSummary) {
 
 export function AutomationsPanel({ automations, loading, error, skills, onCreate, onUpdate, onToggle, onDelete }: AutomationsPanelProps) {
   const [editing, setEditing] = useState<{ mode: 'create' } | { mode: 'edit'; automation: AutomationRecord } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredAutomations = useMemo(() => filterAutomationsForWorkspaceSearch(automations, searchQuery), [automations, searchQuery]);
+  const searchActive = searchQuery.trim().length > 0;
 
   if (editing) {
     return (
@@ -52,11 +57,15 @@ export function AutomationsPanel({ automations, loading, error, skills, onCreate
         </button>
       </div>
 
+      <WorkspaceSearchInput query={searchQuery} onChange={setSearchQuery} placeholder="Search automations, triggers, or status" />
+
       {automations.length === 0 && !loading ? (
         <div className="rounded-xl border border-dashed border-[#2a2a27] bg-[#171715] p-10 text-center text-sm text-zinc-500">No automations yet. Create one to schedule work or react to a conversation topic.</div>
+      ) : filteredAutomations.length === 0 && searchActive ? (
+        <div className="rounded-xl border border-dashed border-[#2a2a27] bg-[#171715] p-10 text-center text-sm text-zinc-500">No automations matched that search.</div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {automations.map((automation) => (
+          {filteredAutomations.map((automation) => (
             <div key={automation.id} className="rounded-xl border border-[#2a2a27] bg-[#171715] p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">

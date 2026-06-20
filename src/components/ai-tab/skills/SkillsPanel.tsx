@@ -1,6 +1,8 @@
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { CreateSkillRequest, SkillSummary, UpdateSkillRequest } from '../../../../shared/skills-contract';
+import { WorkspaceSearchInput } from '../WorkspaceSearchInput';
+import { filterSkillsForWorkspaceSearch } from '../workspace-search';
 import { SkillEditor } from './SkillEditor';
 
 interface SkillsPanelHandlers {
@@ -15,6 +17,9 @@ interface SkillsPanelHandlers {
 
 export function SkillsPanel({ skills, loading, error, onCreate, onUpdate, onToggle, onDelete }: SkillsPanelHandlers) {
   const [editing, setEditing] = useState<{ mode: 'create' } | { mode: 'edit'; skill: SkillSummary } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredSkills = useMemo(() => filterSkillsForWorkspaceSearch(skills, searchQuery), [skills, searchQuery]);
+  const searchActive = searchQuery.trim().length > 0;
 
   if (editing) {
     return (
@@ -54,13 +59,19 @@ export function SkillsPanel({ skills, loading, error, onCreate, onUpdate, onTogg
         </button>
       </div>
 
+      <WorkspaceSearchInput query={searchQuery} onChange={setSearchQuery} placeholder="Search skills, tools, or status" />
+
       {skills.length === 0 && !loading ? (
         <div className="rounded-xl border border-dashed border-[#2a2a27] bg-[#171715] p-10 text-center text-sm text-zinc-500">
           No skills yet. Create one to package reusable instructions.
         </div>
+      ) : filteredSkills.length === 0 && searchActive ? (
+        <div className="rounded-xl border border-dashed border-[#2a2a27] bg-[#171715] p-10 text-center text-sm text-zinc-500">
+          No skills matched that search.
+        </div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
-          {skills.map((skill) => (
+          {filteredSkills.map((skill) => (
             <div key={skill.id} className="rounded-xl border border-[#2a2a27] bg-[#171715] p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">

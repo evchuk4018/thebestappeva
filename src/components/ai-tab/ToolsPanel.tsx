@@ -1,4 +1,7 @@
+import { useMemo, useState } from 'react';
 import { ToolDefinition } from './tools/types';
+import { WorkspaceSearchInput } from './WorkspaceSearchInput';
+import { filterToolsForWorkspaceSearch } from './workspace-search';
 
 interface ToolPanelItem extends ToolDefinition {
   enabled: boolean;
@@ -10,6 +13,10 @@ interface ToolsPanelProps {
 }
 
 export function ToolsPanel({ tools, onToggleTool }: ToolsPanelProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredTools = useMemo(() => filterToolsForWorkspaceSearch(tools, searchQuery), [tools, searchQuery]);
+  const searchActive = searchQuery.trim().length > 0;
+
   return (
     <div className="flex w-full max-w-5xl flex-col gap-4 py-6 pb-24">
       <div className="px-1 text-left">
@@ -18,8 +25,15 @@ export function ToolsPanel({ tools, onToggleTool }: ToolsPanelProps) {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">Enabled tools are exposed to the model and only load data on demand.</p>
       </div>
 
+      <WorkspaceSearchInput query={searchQuery} onChange={setSearchQuery} placeholder="Search tools, functions, or parameters" />
+
+      {filteredTools.length === 0 && searchActive ? (
+        <div className="rounded-xl border border-dashed border-[#2a2a27] bg-[#171715] p-10 text-center text-sm text-zinc-500">
+          No tools matched that search.
+        </div>
+      ) : (
       <div className="grid gap-3 lg:grid-cols-2">
-        {tools.map((tool) => (
+        {filteredTools.map((tool) => (
           <div key={tool.id} className="rounded-xl border border-[#2a2a27] bg-[#171715] p-4 text-left">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -63,6 +77,7 @@ export function ToolsPanel({ tools, onToggleTool }: ToolsPanelProps) {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

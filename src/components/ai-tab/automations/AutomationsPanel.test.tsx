@@ -43,6 +43,7 @@ test('renders automation cards with kind and schedule metadata', () => {
     />,
   );
   assert.match(html, /Automation workspace/);
+  assert.match(html, /Search automations, triggers, or status/);
   assert.match(html, /schedule/);
   assert.match(html, /skill: writer/);
 });

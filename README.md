@@ -94,9 +94,10 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - each chat has a mode toggle beside the model picker:
   - `Thinking` enables Ollama thinking, streams a collapsible `Thinking Progress` trace live, nudges long turns into explicit task/progress blocks, and keeps the final answer in the main reply bubble
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
-- the main `Tools` workspace lists installed tools, their functions, and an enable/disable toggle
+- the main `Tools` workspace lists installed tools, their functions, an enable/disable toggle, and local card search
+- the main `Skills` workspace supports local search across skill names, descriptions, status, and tool metadata
 - local starter tools now include `/automation`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
-- the new `Automations` workspace stores scheduled runs and conversation triggers, supports optional linked skills plus tool overrides, and persists run status such as next run, last run summary, last error, and linked chat id
+- the new `Automations` workspace stores scheduled runs and conversation triggers, supports optional linked skills plus tool overrides, searchable cards, and persisted run status such as next run, last run summary, last error, and linked chat id
 - scheduled automations run from an app-wide background runner whenever the SPA is open on any route, create a fresh `Thinking` chat for each occurrence, and perform a single catch-up run on the next open if a schedule was missed while the app was closed
 - conversation automations match simple case-insensitive phrases in the latest user message, inject extra automation instructions into that turn, and can promote a `Flash` send to `Thinking` when linked skills or tool overrides are required
 - `/ai` now includes a Markdown artifact workspace with chat-linked artifacts, assistant-created artifact cards, bounded artifact context injection, line fetch/search/outline tools, version restore, structured table edits, and export into `/docs`

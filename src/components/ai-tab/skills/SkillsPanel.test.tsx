@@ -37,6 +37,7 @@ function render(skills: SkillSummary[]) {
 
 test('renders built-in skills as read-only with a badge', () => {
   const html = render([skill({})]);
+  assert.match(html, /Search skills, tools, or status/);
   assert.match(html, /Built-in/);
   assert.match(html, /Read only/);
   assert.doesNotMatch(html, /title="Edit skill"/);
