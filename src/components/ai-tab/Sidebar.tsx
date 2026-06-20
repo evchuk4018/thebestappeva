@@ -145,7 +145,7 @@ export function Sidebar({
 
         <div className="mt-3 px-3">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Workspace</div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2">
             {panelItems.map(({ icon: Icon, label, value }) => {
               const isActive = activePanel === value;
               return (
