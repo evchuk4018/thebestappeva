@@ -189,7 +189,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={onNavigateHome}
-              title="Exit AI to Gym Lobby"
+              title="Back to workspace launcher"
               className="flex h-8 w-8 items-center justify-center rounded-full border border-[#efeae4]/10 bg-[#f4ebd0] text-xs font-bold text-[#121210] shadow-md transition-all hover:bg-[#e8deb8]"
             >
               JS
