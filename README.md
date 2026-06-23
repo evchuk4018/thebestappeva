@@ -1,6 +1,6 @@
 # thebestappeva
 
-This is a Vite + React app with an AI workspace, a desktop-first Docs workspace, and a simple launcher that ties them together.
+This is a Vite + React app with an AI workspace, a desktop-first Docs workspace, a private Calendar workspace, and a simple launcher that ties them together.
 
 ## Local setup
 
@@ -78,6 +78,27 @@ Implementation notes:
 - `.docx` export: `docx`
 
 Existing browser-stored docs data is migrated once into the local SQLite workspace and then removed from IndexedDB/localStorage. The docs feature remains single-user with no collaboration or comments in this implementation.
+
+## Calendar workspace
+
+The app now includes a `/calendar` module with:
+
+- day, week, month, year, and agenda views
+- private calendars and color categories
+- event create/edit/duplicate, drag move, duration resize controls, trash, restore, hard delete, and undo
+- all-day and multi-day event fields
+- recurring events and tasks backed by `rrule`
+- occurrence exception storage for edited or cancelled recurring instances
+- task due dates, priorities, recurrence, and completion
+- search, calendar visibility filters, conflict highlighting, working hours, week-start, timezone, and 12/24-hour settings
+- responsive layout with an agenda-friendly mobile surface
+
+Implementation notes:
+
+- Local persistence: same-origin `/api/calendar/*` APIs backed by the repo-owned SQLite database
+- Local owner guard: calendar rows use `owner_id = local-user` until the app has a real auth layer
+- Recurrence: `rrule` stores normalized recurrence rows plus the generated RRULE text
+- Reminders, sharing, attendees, invitations, RSVPs, booking pages, collaboration, and calendar import are intentionally not included
 
 ## AI workspace
 

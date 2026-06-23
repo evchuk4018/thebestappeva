@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import { ensureAutomationsSchema } from './automations-schema';
+import { ensureCalendarSchema } from './calendar-schema';
 import { ensureDocsSchema } from './docs-schema';
 import { ensureSkillsSchema } from './skills-schema';
 
@@ -56,4 +57,5 @@ export function ensureDatabaseSchema(database: BetterSqlite3.Database) {
   ensureDocsSchema(database);
   ensureSkillsSchema(database);
   ensureAutomationsSchema(database);
+  ensureCalendarSchema(database);
 }

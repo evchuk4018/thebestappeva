@@ -1,4 +1,4 @@
-import { FileText, Sparkles } from 'lucide-react';
+import { CalendarDays, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +18,14 @@ const cards = [
     subtitle: 'Files, templates, exports, and local history',
     href: '/docs',
     delay: 0.08,
+  },
+  {
+    id: 'btn-calendar-start',
+    icon: CalendarDays,
+    title: 'Calendar',
+    subtitle: 'Events, tasks, recurrence, and private schedules',
+    href: '/calendar',
+    delay: 0.16,
   },
 ] as const;
 
@@ -39,7 +47,7 @@ export default function HomePage() {
             Choose the workspace you want to open. AI handles conversations, tools, and artifacts. Docs keeps your files, templates, rewrites, and exports in one local workspace.
           </p>
         </motion.div>
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
           {cards.map(({ id, icon: Icon, title, subtitle, href, delay }) => (
             <motion.button
               key={id}

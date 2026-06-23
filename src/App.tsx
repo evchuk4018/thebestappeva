@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import HomePage from './components/HomePage';
 import AiTab from './components/AiTab';
 import RetiredRoutePage from './components/RetiredRoutePage';
+import CalendarPage from './components/calendar/CalendarPage';
 import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
@@ -31,7 +32,7 @@ function AnimatedPage({ children, className = 'h-full min-h-0 w-full' }: { child
 
 function AppContent() {
   const location = useLocation();
-  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai';
+  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai' || location.pathname === '/calendar';
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-zinc-950 font-sans text-zinc-50 selection:bg-blue-500/30">
@@ -40,6 +41,7 @@ function AppContent() {
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<HomePage />} />
             <Route path="/ai" element={<AnimatedPage><AiTab /></AnimatedPage>} />
+            <Route path="/calendar" element={<AnimatedPage className="h-full w-full"><CalendarPage /></AnimatedPage>} />
             <Route path="/docs" element={<AnimatedPage className="h-full w-full"><DocsHomePage /></AnimatedPage>} />
             <Route path="/docs/new" element={<AnimatedPage className="h-full w-full"><DocsNewRedirect /></AnimatedPage>} />
             <Route path="/docs/:docId" element={<AnimatedPage className="h-full w-full"><DocsEditorPage /></AnimatedPage>} />

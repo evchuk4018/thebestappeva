@@ -65,6 +65,31 @@ import {
   handleToggleSkill,
 } from './skills';
 import {
+  handleCreateCalendarCalendar,
+  handleCreateCalendarCategory,
+  handleCreateCalendarEvent,
+  handleCreateCalendarTask,
+  handleDeleteCalendarCalendar,
+  handleDeleteCalendarCategory,
+  handleDeleteCalendarEvent,
+  handleDeleteCalendarTask,
+  handleDuplicateCalendarEvent,
+  handleGetCalendarBootstrap,
+  handleListCalendarCalendars,
+  handleListCalendarCategories,
+  handleListCalendarEvents,
+  handleListCalendarTasks,
+  handlePostCalendarUndo,
+  handlePutCalendarCalendar,
+  handlePutCalendarCategory,
+  handlePutCalendarEvent,
+  handlePutCalendarSettings,
+  handlePutCalendarTask,
+  handleRestoreCalendarEvent,
+  handleSaveCalendarOccurrence,
+  handleTrashCalendarEvent,
+} from './calendar';
+import {
   handleCreateDoc,
   handleCreateDocVersion,
   handleDeleteDoc,
@@ -205,6 +230,29 @@ function registerApiRoutes(app: Express) {
   app.delete('/api/automations/:automationId', (req, res) => void handleDeleteAutomation(req, res));
   app.post('/api/automations/:automationId/toggle', (req, res) => void handleToggleAutomation(req, res));
   app.post('/api/automations/:automationId/report-run', (req, res) => void handleReportAutomationRun(req, res));
+  app.get('/api/calendar/bootstrap', (req, res) => void handleGetCalendarBootstrap(req, res));
+  app.get('/api/calendar/calendars', (req, res) => void handleListCalendarCalendars(req, res));
+  app.post('/api/calendar/calendars', (req, res) => void handleCreateCalendarCalendar(req, res));
+  app.put('/api/calendar/calendars/:calendarId', (req, res) => void handlePutCalendarCalendar(req, res));
+  app.delete('/api/calendar/calendars/:calendarId', (req, res) => void handleDeleteCalendarCalendar(req, res));
+  app.get('/api/calendar/categories', (req, res) => void handleListCalendarCategories(req, res));
+  app.post('/api/calendar/categories', (req, res) => void handleCreateCalendarCategory(req, res));
+  app.put('/api/calendar/categories/:categoryId', (req, res) => void handlePutCalendarCategory(req, res));
+  app.delete('/api/calendar/categories/:categoryId', (req, res) => void handleDeleteCalendarCategory(req, res));
+  app.get('/api/calendar/events', (req, res) => void handleListCalendarEvents(req, res));
+  app.post('/api/calendar/events', (req, res) => void handleCreateCalendarEvent(req, res));
+  app.put('/api/calendar/events/:eventId', (req, res) => void handlePutCalendarEvent(req, res));
+  app.post('/api/calendar/events/:eventId/duplicate', (req, res) => void handleDuplicateCalendarEvent(req, res));
+  app.post('/api/calendar/events/:eventId/trash', (req, res) => void handleTrashCalendarEvent(req, res));
+  app.delete('/api/calendar/events/:eventId/trash', (req, res) => void handleRestoreCalendarEvent(req, res));
+  app.delete('/api/calendar/events/:eventId', (req, res) => void handleDeleteCalendarEvent(req, res));
+  app.post('/api/calendar/events/:eventId/occurrences/:occurrenceKey', (req, res) => void handleSaveCalendarOccurrence(req, res));
+  app.get('/api/calendar/tasks', (req, res) => void handleListCalendarTasks(req, res));
+  app.post('/api/calendar/tasks', (req, res) => void handleCreateCalendarTask(req, res));
+  app.put('/api/calendar/tasks/:taskId', (req, res) => void handlePutCalendarTask(req, res));
+  app.delete('/api/calendar/tasks/:taskId', (req, res) => void handleDeleteCalendarTask(req, res));
+  app.put('/api/calendar/settings', (req, res) => void handlePutCalendarSettings(req, res));
+  app.post('/api/calendar/undo', (req, res) => void handlePostCalendarUndo(req, res));
   app.get('/api/skills', (req, res) => void handleListSkills(req, res));
   app.post('/api/skills', (req, res) => void handleCreateSkill(req, res));
   app.get('/api/skills/by-name/:name', (req, res) => void handleGetSkillByName(req, res));
