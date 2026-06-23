@@ -13,6 +13,7 @@ import CalendarPage from './components/calendar/CalendarPage';
 import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
+import WorkoutPage from './components/workout/WorkoutPage';
 import { AiAutomationRuntime } from './components/ai-tab/AiAutomationRuntime';
 import { AiControllerProvider } from './components/ai-tab/AiControllerContext';
 
@@ -32,7 +33,7 @@ function AnimatedPage({ children, className = 'h-full min-h-0 w-full' }: { child
 
 function AppContent() {
   const location = useLocation();
-  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai' || location.pathname === '/calendar';
+  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai' || location.pathname === '/calendar' || location.pathname === '/workout';
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-zinc-950 font-sans text-zinc-50 selection:bg-blue-500/30">
@@ -45,7 +46,7 @@ function AppContent() {
             <Route path="/docs" element={<AnimatedPage className="h-full w-full"><DocsHomePage /></AnimatedPage>} />
             <Route path="/docs/new" element={<AnimatedPage className="h-full w-full"><DocsNewRedirect /></AnimatedPage>} />
             <Route path="/docs/:docId" element={<AnimatedPage className="h-full w-full"><DocsEditorPage /></AnimatedPage>} />
-            <Route path="/workout" element={<RetiredRoutePage />} />
+            <Route path="/workout" element={<AnimatedPage className="h-full w-full"><WorkoutPage /></AnimatedPage>} />
             <Route path="/nutrition" element={<RetiredRoutePage />} />
             <Route path="/tasks" element={<RetiredRoutePage />} />
             <Route path="/notes" element={<RetiredRoutePage />} />

@@ -4,4 +4,5 @@
 - Extract functions and components so each does one thing.
 - Keep authored project files at or below 300 lines.
 - Update documentation when a task changes behavior, structure, or developer workflow.
-Always push changes to main when done
+Always push changes to main when done even if you didnt make them
+NEVER TRY TO VERIFY THE VISUALS WITH THE BROWSER TOOL

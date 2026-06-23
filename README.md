@@ -1,6 +1,6 @@
 # thebestappeva
 
-This is a Vite + React app with an AI workspace, a desktop-first Docs workspace, a private Calendar workspace, and a simple launcher that ties them together.
+This is a Vite + React app with an AI workspace, a desktop-first Docs workspace, a private Calendar workspace, a Workout workspace, and a simple launcher that ties them together.
 
 ## Local setup
 
@@ -99,6 +99,27 @@ Implementation notes:
 - Local owner guard: calendar rows use `owner_id = local-user` until the app has a real auth layer
 - Recurrence: `rrule` stores normalized recurrence rows plus the generated RRULE text
 - Reminders, sharing, attendees, invitations, RSVPs, booking pages, collaboration, and calendar import are intentionally not included
+
+## Workout workspace
+
+The app now includes a `/workout` module with:
+
+- a dark, mobile-first Hevy-style workout screen
+- Quick Start for empty workouts
+- reusable routine creation, editing, and routine-start flows
+- a seeded exercise library across barbell, dumbbell, cable, machine, bodyweight, and cardio movements
+- custom exercise creation saved into the local SQLite database
+- one active unfinished session that resumes after closing and reopening the app
+- autosaved workout sets with RIR, reps, weight, and completion state
+- previous completed set summaries shown in subtle grey text for exercises with history
+- a workout-local two-button nav for `Home` and `Workout`
+
+Implementation notes:
+
+- Local persistence: same-origin `/api/workout/*` APIs backed by the repo-owned SQLite database
+- Local owner guard: workout rows use `owner_id = local-user` until the app has a real auth layer
+- Session model: only one unfinished workout is active at a time; starting another routine resumes that active session
+- Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
 
 ## AI workspace
 

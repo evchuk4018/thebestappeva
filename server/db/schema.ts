@@ -3,6 +3,7 @@ import { ensureAutomationsSchema } from './automations-schema';
 import { ensureCalendarSchema } from './calendar-schema';
 import { ensureDocsSchema } from './docs-schema';
 import { ensureSkillsSchema } from './skills-schema';
+import { ensureWorkoutSchema } from './workout-schema';
 
 export function ensureDatabaseSchema(database: BetterSqlite3.Database) {
   database.exec(`
@@ -58,4 +59,5 @@ export function ensureDatabaseSchema(database: BetterSqlite3.Database) {
   ensureSkillsSchema(database);
   ensureAutomationsSchema(database);
   ensureCalendarSchema(database);
+  ensureWorkoutSchema(database);
 }
