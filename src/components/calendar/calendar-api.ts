@@ -5,6 +5,7 @@ import type {
   CalendarEventInput,
   CalendarEventOccurrence,
   CalendarList,
+  CalendarOccurrenceAction,
   CalendarSettings,
   CalendarTask,
   CalendarTaskInput,
@@ -21,7 +22,8 @@ async function json(path: string, init?: RequestInit) {
 }
 
 function query(path: string, params: Record<string, string | boolean | null | undefined>) {
-  const url = new URL(path, window.location.origin);
+  const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+  const url = new URL(path, baseUrl);
   for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, String(value));
   }
@@ -43,6 +45,16 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<Ca
 
 export async function updateCalendarEvent(eventId: string, input: CalendarEventInput): Promise<CalendarEvent> {
   return (await json(`/api/calendar/events/${eventId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
+}
+
+export async function saveCalendarOccurrence(
+  eventId: string,
+  occurrenceKey: string,
+  action: CalendarOccurrenceAction,
+  override: Partial<CalendarEventInput> | null,
+): Promise<CalendarEvent> {
+  const key = encodeURIComponent(occurrenceKey);
+  return (await json(`/api/calendar/events/${eventId}/occurrences/${key}`, { method: 'POST', body: JSON.stringify({ action, override }) })).item;
 }
 
 export async function duplicateCalendarEvent(eventId: string): Promise<CalendarEvent> {
@@ -83,6 +95,10 @@ export async function updateCalendarList(calendarId: string, input: Partial<Pick
 
 export async function createCalendarCategory(input: Pick<CalendarCategory, 'calendarId' | 'name' | 'color'>): Promise<CalendarCategory> {
   return (await json('/api/calendar/categories', { method: 'POST', body: JSON.stringify(input) })).item;
+}
+
+export async function updateCalendarCategory(categoryId: string, input: Partial<Pick<CalendarCategory, 'name' | 'color'>>): Promise<CalendarCategory> {
+  return (await json(`/api/calendar/categories/${categoryId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
 }
 
 export async function updateCalendarSettings(settings: CalendarSettings): Promise<CalendarSettings> {

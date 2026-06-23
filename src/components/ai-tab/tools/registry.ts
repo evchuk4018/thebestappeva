@@ -1,5 +1,6 @@
 import { automationTool } from './automation-tool';
 import { askUserTool } from './ask-user-tool';
+import { calendarTool } from './calendar-tool';
 import { dateTimeTool } from './date-time-tool';
 import { localeTool } from './locale-tool';
 import { locationTool } from './location-tool';
@@ -14,6 +15,7 @@ import { ToolRegistryEntry } from './types';
 const toolRegistry: ToolRegistryEntry[] = [
   automationTool,
   askUserTool,
+  calendarTool,
   dateTimeTool,
   locationTool,
   timezoneTool,
