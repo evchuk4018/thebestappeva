@@ -4,6 +4,8 @@ import type { WorkoutExerciseInput, WorkoutLoggedSessionInput, WorkoutRoutineInp
 import { defaultRoutines, presetExercises } from './workout-seed';
 import { getDatabase } from './database';
 import { localWorkoutOwnerId, mapExercise, mapHistoryEntry, mapRoutine, mapRoutineExercise, mapSession, mapSessionExercise, mapSet, type WorkoutRow } from './workout-mappers';
+import { getWorkoutSessionExpiry, isWorkoutSessionExpired } from './workout-session-expiry';
+import { createWorkoutSessionWriter } from './workout-session-writes';
 
 function id(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -24,8 +26,9 @@ function setSummary(row: WorkoutRow) {
   return `${weight} x ${reps}${rir}`;
 }
 
-export function createWorkoutRepository(database: BetterSqlite3.Database = getDatabase()) {
+export function createWorkoutRepository(database: BetterSqlite3.Database = getDatabase(), getNow = now) {
   const owner = localWorkoutOwnerId;
+  const writer = createWorkoutSessionWriter(database, id);
 
   function exerciseByName(name: string) {
     return database.prepare('SELECT * FROM workout_exercises WHERE owner_id = ? AND name = ?').get(owner, name) as WorkoutRow | undefined;
@@ -76,22 +79,29 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     return row ? mapSession(row, sessionExercises(sessionId)) : null;
   }
 
-  function insertSessionSet(sessionExerciseId: string, setIndex: number, set: { rir?: number | null; reps?: number | null; weight?: number | null; completed?: boolean }) {
-    database.prepare('INSERT INTO workout_sets (id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id('set'), sessionExerciseId, setIndex, set.rir ?? null, set.reps ?? null, set.weight ?? null, set.completed ? 1 : 0);
-  }
-
   function saveRoutineExercises(routineId: string, exercises: WorkoutRoutineInput['exercises']) {
     database.prepare('DELETE FROM workout_routine_exercises WHERE routine_id = ?').run(routineId);
     const insert = database.prepare('INSERT INTO workout_routine_exercises (id, routine_id, exercise_id, order_index, target_sets, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-    exercises.forEach((exercise, index) => insert.run(id('rex'), routineId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.targetSets ?? 3, now()));
+    exercises.forEach((exercise, index) => insert.run(id('rex'), routineId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.targetSets ?? 3, getNow()));
   }
 
-  function insertSessionExercise(sessionId: string, exerciseId: string, orderIndex: number, targetSets = 3) {
-    const sessionExerciseId = id('sex');
-    database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)')
-      .run(sessionExerciseId, sessionId, exerciseId, orderIndex, '');
-    for (let index = 0; index < targetSets; index += 1) insertSessionSet(sessionExerciseId, index, {});
+  function finishExpiredSessions(referenceTime = getNow()) {
+    const rows = database.prepare('SELECT id, started_at FROM workout_sessions WHERE owner_id = ? AND finished_at IS NULL').all(owner) as WorkoutRow[];
+    const expired = rows.flatMap((row) => {
+      const startedAt = String(row.started_at);
+      return isWorkoutSessionExpired(startedAt, null, referenceTime) ? [{ id: String(row.id), finishedAt: getWorkoutSessionExpiry(startedAt) }] : [];
+    });
+    if (!expired.length) return;
+    const update = database.prepare('UPDATE workout_sessions SET finished_at = ?, updated_at = ? WHERE owner_id = ? AND id = ? AND finished_at IS NULL');
+    database.transaction(() => {
+      expired.forEach((row) => update.run(row.finishedAt, referenceTime, owner, row.id));
+    })();
+  }
+
+  function saveSessionRecord(session: WorkoutSession, finishAt: string | null) {
+    database.prepare('UPDATE workout_sessions SET name = ?, routine_id = ?, started_at = ?, finished_at = ?, updated_at = ? WHERE owner_id = ? AND id = ?')
+      .run(session.name.trim(), session.routineId, session.startedAt, finishAt, getNow(), owner, session.id);
+    writer.replaceSessionExercises(session);
   }
 
   function assertLoggedSessionReferences(input: WorkoutLoggedSessionInput) {
@@ -103,7 +113,7 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
 
   return {
     ensureDefaults() {
-      const createdAt = now();
+      const createdAt = getNow();
       const insertExercise = database.prepare(`
         INSERT OR IGNORE INTO workout_exercises (id, owner_id, name, category, equipment, is_preset, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
@@ -132,6 +142,7 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       return rows.map((row) => mapRoutine(row, routineExercises(String(row.id))));
     },
     listFinishedSessions(options: { limit?: number; query?: string; exerciseId?: string } = {}) {
+      finishExpiredSessions();
       const search = options.query?.trim().toLowerCase() || null;
       const like = search ? `%${search}%` : null;
       const exerciseId = options.exerciseId?.trim() || null;
@@ -162,7 +173,7 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     },
     createExercise(input: WorkoutExerciseInput) {
       const exerciseId = id('ex');
-      const createdAt = now();
+      const createdAt = getNow();
       database.prepare('INSERT INTO workout_exercises (id, owner_id, name, category, equipment, is_preset, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
         .run(exerciseId, owner, input.name.trim(), input.category ?? 'Custom', input.equipment ?? 'Other', createdAt, createdAt);
       return mapExercise(database.prepare('SELECT * FROM workout_exercises WHERE id = ?').get(exerciseId) as WorkoutRow);
@@ -170,30 +181,32 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     saveRoutine(routineId: string | null, input: WorkoutRoutineInput) {
       const routine = routineId ? database.prepare('SELECT * FROM workout_routines WHERE owner_id = ? AND id = ?').get(owner, routineId) as WorkoutRow | undefined : null;
       const nextId = routineId ?? id('routine');
-      const createdAt = routine ? String(routine.created_at) : now();
+      const createdAt = routine ? String(routine.created_at) : getNow();
       database.transaction(() => {
         database.prepare('INSERT INTO workout_routines (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at, archived_at = NULL')
-          .run(nextId, owner, input.name.trim(), createdAt, now());
+          .run(nextId, owner, input.name.trim(), createdAt, getNow());
         saveRoutineExercises(nextId, input.exercises);
       })();
       return this.listRoutines().find((item) => item.id === nextId)!;
     },
     archiveRoutine(routineId: string) {
-      const result = database.prepare('UPDATE workout_routines SET archived_at = ?, updated_at = ? WHERE owner_id = ? AND id = ?').run(now(), now(), owner, routineId);
+      const result = database.prepare('UPDATE workout_routines SET archived_at = ?, updated_at = ? WHERE owner_id = ? AND id = ?').run(getNow(), getNow(), owner, routineId);
       return result.changes > 0;
     },
     activeSession() {
+      finishExpiredSessions();
       const row = database.prepare('SELECT * FROM workout_sessions WHERE owner_id = ? AND finished_at IS NULL ORDER BY updated_at DESC LIMIT 1').get(owner) as WorkoutRow | undefined;
       return row ? sessionById(String(row.id)) : null;
     },
     getSession(sessionId: string) {
+      finishExpiredSessions();
       return sessionById(sessionId);
     },
     startEmptySession() {
       const active = this.activeSession();
       if (active) return active;
       const sessionId = id('session');
-      const createdAt = now();
+      const createdAt = getNow();
       database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?)')
         .run(sessionId, owner, 'Empty Workout', createdAt, createdAt);
       return sessionById(sessionId)!;
@@ -204,31 +217,26 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       const routine = this.listRoutines().find((item) => item.id === routineId);
       if (!routine) return null;
       const sessionId = id('session');
-      const createdAt = now();
+      const createdAt = getNow();
       database.transaction(() => {
         database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
           .run(sessionId, owner, routine.id, routine.name, createdAt, createdAt);
-        routine.exercises.forEach((exercise) => insertSessionExercise(sessionId, exercise.exerciseId, exercise.orderIndex, exercise.targetSets));
+        routine.exercises.forEach((exercise) => writer.insertSessionExercise(sessionId, exercise.exerciseId, exercise.orderIndex, exercise.targetSets));
       })();
       return sessionById(sessionId);
     },
     saveSession(session: WorkoutSession) {
-      if (!database.prepare('SELECT id FROM workout_sessions WHERE owner_id = ? AND id = ?').get(owner, session.id)) return null;
+      const existing = database.prepare('SELECT id, started_at FROM workout_sessions WHERE owner_id = ? AND id = ?').get(owner, session.id) as WorkoutRow | undefined;
+      if (!existing) return null;
+      finishExpiredSessions();
+      const finishAt = isWorkoutSessionExpired(String(existing.started_at), null, getNow()) ? getWorkoutSessionExpiry(String(existing.started_at)) : session.finishedAt;
       database.transaction(() => {
-        database.prepare('UPDATE workout_sessions SET name = ?, routine_id = ?, started_at = ?, finished_at = ?, updated_at = ? WHERE owner_id = ? AND id = ?')
-          .run(session.name.trim(), session.routineId, session.startedAt, session.finishedAt, now(), owner, session.id);
-        database.prepare('DELETE FROM workout_session_exercises WHERE session_id = ?').run(session.id);
-        const insertExercise = database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)');
-        const insertSet = database.prepare('INSERT INTO workout_sets (id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        session.exercises.forEach((exercise, index) => {
-          insertExercise.run(exercise.id, session.id, exercise.exerciseId, exercise.orderIndex ?? index, exercise.notes ?? '');
-          exercise.sets.forEach((set, setIndex) => insertSet.run(set.id, exercise.id, set.setIndex ?? setIndex, set.rir, set.reps, set.weight, set.completed ? 1 : 0));
-        });
+        saveSessionRecord(session, finishAt);
       })();
       return sessionById(session.id);
     },
     finishSession(session: WorkoutSession) {
-      const saved = this.saveSession({ ...session, finishedAt: session.finishedAt ?? now() });
+      const saved = this.saveSession({ ...session, finishedAt: session.finishedAt ?? getNow() });
       return saved ? sessionById(saved.id) : null;
     },
     logCompletedSession(input: WorkoutLoggedSessionInput) {
@@ -236,12 +244,12 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       const sessionId = id('session');
       database.transaction(() => {
         database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, finished_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run(sessionId, owner, input.routineId ?? null, input.name.trim(), input.startedAt, input.finishedAt, now());
+          .run(sessionId, owner, input.routineId ?? null, input.name.trim(), input.startedAt, input.finishedAt, getNow());
         input.exercises.forEach((exercise, index) => {
           const sessionExerciseId = id('sex');
           database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)')
             .run(sessionExerciseId, sessionId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.notes ?? '');
-          exercise.sets.forEach((set, setIndex) => insertSessionSet(sessionExerciseId, set.setIndex ?? setIndex, set));
+          exercise.sets.forEach((set, setIndex) => writer.insertSessionSet(sessionExerciseId, set.setIndex ?? setIndex, set));
         });
       })();
       return sessionById(sessionId)!;

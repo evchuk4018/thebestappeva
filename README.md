@@ -110,10 +110,12 @@ The app now includes a `/workout` module with:
 - a seeded exercise library across barbell, dumbbell, cable, machine, bodyweight, and cardio movements
 - popup-based library search for explore and add-exercise flows
 - custom exercise creation with name, muscle-group, and weight-type inputs saved into the local SQLite database
-- one active unfinished session that resumes after closing and reopening the app
+- one active unfinished session that resumes after closing and reopening the app until it auto-finishes 24 hours after `startedAt`
 - a sticky home-page workout resume bar and an in-tab resume card for active sessions
 - autosaved workout sets with RIR, reps, weight, and completion state
 - session exercise utility menus for delete/reorder plus drag-and-drop reordering
+- finish-time prompts that offer `Would you like to update routine?` when a routine workout structure changes
+- quick-workout finish prompts that can save the current structure as a new routine before finishing
 - previous completed set summaries shown in subtle grey text for exercises with history
 - completed workout history summaries plus direct AI logging for backfilled workouts
 - a workout-local two-button nav for `Home` and `Workout`
@@ -122,7 +124,7 @@ Implementation notes:
 
 - Local persistence: same-origin `/api/workout/*` APIs backed by the repo-owned SQLite database
 - Local owner guard: workout rows use `owner_id = local-user` until the app has a real auth layer
-- Session model: only one unfinished workout is active at a time; starting another routine resumes that active session
+- Session model: only one unfinished workout is active at a time; starting another routine resumes that active session unless it has crossed the 24-hour auto-finish limit
 - History API: `/api/workout/history`, `/api/workout/sessions/:sessionId`, and `/api/workout/sessions/log` expose finished-session summaries, full session detail, and create-only completed workout logging
 - Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
 

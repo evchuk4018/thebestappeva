@@ -5,7 +5,9 @@ import { MemoryRouter } from 'react-router-dom';
 import type { WorkoutExercise, WorkoutSession, WorkoutSessionExercise } from '../../../shared/workout-contract';
 import { ExercisePicker } from './ExercisePicker';
 import { RoutineCard } from './RoutineCard';
+import { WorkoutFinishPromptModal } from './WorkoutFinishPromptModal';
 import { WorkoutResumeBar } from './WorkoutResumeBar';
+import { WorkoutSaveRoutineModal } from './WorkoutSaveRoutineModal';
 import { WorkoutSessionExerciseCard } from './WorkoutSessionExerciseCard';
 
 const exercise: WorkoutExercise = {
@@ -101,4 +103,34 @@ test('renders workout exercise utility menu and reorder styling', () => {
   assert.match(html, /Delete/);
   assert.match(html, /Reorder/);
   assert.match(html, /cursor-move/);
+});
+
+test('renders workout finish prompts for changed routines and quick workouts', () => {
+  const routineHtml = renderToStaticMarkup(
+    <WorkoutFinishPromptModal
+      kind="routine-update"
+      routineName="Push Day"
+      onCancel={() => {}}
+      onConfirmPrimary={() => {}}
+      onConfirmSecondary={() => {}}
+    />,
+  );
+  const quickHtml = renderToStaticMarkup(
+    <WorkoutFinishPromptModal
+      kind="save-routine"
+      onCancel={() => {}}
+      onConfirmPrimary={() => {}}
+      onConfirmSecondary={() => {}}
+    />,
+  );
+  assert.match(routineHtml, /Would you like to update routine\?/);
+  assert.match(routineHtml, /Update Routine/);
+  assert.match(quickHtml, /Save as New Routine/);
+  assert.match(quickHtml, /Finish Workout/);
+});
+
+test('renders the quick workout save modal without the routine update prompt copy', () => {
+  const html = renderToStaticMarkup(<WorkoutSaveRoutineModal session={session} onClose={() => {}} onSave={() => {}} />);
+  assert.match(html, /Save as New Routine/);
+  assert.doesNotMatch(html, /Would you like to update routine\?/);
 });

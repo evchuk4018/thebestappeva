@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { WorkoutRoutine, WorkoutSession } from '../../../shared/workout-contract';
-import { duplicateRoutineInput } from './workout-routine-utils';
+import { duplicateRoutineInput, getWorkoutFinishPrompt, hasRoutineStructureChanges, sessionToRoutineInput } from './workout-routine-utils';
 import { moveSessionExercise } from './workout-session-utils';
 
 const baseRoutine: WorkoutRoutine = {
@@ -45,3 +45,101 @@ test('reorders session exercises and renumbers their order indexes', () => {
     { id: 'sex-1', orderIndex: 1 },
   ]);
 });
+
+test('builds a routine input from the active session structure', () => {
+  const routine = sessionToRoutineInput({
+    ...baseSession(),
+    name: 'Custom Upper',
+    exercises: [
+      makeSessionExercise('bench', 4),
+      makeSessionExercise('row', 2),
+    ],
+  });
+  assert.deepEqual(routine, {
+    name: 'Custom Upper',
+    exercises: [
+      { exerciseId: 'bench', orderIndex: 0, targetSets: 4 },
+      { exerciseId: 'row', orderIndex: 1, targetSets: 2 },
+    ],
+  });
+});
+
+test('detects routine structure changes from exercise order and set counts only', () => {
+  assert.equal(hasRoutineStructureChanges(baseRoutineSession(), baseRoutine), false);
+  assert.equal(hasRoutineStructureChanges({ ...baseRoutineSession(), name: 'Renamed Session' }, baseRoutine), false);
+  assert.equal(hasRoutineStructureChanges(withUpdatedWeight(baseRoutineSession()), baseRoutine), false);
+  assert.equal(hasRoutineStructureChanges({
+    ...baseRoutineSession(),
+    exercises: [makeSessionExercise('press', 3), makeSessionExercise('bench', 4)],
+  }, baseRoutine), true);
+  assert.equal(hasRoutineStructureChanges({
+    ...baseRoutineSession(),
+    exercises: [makeSessionExercise('bench', 5), makeSessionExercise('press', 3)],
+  }, baseRoutine), true);
+});
+
+test('returns finish prompts only for changed routines or non-empty quick workouts', () => {
+  assert.equal(getWorkoutFinishPrompt(baseRoutineSession(), [baseRoutine]), null);
+  assert.deepEqual(getWorkoutFinishPrompt(withUpdatedWeight(baseRoutineSession()), [baseRoutine]), null);
+  assert.deepEqual(getWorkoutFinishPrompt({
+    ...baseRoutineSession(),
+    exercises: [makeSessionExercise('bench', 3), makeSessionExercise('press', 3)],
+  }, [baseRoutine]), { kind: 'routine-update', routine: baseRoutine });
+  assert.deepEqual(getWorkoutFinishPrompt({
+    ...baseSession(),
+    exercises: [makeSessionExercise('bench', 3)],
+  }, [baseRoutine]), { kind: 'save-routine' });
+  assert.equal(getWorkoutFinishPrompt(baseSession(), [baseRoutine]), null);
+});
+
+function baseSession(): WorkoutSession {
+  return {
+    id: 'session-1',
+    routineId: null,
+    name: 'Upper',
+    startedAt: '2026-06-23T00:00:00.000Z',
+    finishedAt: null,
+    updatedAt: '2026-06-23T00:00:00.000Z',
+    exercises: [],
+  };
+}
+
+function baseRoutineSession(): WorkoutSession {
+  return {
+    ...baseSession(),
+    routineId: 'routine-1',
+    name: 'Push',
+    exercises: [makeSessionExercise('bench', 4), makeSessionExercise('press', 3)],
+  };
+}
+
+function makeSessionExercise(exerciseId: string, setCount: number) {
+  return {
+    id: `sex-${exerciseId}`,
+    sessionId: 'session-1',
+    exerciseId,
+    exerciseName: exerciseId,
+    orderIndex: 0,
+    notes: '',
+    lastPerformedText: null,
+    sets: Array.from({ length: setCount }, (_, index) => ({
+      id: `set-${exerciseId}-${index}`,
+      sessionExerciseId: `sex-${exerciseId}`,
+      setIndex: index,
+      rir: 2,
+      reps: 8,
+      weight: 185,
+      completed: true,
+    })),
+  };
+}
+
+function withUpdatedWeight(session: WorkoutSession): WorkoutSession {
+  return {
+    ...session,
+    exercises: session.exercises.map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set, weight: (set.weight ?? 0) + 5 })),
+    })),
+  };
+}

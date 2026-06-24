@@ -8,7 +8,12 @@ function createTestRepository() {
   const database = new BetterSqlite3(':memory:');
   database.pragma('foreign_keys = ON');
   ensureDatabaseSchema(database);
-  return { database, repository: createWorkoutRepository(database) };
+  let currentNow = '2026-06-23T12:00:00.000Z';
+  return {
+    database,
+    repository: createWorkoutRepository(database, () => currentNow),
+    setNow(next: string) { currentNow = next; },
+  };
 }
 
 test('creates workout schema and seeds presets idempotently', () => {
@@ -112,4 +117,51 @@ test('fetches saved sessions and preserves active session when logging history',
   assert.equal(repository.getSession(logged.id)?.finishedAt, '2026-06-20T11:00:00.000Z');
   assert.ok(logged.exercises[0].id.startsWith('sex_'));
   assert.ok(logged.exercises[0].sets[0].id.startsWith('set_'));
+});
+
+test('auto-finishes expired sessions at startedAt plus 24 hours', () => {
+  const { repository, setNow } = createTestRepository();
+  const active = repository.startEmptySession();
+  setNow('2026-06-24T12:00:00.000Z');
+
+  const bootstrap = repository.bootstrap();
+
+  assert.equal(bootstrap.activeSession, null);
+  const finished = repository.getSession(active.id);
+  assert.equal(finished?.finishedAt, '2026-06-24T12:00:00.000Z');
+  assert.equal(repository.listFinishedSessions({ limit: 10 }).some((session) => session.id === active.id), true);
+});
+
+test('starts a new session instead of resuming an expired one', () => {
+  const { repository, setNow } = createTestRepository();
+  const active = repository.startEmptySession();
+  setNow('2026-06-24T12:00:00.000Z');
+
+  const next = repository.startEmptySession();
+
+  assert.notEqual(next.id, active.id);
+  assert.equal(repository.getSession(active.id)?.finishedAt, '2026-06-24T12:00:00.000Z');
+});
+
+test('forces stale autosaves to keep the expiry finish time', () => {
+  const { repository, setNow } = createTestRepository();
+  const active = repository.startEmptySession();
+  setNow('2026-06-24T12:00:00.000Z');
+  active.name = 'Late Save';
+  active.exercises = [{
+    id: 'sex-late',
+    sessionId: active.id,
+    exerciseId: repository.bootstrap().exercises[0].id,
+    exerciseName: 'Bench Press',
+    orderIndex: 0,
+    notes: 'late update',
+    lastPerformedText: null,
+    sets: [{ id: 'set-late', sessionExerciseId: 'sex-late', setIndex: 0, rir: 1, reps: 8, weight: 185, completed: true }],
+  }];
+
+  const saved = repository.saveSession(active);
+
+  assert.equal(saved?.name, 'Late Save');
+  assert.equal(saved?.finishedAt, '2026-06-24T12:00:00.000Z');
+  assert.equal(saved?.exercises[0].notes, 'late update');
 });
