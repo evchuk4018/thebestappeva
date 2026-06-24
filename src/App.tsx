@@ -14,6 +14,7 @@ import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
 import WorkoutPage from './components/workout/WorkoutPage';
+import { WorkoutSessionSummaryProvider } from './components/workout/WorkoutSessionSummaryContext';
 import { AiAutomationRuntime } from './components/ai-tab/AiAutomationRuntime';
 import { AiControllerProvider } from './components/ai-tab/AiControllerContext';
 
@@ -62,8 +63,10 @@ export default function App() {
   return (
     <Router>
       <AiControllerProvider>
-        <AiAutomationRuntime />
-        <AppContent />
+        <WorkoutSessionSummaryProvider>
+          <AiAutomationRuntime />
+          <AppContent />
+        </WorkoutSessionSummaryProvider>
       </AiControllerProvider>
     </Router>
   );

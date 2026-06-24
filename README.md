@@ -106,11 +106,14 @@ The app now includes a `/workout` module with:
 
 - a dark, mobile-first Hevy-style workout screen
 - Quick Start for empty workouts
-- reusable routine creation, editing, and routine-start flows
+- create-only routine building plus duplicate/delete routine actions
 - a seeded exercise library across barbell, dumbbell, cable, machine, bodyweight, and cardio movements
-- custom exercise creation saved into the local SQLite database
+- popup-based library search for explore and add-exercise flows
+- custom exercise creation with name, muscle-group, and weight-type inputs saved into the local SQLite database
 - one active unfinished session that resumes after closing and reopening the app
+- a sticky home-page workout resume bar and an in-tab resume card for active sessions
 - autosaved workout sets with RIR, reps, weight, and completion state
+- session exercise utility menus for delete/reorder plus drag-and-drop reordering
 - previous completed set summaries shown in subtle grey text for exercises with history
 - a workout-local two-button nav for `Home` and `Workout`
 

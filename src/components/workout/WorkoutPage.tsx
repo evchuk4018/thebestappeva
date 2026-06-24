@@ -1,14 +1,28 @@
-import { useState } from 'react';
-import type { WorkoutRoutine } from '../../../shared/workout-contract';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { WorkoutBottomNav } from './WorkoutBottomNav';
 import { WorkoutLanding } from './WorkoutLanding';
 import { WorkoutSessionView } from './WorkoutSessionView';
+import { useWorkoutSessionSummary } from './WorkoutSessionSummaryContext';
 import { useWorkout } from './useWorkout';
 
 export default function WorkoutPage() {
+  const location = useLocation();
   const workout = useWorkout();
+  const workoutSummary = useWorkoutSessionSummary();
   const [showSession, setShowSession] = useState(false);
-  const [editingRoutine, setEditingRoutine] = useState<WorkoutRoutine | null | 'new'>(null);
+  const [editingRoutine, setEditingRoutine] = useState<'new' | null>(null);
+
+  useEffect(() => {
+    if (workout.busy) return;
+    workoutSummary.setSession(workout.session);
+  }, [workout.busy, workout.session, workoutSummary]);
+
+  useEffect(() => {
+    if (location.state && typeof location.state === 'object' && 'openSession' in location.state && location.state.openSession && workout.session) {
+      setShowSession(true);
+    }
+  }, [location.state, workout.session]);
 
   const openSession = () => {
     if (workout.session) setShowSession(true);
@@ -57,6 +71,7 @@ export default function WorkoutPage() {
       onStartRoutine={(routineId) => void startRoutine(routineId)}
       onOpenSession={openSession}
       onSaveRoutine={workout.saveRoutine}
+      onDeleteRoutine={workout.deleteRoutine}
       onCreateExercise={workout.createExercise}
     />
   );

@@ -1,6 +1,8 @@
 import { CalendarDays, Dumbbell, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { WorkoutResumeBar } from './workout/WorkoutResumeBar';
+import { useWorkoutSessionSummary } from './workout/WorkoutSessionSummaryContext';
 
 const cards = [
   {
@@ -39,6 +41,7 @@ const cards = [
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const workout = useWorkoutSessionSummary();
 
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto bg-zinc-950 px-6 py-10">
@@ -78,6 +81,7 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+      {workout.session ? <WorkoutResumeBar session={workout.session} /> : null}
     </div>
   );
 }

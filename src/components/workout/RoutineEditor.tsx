@@ -1,19 +1,20 @@
-import { Save, Trash2, X } from 'lucide-react';
+import { Plus, Save, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { WorkoutExercise, WorkoutRoutine } from '../../../shared/workout-contract';
+import type { WorkoutExercise, WorkoutRoutineInput } from '../../../shared/workout-contract';
 import { ExercisePicker } from './ExercisePicker';
+import { WorkoutActionButton } from './WorkoutActionButton';
 
 interface RoutineEditorProps {
-  routine: WorkoutRoutine | null;
   exercises: WorkoutExercise[];
   onClose: () => void;
-  onSave: (routineId: string | null, input: { name: string; exercises: Array<{ exerciseId: string; orderIndex: number; targetSets: number }> }) => Promise<unknown>;
+  onSave: (routineId: string | null, input: WorkoutRoutineInput) => Promise<unknown>;
   onCreateExercise: (input: { name: string; category: string; equipment: string }) => Promise<WorkoutExercise | null>;
 }
 
-export function RoutineEditor({ routine, exercises, onClose, onSave, onCreateExercise }: RoutineEditorProps) {
-  const [name, setName] = useState(routine?.name ?? 'New Routine');
-  const [items, setItems] = useState(() => routine?.exercises.map((item) => ({ exerciseId: item.exerciseId, targetSets: item.targetSets })) ?? []);
+export function RoutineEditor({ exercises, onClose, onSave, onCreateExercise }: RoutineEditorProps) {
+  const [name, setName] = useState('New Routine');
+  const [items, setItems] = useState<Array<{ exerciseId: string; targetSets: number }>>([]);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
   const byId = useMemo(() => new Map(exercises.map((exercise) => [exercise.id, exercise])), [exercises]);
   const canSave = name.trim() && items.length > 0;
 
@@ -23,7 +24,7 @@ export function RoutineEditor({ routine, exercises, onClose, onSave, onCreateExe
 
   const save = async () => {
     if (!canSave) return;
-    await onSave(routine?.id ?? null, { name: name.trim(), exercises: items.map((item, index) => ({ ...item, orderIndex: index })) });
+    await onSave(null, { name: name.trim(), exercises: items.map((item, index) => ({ ...item, orderIndex: index })) });
     onClose();
   };
 
@@ -59,12 +60,22 @@ export function RoutineEditor({ routine, exercises, onClose, onSave, onCreateExe
           );
         })}
       </div>
-      <div className="mt-4">
-        <ExercisePicker exercises={exercises} onPick={addExercise} onCreate={onCreateExercise} />
-      </div>
-      <button disabled={!canSave} onClick={() => void save()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
-        <Save size={18} /> Save Routine
+      <button onClick={() => setShowExercisePicker(true)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-blue-500/70 hover:bg-zinc-900">
+        <Plus size={18} /> Add exercises
       </button>
+      <WorkoutActionButton disabled={!canSave} onClick={() => void save()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+        <Save size={18} /> Save Routine
+      </WorkoutActionButton>
+      {showExercisePicker ? (
+        <ExercisePicker
+          exercises={exercises}
+          onClose={() => setShowExercisePicker(false)}
+          onCreate={onCreateExercise}
+          onPick={addExercise}
+          title="Add exercises"
+          description="Search the library or build a custom movement before saving this new routine."
+        />
+      ) : null}
     </section>
   );
 }
