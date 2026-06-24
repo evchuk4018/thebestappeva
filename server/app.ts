@@ -121,6 +121,9 @@ import {
   handleDeleteWorkoutSession,
   handleFinishWorkoutSession,
   handleGetWorkoutBootstrap,
+  handleGetWorkoutHistory,
+  handleGetWorkoutSession,
+  handleLogWorkoutSession,
   handlePutWorkoutRoutine,
   handlePutWorkoutSession,
   handleStartEmptyWorkoutSession,
@@ -220,12 +223,15 @@ function registerApiRoutes(app: Express) {
   app.put('/api/docs/:docId/citations', (req, res) => void handleSaveDocCitations(req, res));
   app.delete('/api/docs/:docId/citations/:citationId', (req, res) => void handleDeleteDocCitation(req, res));
   app.get('/api/workout/bootstrap', (req, res) => void handleGetWorkoutBootstrap(req, res));
+  app.get('/api/workout/history', (req, res) => void handleGetWorkoutHistory(req, res));
   app.post('/api/workout/routines', (req, res) => void handleCreateWorkoutRoutine(req, res));
   app.put('/api/workout/routines/:routineId', (req, res) => void handlePutWorkoutRoutine(req, res));
   app.delete('/api/workout/routines/:routineId', (req, res) => void handleDeleteWorkoutRoutine(req, res));
   app.post('/api/workout/exercises', (req, res) => void handleCreateWorkoutExercise(req, res));
   app.post('/api/workout/sessions/empty', (req, res) => void handleStartEmptyWorkoutSession(req, res));
+  app.post('/api/workout/sessions/log', (req, res) => void handleLogWorkoutSession(req, res));
   app.post('/api/workout/sessions/from-routine/:routineId', (req, res) => void handleStartRoutineWorkoutSession(req, res));
+  app.get('/api/workout/sessions/:sessionId', (req, res) => void handleGetWorkoutSession(req, res));
   app.put('/api/workout/sessions/:sessionId', (req, res) => void handlePutWorkoutSession(req, res));
   app.post('/api/workout/sessions/:sessionId/finish', (req, res) => void handleFinishWorkoutSession(req, res));
   app.delete('/api/workout/sessions/:sessionId', (req, res) => void handleDeleteWorkoutSession(req, res));

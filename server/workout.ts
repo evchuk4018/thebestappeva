@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
-import { parseWorkoutExerciseInput, parseWorkoutRoutineInput, parseWorkoutSession } from '../shared/workout-contract';
+import { parseWorkoutExerciseInput, parseWorkoutLoggedSessionInput, parseWorkoutRoutineInput, parseWorkoutSession } from '../shared/workout-contract';
 import { HttpError } from './http';
+import { getOptionalIntParam, getOptionalQueryParam } from './http';
 import { workoutRepository } from './db/workout-repository';
 
 function sendJson(response: Response, payload: unknown) {
@@ -22,6 +23,22 @@ function parseOrBadRequest<T>(reader: () => T) {
 
 export async function handleGetWorkoutBootstrap(_request: Request, response: Response) {
   sendJson(response, workoutRepository.bootstrap());
+}
+
+export async function handleGetWorkoutHistory(request: Request, response: Response) {
+  sendJson(response, {
+    sessions: workoutRepository.listFinishedSessions({
+      limit: getOptionalIntParam(request.query.limit, 20, 1, 100),
+      query: getOptionalQueryParam(request.query.query),
+      exerciseId: getOptionalQueryParam(request.query.exerciseId),
+    }),
+  });
+}
+
+export async function handleGetWorkoutSession(request: Request, response: Response) {
+  const item = workoutRepository.getSession(request.params.sessionId);
+  if (!item) throw new HttpError(404, 'Workout session was not found.');
+  sendJson(response, { item });
 }
 
 export async function handleCreateWorkoutRoutine(request: Request, response: Response) {
@@ -68,6 +85,11 @@ export async function handleFinishWorkoutSession(request: Request, response: Res
   const item = workoutRepository.finishSession(session);
   if (!item) throw new HttpError(404, 'Workout session was not found.');
   sendJson(response, { item });
+}
+
+export async function handleLogWorkoutSession(request: Request, response: Response) {
+  const input = parseOrBadRequest(() => parseWorkoutLoggedSessionInput(body(request).session ?? body(request)));
+  sendJson(response, { item: workoutRepository.logCompletedSession(input) });
 }
 
 export async function handleDeleteWorkoutSession(request: Request, response: Response) {

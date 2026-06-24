@@ -115,6 +115,7 @@ The app now includes a `/workout` module with:
 - autosaved workout sets with RIR, reps, weight, and completion state
 - session exercise utility menus for delete/reorder plus drag-and-drop reordering
 - previous completed set summaries shown in subtle grey text for exercises with history
+- completed workout history summaries plus direct AI logging for backfilled workouts
 - a workout-local two-button nav for `Home` and `Workout`
 
 Implementation notes:
@@ -122,6 +123,7 @@ Implementation notes:
 - Local persistence: same-origin `/api/workout/*` APIs backed by the repo-owned SQLite database
 - Local owner guard: workout rows use `owner_id = local-user` until the app has a real auth layer
 - Session model: only one unfinished workout is active at a time; starting another routine resumes that active session
+- History API: `/api/workout/history`, `/api/workout/sessions/:sessionId`, and `/api/workout/sessions/log` expose finished-session summaries, full session detail, and create-only completed workout logging
 - Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
 
 ## AI workspace
@@ -141,7 +143,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the main `Tools` workspace lists installed tools, their functions, an enable/disable toggle, and local card search
 - the main `Skills` workspace supports local search across skill names, descriptions, status, and tool metadata
-- local starter tools now include `/automation`, `/calendar`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
+- local starter tools now include `/automation`, `/calendar`, `/workout`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - the new `Automations` workspace stores scheduled runs and conversation triggers, supports optional linked skills plus tool overrides, searchable cards, and persisted run status such as next run, last run summary, last error, and linked chat id
 - scheduled automations run from an app-wide background runner whenever the SPA is open on any route, create a fresh `Thinking` chat for each occurrence, and perform a single catch-up run on the next open if a schedule was missed while the app was closed
 - conversation automations match simple case-insensitive phrases in the latest user message, inject extra automation instructions into that turn, and can promote a `Flash` send to `Thinking` when linked skills or tool overrides are required
@@ -153,6 +155,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - generated SVG candidates can be rendered back to PNG with `compare_generated_image`, which returns structured layout/color/text diffs and patch guidance for iterative repair loops
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - the `/calendar` tool lets Thinking-mode models read and write calendar events, tasks, recurrence, occurrence overrides, calendars, categories, and settings; syllabus PDF workflows use existing PDF extraction first, then create date-only deadlines, timed meetings, exams, and recurring class sessions directly in `/calendar`
+- the `/workout` tool lets Thinking-mode models inspect exercise data, create and edit routines, manage the active workout session, list past completed workouts, fetch full workout details, and log completed workouts into history without replacing an unfinished active session
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
 - `python.exec` stages up to a few repo-relative files into a temp `inputs/` directory, runs private Python code in writable `work/`, keeps raw code/stdout/stderr out of the default visible trace, and exposes a collapsible `View Python` inspector when you want the full details
@@ -200,7 +203,7 @@ Implementation notes:
 - Attachment parser sidecars: `python/docling_sidecar.py` for documents and persistent-worker `python/image_analysis_sidecar.py` for structured image geometry/OCR extraction
 - Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
-- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `/api/calendar/*`, `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
+- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `/api/calendar/*`, same-origin `/api/workout/*`, `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
 - Automation APIs: same-origin `GET/POST /api/automations`, `GET/PUT/DELETE /api/automations/:automationId`, `POST /api/automations/:automationId/toggle`, `POST /api/automations/claim-due`, and `POST /api/automations/:automationId/report-run`
 - Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
 - Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format

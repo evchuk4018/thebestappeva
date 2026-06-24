@@ -10,6 +10,7 @@ import { skillTool } from './skill-tool';
 import { timezoneTool } from './timezone-tool';
 import { webSearchTool } from './web-search-tool';
 import { weatherTool } from './weather-tool';
+import { workoutTool } from './workout-tool';
 import { ToolRegistryEntry } from './types';
 
 const toolRegistry: ToolRegistryEntry[] = [
@@ -23,6 +24,7 @@ const toolRegistry: ToolRegistryEntry[] = [
   localeTool,
   onlineStatusTool,
   webSearchTool,
+  workoutTool,
   pythonExecTool,
   skillTool,
 ];

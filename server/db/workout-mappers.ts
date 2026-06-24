@@ -1,4 +1,4 @@
-import type { WorkoutExercise, WorkoutRoutine, WorkoutRoutineExercise, WorkoutSession, WorkoutSessionExercise, WorkoutSet } from '../../shared/workout-contract';
+import type { WorkoutExercise, WorkoutHistoryEntry, WorkoutRoutine, WorkoutRoutineExercise, WorkoutSession, WorkoutSessionExercise, WorkoutSet } from '../../shared/workout-contract';
 
 export type WorkoutRow = Record<string, string | number | null>;
 export const localWorkoutOwnerId = 'local-user';
@@ -24,6 +24,20 @@ export function mapRoutine(row: WorkoutRow, exercises: WorkoutRoutineExercise[])
     exercises,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+  };
+}
+
+export function mapHistoryEntry(row: WorkoutRow): WorkoutHistoryEntry {
+  return {
+    id: String(row.id),
+    routineId: row.routine_id ? String(row.routine_id) : null,
+    name: String(row.name),
+    startedAt: String(row.started_at),
+    finishedAt: String(row.finished_at),
+    updatedAt: String(row.updated_at),
+    exerciseNames: String(row.exercise_names ?? '').split('|').filter(Boolean),
+    exerciseCount: Number(row.exercise_count ?? 0),
+    completedSetCount: Number(row.completed_set_count ?? 0),
   };
 }
 

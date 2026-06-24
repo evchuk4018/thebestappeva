@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
-import type { WorkoutExerciseInput, WorkoutRoutineInput, WorkoutSession } from '../../shared/workout-contract';
+import type { WorkoutExerciseInput, WorkoutLoggedSessionInput, WorkoutRoutineInput, WorkoutSession } from '../../shared/workout-contract';
 import { defaultRoutines, presetExercises } from './workout-seed';
 import { getDatabase } from './database';
-import { localWorkoutOwnerId, mapExercise, mapRoutine, mapRoutineExercise, mapSession, mapSessionExercise, mapSet, type WorkoutRow } from './workout-mappers';
+import { localWorkoutOwnerId, mapExercise, mapHistoryEntry, mapRoutine, mapRoutineExercise, mapSession, mapSessionExercise, mapSet, type WorkoutRow } from './workout-mappers';
 
 function id(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -29,6 +29,14 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
 
   function exerciseByName(name: string) {
     return database.prepare('SELECT * FROM workout_exercises WHERE owner_id = ? AND name = ?').get(owner, name) as WorkoutRow | undefined;
+  }
+
+  function exerciseExists(exerciseId: string) {
+    return Boolean(database.prepare('SELECT id FROM workout_exercises WHERE owner_id = ? AND id = ?').get(owner, exerciseId));
+  }
+
+  function routineExists(routineId: string) {
+    return Boolean(database.prepare('SELECT id FROM workout_routines WHERE owner_id = ? AND id = ? AND archived_at IS NULL').get(owner, routineId));
   }
 
   function routineExercises(routineId: string) {
@@ -68,6 +76,11 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     return row ? mapSession(row, sessionExercises(sessionId)) : null;
   }
 
+  function insertSessionSet(sessionExerciseId: string, setIndex: number, set: { rir?: number | null; reps?: number | null; weight?: number | null; completed?: boolean }) {
+    database.prepare('INSERT INTO workout_sets (id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id('set'), sessionExerciseId, setIndex, set.rir ?? null, set.reps ?? null, set.weight ?? null, set.completed ? 1 : 0);
+  }
+
   function saveRoutineExercises(routineId: string, exercises: WorkoutRoutineInput['exercises']) {
     database.prepare('DELETE FROM workout_routine_exercises WHERE routine_id = ?').run(routineId);
     const insert = database.prepare('INSERT INTO workout_routine_exercises (id, routine_id, exercise_id, order_index, target_sets, created_at) VALUES (?, ?, ?, ?, ?, ?)');
@@ -78,8 +91,14 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     const sessionExerciseId = id('sex');
     database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)')
       .run(sessionExerciseId, sessionId, exerciseId, orderIndex, '');
-    const insertSet = database.prepare('INSERT INTO workout_sets (id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, NULL, NULL, NULL, 0)');
-    for (let index = 0; index < targetSets; index += 1) insertSet.run(id('set'), sessionExerciseId, index);
+    for (let index = 0; index < targetSets; index += 1) insertSessionSet(sessionExerciseId, index, {});
+  }
+
+  function assertLoggedSessionReferences(input: WorkoutLoggedSessionInput) {
+    if (input.routineId && !routineExists(input.routineId)) throw new Error('Routine was not found.');
+    input.exercises.forEach((exercise) => {
+      if (!exerciseExists(exercise.exerciseId)) throw new Error(`Exercise "${exercise.exerciseId}" was not found.`);
+    });
   }
 
   return {
@@ -112,6 +131,35 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       const rows = database.prepare('SELECT * FROM workout_routines WHERE owner_id = ? AND archived_at IS NULL ORDER BY updated_at DESC, id DESC').all(owner) as WorkoutRow[];
       return rows.map((row) => mapRoutine(row, routineExercises(String(row.id))));
     },
+    listFinishedSessions(options: { limit?: number; query?: string; exerciseId?: string } = {}) {
+      const search = options.query?.trim().toLowerCase() || null;
+      const like = search ? `%${search}%` : null;
+      const exerciseId = options.exerciseId?.trim() || null;
+      const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
+      const rows = database.prepare(`
+        SELECT s.*,
+          COALESCE((SELECT GROUP_CONCAT(name, '|') FROM (
+            SELECT e.name AS name FROM workout_session_exercises se
+            JOIN workout_exercises e ON e.id = se.exercise_id
+            WHERE se.session_id = s.id ORDER BY se.order_index, se.id
+          )), '') AS exercise_names,
+          COALESCE((SELECT COUNT(*) FROM workout_session_exercises se WHERE se.session_id = s.id), 0) AS exercise_count,
+          COALESCE((SELECT COUNT(*) FROM workout_sets ws JOIN workout_session_exercises se ON se.id = ws.session_exercise_id WHERE se.session_id = s.id AND ws.completed = 1), 0) AS completed_set_count
+        FROM workout_sessions s
+        WHERE s.owner_id = ? AND s.finished_at IS NOT NULL
+          AND (? IS NULL OR LOWER(s.name) LIKE ? OR EXISTS(
+            SELECT 1 FROM workout_session_exercises se
+            JOIN workout_exercises e ON e.id = se.exercise_id
+            WHERE se.session_id = s.id AND LOWER(e.name) LIKE ?
+          ))
+          AND (? IS NULL OR EXISTS(
+            SELECT 1 FROM workout_session_exercises se WHERE se.session_id = s.id AND se.exercise_id = ?
+          ))
+        ORDER BY s.finished_at DESC, s.updated_at DESC, s.id DESC
+        LIMIT ?
+      `).all(owner, like, like, like, exerciseId, exerciseId, limit) as WorkoutRow[];
+      return rows.map(mapHistoryEntry);
+    },
     createExercise(input: WorkoutExerciseInput) {
       const exerciseId = id('ex');
       const createdAt = now();
@@ -137,6 +185,9 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     activeSession() {
       const row = database.prepare('SELECT * FROM workout_sessions WHERE owner_id = ? AND finished_at IS NULL ORDER BY updated_at DESC LIMIT 1').get(owner) as WorkoutRow | undefined;
       return row ? sessionById(String(row.id)) : null;
+    },
+    getSession(sessionId: string) {
+      return sessionById(sessionId);
     },
     startEmptySession() {
       const active = this.activeSession();
@@ -179,6 +230,21 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
     finishSession(session: WorkoutSession) {
       const saved = this.saveSession({ ...session, finishedAt: session.finishedAt ?? now() });
       return saved ? sessionById(saved.id) : null;
+    },
+    logCompletedSession(input: WorkoutLoggedSessionInput) {
+      assertLoggedSessionReferences(input);
+      const sessionId = id('session');
+      database.transaction(() => {
+        database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, finished_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(sessionId, owner, input.routineId ?? null, input.name.trim(), input.startedAt, input.finishedAt, now());
+        input.exercises.forEach((exercise, index) => {
+          const sessionExerciseId = id('sex');
+          database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)')
+            .run(sessionExerciseId, sessionId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.notes ?? '');
+          exercise.sets.forEach((set, setIndex) => insertSessionSet(sessionExerciseId, set.setIndex ?? setIndex, set));
+        });
+      })();
+      return sessionById(sessionId)!;
     },
     deleteSession(sessionId: string) {
       return database.prepare('DELETE FROM workout_sessions WHERE owner_id = ? AND id = ?').run(owner, sessionId).changes > 0;

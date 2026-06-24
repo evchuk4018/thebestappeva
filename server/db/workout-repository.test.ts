@@ -64,3 +64,52 @@ test('finishes sessions and exposes previous set hints', () => {
   const saved = repository.saveSession(next);
   assert.match(saved?.exercises[0].lastPerformedText ?? '', /135 x 8/);
 });
+
+test('lists finished workout history and supports filters', () => {
+  const { repository } = createTestRepository();
+  const [bench, row] = repository.bootstrap().exercises;
+  repository.logCompletedSession({
+    name: 'Push Day',
+    startedAt: '2026-06-23T10:00:00.000Z',
+    finishedAt: '2026-06-23T11:00:00.000Z',
+    exercises: [
+      { exerciseId: bench.id, sets: [{ reps: 8, weight: 185, completed: true }] },
+      { exerciseId: row.id, sets: [{ reps: 10, weight: 135, completed: true }] },
+    ],
+  });
+  repository.logCompletedSession({
+    name: 'Leg Day',
+    startedAt: '2026-06-22T10:00:00.000Z',
+    finishedAt: '2026-06-22T11:00:00.000Z',
+    exercises: [{ exerciseId: row.id, sets: [{ reps: 12, weight: 90, completed: true }] }],
+  });
+
+  const all = repository.listFinishedSessions({ limit: 10 });
+  const filteredByQuery = repository.listFinishedSessions({ query: 'push' });
+  const filteredByExercise = repository.listFinishedSessions({ exerciseId: bench.id });
+
+  assert.equal(all.length, 2);
+  assert.deepEqual(all[0].exerciseNames, [bench.name, row.name]);
+  assert.equal(all[0].completedSetCount, 2);
+  assert.equal(filteredByQuery.length, 1);
+  assert.equal(filteredByQuery[0].name, 'Push Day');
+  assert.equal(filteredByExercise.length, 1);
+  assert.equal(filteredByExercise[0].name, 'Push Day');
+});
+
+test('fetches saved sessions and preserves active session when logging history', () => {
+  const { repository } = createTestRepository();
+  const exercise = repository.bootstrap().exercises[0];
+  const active = repository.startEmptySession();
+  const logged = repository.logCompletedSession({
+    name: 'Backfill',
+    startedAt: '2026-06-20T10:00:00.000Z',
+    finishedAt: '2026-06-20T11:00:00.000Z',
+    exercises: [{ exerciseId: exercise.id, sets: [{ reps: 6, weight: 205, completed: true }] }],
+  });
+
+  assert.equal(repository.activeSession()?.id, active.id);
+  assert.equal(repository.getSession(logged.id)?.finishedAt, '2026-06-20T11:00:00.000Z');
+  assert.ok(logged.exercises[0].id.startsWith('sex_'));
+  assert.ok(logged.exercises[0].sets[0].id.startsWith('set_'));
+});
