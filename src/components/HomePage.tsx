@@ -1,4 +1,4 @@
-import { CalendarDays, Dumbbell, FileText, Sparkles } from 'lucide-react';
+import { Apple, CalendarDays, Dumbbell, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { WorkoutResumeBar } from './workout/WorkoutResumeBar';
@@ -37,6 +37,14 @@ const cards = [
     href: '/workout',
     delay: 0.24,
   },
+  {
+    id: 'btn-nutrition-start',
+    icon: Apple,
+    title: 'Nutrition',
+    subtitle: 'Food logging, goals, search ranking, and quick-log recipes',
+    href: '/nutrition',
+    delay: 0.32,
+  },
 ] as const;
 
 export default function HomePage() {
@@ -58,7 +66,7 @@ export default function HomePage() {
             Choose the workspace you want to open. AI handles conversations, tools, and artifacts. Docs keeps your files, templates, rewrites, and exports in one local workspace.
           </p>
         </motion.div>
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
           {cards.map(({ id, icon: Icon, title, subtitle, href, delay }) => (
             <motion.button
               key={id}

@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import type { NutritionDiaryEntry, NutritionGoals, NutritionRecipe } from '../../../shared/nutrition-contract';
+import HomePage from '../HomePage';
+import { NutritionDashboard } from './NutritionDashboard';
+import { NutritionRecipesView } from './NutritionRecipesView';
+import { NutritionSearchSheet } from './NutritionSearchSheet';
+import { WorkoutSessionSummaryProvider } from '../workout/WorkoutSessionSummaryContext';
+
+const goals: NutritionGoals = {
+  caloriesTarget: 2200,
+  proteinTargetG: 160,
+  carbsTargetG: 220,
+  fatTargetG: 70,
+  updatedAt: '2026-06-24T00:00:00.000Z',
+};
+
+const entry: NutritionDiaryEntry = {
+  id: 'entry-1',
+  loggedAt: '2026-06-24T12:00:00.000Z',
+  note: 'Lunch',
+  nutritionTotal: { calories: 420, proteinG: 12, carbsG: 68, fatG: 10 },
+  items: [{
+    id: 'item-1',
+    itemType: 'food',
+    itemId: 'food_apple',
+    name: 'Apple',
+    brandName: null,
+    quantity: 140,
+    unit: 'gram',
+    amountG: 140,
+    servingId: null,
+    servingLabel: null,
+    nutrition: { calories: 73, proteinG: 0.4, carbsG: 19, fatG: 0.2 },
+  }],
+  createdAt: '2026-06-24T12:00:00.000Z',
+  updatedAt: '2026-06-24T12:00:00.000Z',
+};
+
+const recipe: NutritionRecipe = {
+  id: 'recipe-1',
+  name: 'Apple Pie',
+  note: 'Quick log dessert.',
+  servings: 8,
+  totalWeightG: 960,
+  nutritionPerServing: { calories: 240, proteinG: 4, carbsG: 34, fatG: 10 },
+  nutritionTotal: { calories: 1920, proteinG: 32, carbsG: 272, fatG: 80 },
+  ingredients: [{
+    id: 'ingredient-1',
+    foodId: 'food_apple',
+    foodName: 'Apple',
+    foodSourceType: 'whole',
+    brandName: null,
+    amountG: 300,
+    orderIndex: 0,
+    nutrition: { calories: 156, proteinG: 1.2, carbsG: 40.5, fatG: 0.9 },
+  }],
+  createdAt: '2026-06-24T00:00:00.000Z',
+  updatedAt: '2026-06-24T00:00:00.000Z',
+};
+
+test('home page includes the nutrition launcher card', () => {
+  const html = renderToStaticMarkup(<MemoryRouter><WorkoutSessionSummaryProvider><HomePage /></WorkoutSessionSummaryProvider></MemoryRouter>);
+  assert.match(html, /Nutrition/);
+  assert.match(html, /Food logging, goals, search ranking, and quick-log recipes/);
+});
+
+test('renders nutrition dashboard totals and timeline cards', () => {
+  const html = renderToStaticMarkup(<NutritionDashboard entries={[entry]} goals={goals} onDeleteEntry={() => {}} onEditEntry={() => {}} onEditGoals={() => {}} onOpenSearch={() => {}} />);
+  assert.match(html, /Daily Budget/);
+  assert.match(html, /Timeline/);
+  assert.match(html, /Lunch/);
+});
+
+test('renders add-new-food fallback in the nutrition search sheet', () => {
+  const html = renderToStaticMarkup(<NutritionSearchSheet query="cheez" results={[]} onClose={() => {}} onCreateFood={() => {}} onPick={() => {}} onQueryChange={() => {}} />);
+  assert.match(html, /Add new food/);
+  assert.match(html, /No close match found/);
+});
+
+test('renders recipe detail and quick-log action', () => {
+  const html = renderToStaticMarkup(<NutritionRecipesView recipes={[recipe]} onCreate={() => {}} onEdit={() => {}} onLog={() => {}} />);
+  assert.match(html, /Recipe Detail/);
+  assert.match(html, /Quick Log Recipe/);
+  assert.match(html, /Apple Pie/);
+});

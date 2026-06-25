@@ -129,6 +129,23 @@ import {
   handleStartEmptyWorkoutSession,
   handleStartRoutineWorkoutSession,
 } from './workout';
+import {
+  handleCreateNutritionBrandFood,
+  handleCreateNutritionEntry,
+  handleCreateNutritionEntryItem,
+  handleCreateNutritionRecipe,
+  handleDeleteNutritionEntry,
+  handleDeleteNutritionEntryItem,
+  handleGetNutritionBootstrap,
+  handleGetNutritionGoals,
+  handleListNutritionRecipes,
+  handlePutNutritionBrandFood,
+  handlePutNutritionEntry,
+  handlePutNutritionEntryItem,
+  handlePutNutritionGoals,
+  handlePutNutritionRecipe,
+  handleSearchNutritionItems,
+} from './nutrition';
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, '..');
@@ -235,6 +252,21 @@ function registerApiRoutes(app: Express) {
   app.put('/api/workout/sessions/:sessionId', (req, res) => void handlePutWorkoutSession(req, res));
   app.post('/api/workout/sessions/:sessionId/finish', (req, res) => void handleFinishWorkoutSession(req, res));
   app.delete('/api/workout/sessions/:sessionId', (req, res) => void handleDeleteWorkoutSession(req, res));
+  app.get('/api/nutrition/bootstrap', (req, res) => void handleGetNutritionBootstrap(req, res));
+  app.get('/api/nutrition/search', (req, res) => void handleSearchNutritionItems(req, res));
+  app.get('/api/nutrition/goals', (req, res) => void handleGetNutritionGoals(req, res));
+  app.put('/api/nutrition/goals', (req, res) => void handlePutNutritionGoals(req, res));
+  app.get('/api/nutrition/recipes', (req, res) => void handleListNutritionRecipes(req, res));
+  app.post('/api/nutrition/recipes', (req, res) => void handleCreateNutritionRecipe(req, res));
+  app.put('/api/nutrition/recipes/:recipeId', (req, res) => void handlePutNutritionRecipe(req, res));
+  app.post('/api/nutrition/foods/brands', (req, res) => void handleCreateNutritionBrandFood(req, res));
+  app.put('/api/nutrition/foods/brands/:foodId', (req, res) => void handlePutNutritionBrandFood(req, res));
+  app.post('/api/nutrition/entries', (req, res) => void handleCreateNutritionEntry(req, res));
+  app.put('/api/nutrition/entries/:entryId', (req, res) => void handlePutNutritionEntry(req, res));
+  app.delete('/api/nutrition/entries/:entryId', (req, res) => void handleDeleteNutritionEntry(req, res));
+  app.post('/api/nutrition/entries/:entryId/items', (req, res) => void handleCreateNutritionEntryItem(req, res));
+  app.put('/api/nutrition/entries/:entryId/items/:itemId', (req, res) => void handlePutNutritionEntryItem(req, res));
+  app.delete('/api/nutrition/entries/:entryId/items/:itemId', (req, res) => void handleDeleteNutritionEntryItem(req, res));
   app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
   app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
   app.post('/api/ai/attachments/:attachmentId/image-analysis', (req, res) => void handlePostAiImageAnalysis(req, res));

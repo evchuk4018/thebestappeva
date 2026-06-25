@@ -2,7 +2,7 @@ import { FileText, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useLocation } from 'react-router-dom';
 
-const retiredRoutes = new Set(['/workout', '/nutrition', '/tasks', '/notes']);
+const retiredRoutes = new Set(['/workout', '/tasks', '/notes']);
 
 export default function RetiredRoutePage() {
   const location = useLocation();

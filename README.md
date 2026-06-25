@@ -1,6 +1,6 @@
 # thebestappeva
 
-This is a Vite + React app with an AI workspace, a desktop-first Docs workspace, a private Calendar workspace, a Workout workspace, and a simple launcher that ties them together.
+This is a Vite + React app with AI, Docs, Calendar, Workout, and Nutrition workspaces plus a simple launcher that ties them together.
 
 ## Local setup
 
@@ -127,6 +127,27 @@ Implementation notes:
 - Session model: only one unfinished workout is active at a time; starting another routine resumes that active session unless it has crossed the 24-hour auto-finish limit
 - History API: `/api/workout/history`, `/api/workout/sessions/:sessionId`, and `/api/workout/sessions/log` expose finished-session summaries, full session detail, and create-only completed workout logging
 - Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
+
+## Nutrition workspace
+
+The app now includes a `/nutrition` module with:
+
+- a dark, mobile-first daily dashboard for calorie and macro targets
+- a single-timeline diary instead of breakfast/lunch/dinner buckets
+- one fuzzy add-food search ranked by text match, recency, frequency, and time-of-day usage signals
+- several hundred seeded whole foods stored in the local SQLite database
+- manual branded-food creation with barcode placeholder fields
+- local recipe building from seeded foods and user-created branded foods
+- quick-log recipe support using servings and computed total weight
+- diary entry edit/delete flows plus editable daily calorie/protein/carbs/fat goals
+
+Implementation notes:
+
+- Local persistence: same-origin `/api/nutrition/*` APIs backed by the repo-owned SQLite database
+- Local owner guard: nutrition rows use `owner_id = local-user` until the app has a real auth layer
+- Seed behavior: branded foods are not seeded; they are created and stored locally by the user
+- Search ranking: food and recipe results blend fuzzy text relevance with personal usage frequency, recency decay, and coarse morning/midday/evening/late-night affinity
+- Favorites, coaching cards, community feeds, external nutrition APIs, and barcode scanning are intentionally not included in this first pass
 
 ## AI workspace
 

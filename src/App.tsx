@@ -13,6 +13,7 @@ import CalendarPage from './components/calendar/CalendarPage';
 import DocsHomePage from './components/docs/DocsHomePage';
 import DocsEditorPage from './components/docs/DocsEditorPage';
 import DocsNewRedirect from './components/docs/DocsNewRedirect';
+import NutritionPage from './components/nutrition/NutritionPage';
 import WorkoutPage from './components/workout/WorkoutPage';
 import { WorkoutSessionSummaryProvider } from './components/workout/WorkoutSessionSummaryContext';
 import { AiAutomationRuntime } from './components/ai-tab/AiAutomationRuntime';
@@ -34,7 +35,7 @@ function AnimatedPage({ children, className = 'h-full min-h-0 w-full' }: { child
 
 function AppContent() {
   const location = useLocation();
-  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai' || location.pathname === '/calendar' || location.pathname === '/workout';
+  const usesFullBleedLayout = location.pathname.startsWith('/docs') || location.pathname === '/ai' || location.pathname === '/calendar' || location.pathname === '/workout' || location.pathname === '/nutrition';
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-zinc-950 font-sans text-zinc-50 selection:bg-blue-500/30">
@@ -48,7 +49,7 @@ function AppContent() {
             <Route path="/docs/new" element={<AnimatedPage className="h-full w-full"><DocsNewRedirect /></AnimatedPage>} />
             <Route path="/docs/:docId" element={<AnimatedPage className="h-full w-full"><DocsEditorPage /></AnimatedPage>} />
             <Route path="/workout" element={<AnimatedPage className="h-full w-full"><WorkoutPage /></AnimatedPage>} />
-            <Route path="/nutrition" element={<RetiredRoutePage />} />
+            <Route path="/nutrition" element={<AnimatedPage className="h-full w-full"><NutritionPage /></AnimatedPage>} />
             <Route path="/tasks" element={<RetiredRoutePage />} />
             <Route path="/notes" element={<RetiredRoutePage />} />
             <Route path="*" element={<RetiredRoutePage />} />
