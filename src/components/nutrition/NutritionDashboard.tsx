@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import type { NutritionDiaryEntry, NutritionGoals } from '../../../shared/nutrition-contract';
-import { NutritionAdviceStrip } from './NutritionAdviceStrip';
 import { NutritionAppleRing } from './NutritionAppleRing';
 import { NutritionDiaryList } from './NutritionDiaryList';
 import { NutritionMacroBars } from './NutritionMacroBars';
@@ -52,8 +51,6 @@ export function NutritionDashboard({
 
         <NutritionWeekBars entries={weekEntries} selectedDate={selectedDate} target={goals.caloriesTarget} />
       </section>
-
-      <NutritionAdviceStrip />
 
       <section ref={mealsRef} className="mt-5 scroll-mt-4">
         <div className="mb-4 flex items-center justify-between">

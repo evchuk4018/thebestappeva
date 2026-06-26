@@ -72,7 +72,7 @@ test('renders redesigned nutrition dashboard card and meals section', () => {
   const html = renderToStaticMarkup(<NutritionDashboard entries={[entry]} goals={goals} selectedDate="2026-06-24" weekEntries={[entry]} onDeleteEntry={() => {}} onEditEntry={() => {}} onEditGoals={() => {}} />);
   assert.match(html, /Calorie Budget/);
   assert.match(html, /View All Meals/);
-  assert.match(html, /My Daily Advice/);
+  assert.doesNotMatch(html, /My Daily Advice/);
   assert.match(html, /All Meals/);
   assert.match(html, /Lunch/);
 });
