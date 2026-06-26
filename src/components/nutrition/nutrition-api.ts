@@ -12,6 +12,7 @@ import type {
   NutritionRecipeInput,
   NutritionSearchItem,
 } from '../../../shared/nutrition-contract';
+import { parseNutritionAiFoodLogResponse, type NutritionAiFoodLogResponse } from '../../../shared/nutrition-ai-food-log-contract';
 
 async function readJson(response: Response) {
   const payload = await response.json().catch(() => ({ error: 'The local server returned invalid JSON.' }));
@@ -36,6 +37,13 @@ export async function fetchNutritionBootstrap(date: string): Promise<NutritionBo
 
 export async function searchNutritionItems(queryText: string, loggedAt: string): Promise<NutritionSearchItem[]> {
   return (await json(query('/api/nutrition/search', { query: queryText, loggedAt }))).items ?? [];
+}
+
+export async function analyzeNutritionFoodImage(attachmentId: string, loggedAt: string): Promise<NutritionAiFoodLogResponse> {
+  return parseNutritionAiFoodLogResponse(await json('/api/nutrition/ai-food-log', {
+    method: 'POST',
+    body: JSON.stringify({ attachmentId, loggedAt }),
+  }));
 }
 
 export async function fetchNutritionGoals(): Promise<NutritionGoals> {

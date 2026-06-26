@@ -140,6 +140,7 @@ The app now includes a `/nutrition` module with:
 - manual branded-food creation with barcode placeholder fields
 - local recipe building from seeded foods and user-created branded foods
 - quick-log recipe support using servings and computed total weight
+- AI Food Log from the plus menu accepts a meal photo, reuses AI image attachment summaries, drafts matched foods/recipes with DeepSeek plus capped Gemini follow-ups, and requires review before saving
 - diary entry edit/delete flows plus editable daily calorie/protein/carbs/fat goals
 
 Implementation notes:
@@ -149,6 +150,7 @@ Implementation notes:
 - History API: `/api/nutrition/history` exposes diary lookup by exact date or inclusive date range
 - Seed behavior: branded foods are not seeded; they are created and stored locally by the user
 - Search ranking: food and recipe results blend fuzzy text relevance with personal usage frequency, recency decay, and coarse morning/midday/evening/late-night affinity
+- AI food-photo API: `POST /api/nutrition/ai-food-log` returns reviewable draft rows and never creates unmatched foods automatically
 - Favorites, coaching cards, community feeds, external nutrition APIs, and barcode scanning are intentionally not included in this first pass
 
 ## AI workspace

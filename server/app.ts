@@ -140,6 +140,7 @@ import {
   handleGetNutritionHistory,
   handleGetNutritionGoals,
   handleListNutritionRecipes,
+  handlePostNutritionAiFoodLog,
   handlePutNutritionBrandFood,
   handlePutNutritionEntry,
   handlePutNutritionEntryItem,
@@ -255,6 +256,7 @@ function registerApiRoutes(app: Express) {
   app.delete('/api/workout/sessions/:sessionId', (req, res) => void handleDeleteWorkoutSession(req, res));
   app.get('/api/nutrition/bootstrap', (req, res) => void handleGetNutritionBootstrap(req, res));
   app.get('/api/nutrition/search', (req, res) => void handleSearchNutritionItems(req, res));
+  app.post('/api/nutrition/ai-food-log', (req, res) => void handlePostNutritionAiFoodLog(req, res));
   app.get('/api/nutrition/history', (req, res) => void handleGetNutritionHistory(req, res));
   app.get('/api/nutrition/goals', (req, res) => void handleGetNutritionGoals(req, res));
   app.put('/api/nutrition/goals', (req, res) => void handlePutNutritionGoals(req, res));

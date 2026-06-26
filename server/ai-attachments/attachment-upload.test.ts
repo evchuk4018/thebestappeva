@@ -5,16 +5,20 @@ import path from 'node:path';
 import test from 'node:test';
 import { serverConfig } from '../config';
 import { parseIncomingAttachment } from './attachment-upload';
+import { setVisionServiceTestHooksForTests } from './vision-service';
 
 test('image uploads get image_* ids and an immediate summary', async () => {
   const originalFetch = globalThis.fetch;
   const originalStoragePath = serverConfig.aiAttachmentStoragePath;
   const originalVisionModels = [...serverConfig.aiVisionModels];
   const originalAnalysisModel = serverConfig.aiImageAnalysisVisionModel;
+  const originalVisionMode = serverConfig.visionMode;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-image-upload-'));
   serverConfig.aiAttachmentStoragePath = tempDir;
   serverConfig.aiVisionModels = ['qwen2.5vl:7b'];
   serverConfig.aiImageAnalysisVisionModel = 'qwen3-vl:8b';
+  serverConfig.visionMode = 'offline';
+  setVisionServiceTestHooksForTests({ mode: 'offline' });
   const requests: Array<{ url: string; body: string }> = [];
 
   globalThis.fetch = async (input, init) => {
@@ -58,6 +62,8 @@ test('image uploads get image_* ids and an immediate summary', async () => {
     serverConfig.aiAttachmentStoragePath = originalStoragePath;
     serverConfig.aiVisionModels = [...originalVisionModels];
     serverConfig.aiImageAnalysisVisionModel = originalAnalysisModel;
+    serverConfig.visionMode = originalVisionMode;
+    setVisionServiceTestHooksForTests({});
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });

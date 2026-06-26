@@ -6,6 +6,7 @@ import type { NutritionDiaryEntry, NutritionGoals, NutritionRecipe } from '../..
 import HomePage from '../HomePage';
 import { NutritionBottomNav } from './NutritionBottomNav';
 import { NutritionDashboard } from './NutritionDashboard';
+import { NutritionAiFoodLogReviewSheet } from './NutritionAiFoodLogReviewSheet';
 import { NutritionQuickActionMenu } from './NutritionQuickActionMenu';
 import { NutritionRecipesView } from './NutritionRecipesView';
 import { NutritionSearchSheet } from './NutritionSearchSheet';
@@ -79,17 +80,40 @@ test('renders redesigned nutrition dashboard card and meals section', () => {
 });
 
 test('renders nutrition dashboard and home bottom navigation', () => {
-  const html = renderToStaticMarkup(<NutritionBottomNav active="dashboard" onDashboard={() => {}} onHome={() => {}} onLogFood={() => {}} onOpenRecipes={() => {}} />);
+  const html = renderToStaticMarkup(<NutritionBottomNav active="dashboard" onAiFoodLog={() => {}} onDashboard={() => {}} onHome={() => {}} onLogFood={() => {}} onOpenRecipes={() => {}} />);
   assert.match(html, /Dashboard/);
   assert.match(html, /Open nutrition quick actions/);
   assert.match(html, /Home/);
 });
 
 test('renders nutrition quick action menu choices', () => {
-  const html = renderToStaticMarkup(<NutritionQuickActionMenu open onClose={() => {}} onLogFood={() => {}} onOpenRecipes={() => {}} />);
+  const html = renderToStaticMarkup(<NutritionQuickActionMenu open onAiFoodLog={() => {}} onClose={() => {}} onLogFood={() => {}} onOpenRecipes={() => {}} />);
   assert.match(html, /Log Food/);
+  assert.match(html, /AI Food Log/);
   assert.doesNotMatch(html, /Add Food/);
   assert.match(html, /Recipes/);
+});
+
+test('renders AI food log review rows with unmatched blocking state', () => {
+  const html = renderToStaticMarkup(<NutritionAiFoodLogReviewSheet
+    dateText="2026-06-24"
+    response={{
+      attachmentId: 'image_1',
+      summary: 'A bowl of chili.',
+      warnings: ['Review portions.'],
+      trace: [],
+      items: [
+        { id: 'draft_1', name: 'chili', quantity: 100, unit: 'gram', note: '', confidence: 'medium', needsReview: true, matchedItem: { id: 'recipe-1', itemType: 'recipe', name: 'Apple Pie', brandName: null, subtitle: '1 ingredient', defaultAmountG: 120, defaultServingId: null, defaultServingLabel: '1 serving', nutrition: { calories: 240, proteinG: 4, carbsG: 34, fatG: 10 }, score: 80 }, candidates: [] },
+        { id: 'draft_2', name: 'sauce', quantity: 1, unit: 'serving', note: '', confidence: 'low', needsReview: true, matchedItem: null, candidates: [] },
+      ],
+    }}
+    onClose={() => {}}
+    onSave={() => {}}
+    onSearch={async () => []}
+  />);
+  assert.match(html, /Review meal draft/);
+  assert.match(html, /Needs a local food or recipe match before saving/);
+  assert.match(html, /Save Entry/);
 });
 
 test('renders add-new-food fallback in the nutrition search sheet', () => {

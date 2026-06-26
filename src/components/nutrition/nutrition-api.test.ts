@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  analyzeNutritionFoodImage,
   createNutritionBrandFood,
   createNutritionEntry,
   createNutritionRecipe,
@@ -51,6 +52,28 @@ test('nutrition API loads bootstrap, search, and read routes', async () => {
       'GET /api/nutrition/history?date=2026-06-24&limit=3',
       'GET /api/nutrition/history?startDate=2026-06-20&endDate=2026-06-24',
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('nutrition API posts image food log analysis requests', async () => {
+  const originalFetch = globalThis.fetch;
+  let call = '';
+  globalThis.fetch = async (input, init) => {
+    call = `${init?.method ?? 'GET'} ${input} ${String(init?.body)}`;
+    return new Response(JSON.stringify({
+      attachmentId: 'image_1',
+      summary: 'Meal photo.',
+      items: [],
+      warnings: ['No loggable foods were detected.'],
+      trace: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    await analyzeNutritionFoodImage('image_1', '2026-06-24T12:00:00.000Z');
+    assert.equal(call, 'POST /api/nutrition/ai-food-log {"attachmentId":"image_1","loggedAt":"2026-06-24T12:00:00.000Z"}');
   } finally {
     globalThis.fetch = originalFetch;
   }

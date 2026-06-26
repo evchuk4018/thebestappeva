@@ -1,10 +1,11 @@
-import { Search, Soup } from 'lucide-react';
+import { Camera, Search, Soup } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface NutritionQuickActionMenuProps {
   open: boolean;
   onClose: () => void;
   onLogFood: () => void;
+  onAiFoodLog: () => void;
   onOpenRecipes: () => void;
 }
 
@@ -12,6 +13,7 @@ export function NutritionQuickActionMenu({
   open,
   onClose,
   onLogFood,
+  onAiFoodLog,
   onOpenRecipes,
 }: NutritionQuickActionMenuProps) {
   function run(action: () => void) {
@@ -39,6 +41,9 @@ export function NutritionQuickActionMenu({
           >
             <button onClick={() => run(onLogFood)} className="flex items-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-left text-sm font-semibold text-white shadow-xl shadow-black/25">
               <Search size={18} className="text-emerald-300" /> Log Food
+            </button>
+            <button onClick={() => run(onAiFoodLog)} className="flex items-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-left text-sm font-semibold text-white shadow-xl shadow-black/25">
+              <Camera size={18} className="text-emerald-300" /> AI Food Log
             </button>
             <button onClick={() => run(onOpenRecipes)} className="flex items-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-left text-sm font-semibold text-white shadow-xl shadow-black/25">
               <Soup size={18} className="text-emerald-300" /> Recipes

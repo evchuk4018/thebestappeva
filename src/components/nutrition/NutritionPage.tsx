@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { NutritionAiFoodLogResponse } from '../../../shared/nutrition-ai-food-log-contract';
 import type { NutritionDiaryEntry, NutritionDiaryEntryInput, NutritionSearchItem } from '../../../shared/nutrition-contract';
-import { fetchNutritionHistory } from './nutrition-api';
+import { parseAiAttachmentFile } from '../../lib/ai-attachments-storage';
+import { analyzeNutritionFoodImage, fetchNutritionHistory } from './nutrition-api';
+import { NutritionAiFoodLogReviewSheet } from './NutritionAiFoodLogReviewSheet';
 import { NutritionBottomNav } from './NutritionBottomNav';
 import { NutritionDashboard } from './NutritionDashboard';
 import { NutritionFoodFormModal } from './NutritionFoodFormModal';
@@ -72,6 +75,10 @@ export default function NutritionPage() {
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [logDraft, setLogDraft] = useState<LogDraft | null>(null);
+  const [aiFoodLog, setAiFoodLog] = useState<NutritionAiFoodLogResponse | null>(null);
+  const [aiFoodLogBusy, setAiFoodLogBusy] = useState(false);
+  const [aiFoodLogError, setAiFoodLogError] = useState<string | null>(null);
+  const aiFoodLogInputRef = useRef<HTMLInputElement>(null);
   const bootstrap = nutrition.bootstrap;
   const editingRecipe = useMemo(() => bootstrap?.recipes.find((recipe) => recipe.id === editingRecipeId) ?? null, [bootstrap?.recipes, editingRecipeId]);
 
@@ -92,6 +99,23 @@ export default function NutritionPage() {
     return () => { isCurrent = false; };
   }, [nutrition.selectedDate]);
 
+  async function analyzeFoodPhoto(file: File | undefined) {
+    if (!file) return;
+    setAiFoodLogBusy(true);
+    setAiFoodLogError(null);
+    try {
+      const attachment = await parseAiAttachmentFile(file);
+      if (attachment.kind !== 'image') throw new Error('AI Food Log needs an image file.');
+      const loggedAt = new Date(`${nutrition.selectedDate}T12:00:00`).toISOString();
+      setAiFoodLog(await analyzeNutritionFoodImage(attachment.id, loggedAt));
+    } catch (error) {
+      setAiFoodLogError(error instanceof Error ? error.message : 'Unable to analyze this food photo.');
+    } finally {
+      setAiFoodLogBusy(false);
+      if (aiFoodLogInputRef.current) aiFoodLogInputRef.current.value = '';
+    }
+  }
+
   if (nutrition.busy || !bootstrap) {
     return <div className="grid h-full place-items-center bg-zinc-950 text-sm text-zinc-500">Loading nutrition...</div>;
   }
@@ -107,6 +131,8 @@ export default function NutritionPage() {
         onSearch={() => setSearchOpen(true)}
       />
       {nutrition.error ? <div className="border-b border-red-500/40 bg-red-950 px-4 py-2 text-sm text-red-100">{nutrition.error}</div> : null}
+      {aiFoodLogError ? <div className="border-b border-red-500/40 bg-red-950 px-4 py-2 text-sm text-red-100">{aiFoodLogError}</div> : null}
+      {aiFoodLogBusy ? <div className="border-b border-emerald-500/30 bg-emerald-950/50 px-4 py-2 text-sm text-emerald-100">Analyzing food photo...</div> : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {view === 'dashboard' ? (
           <NutritionDashboard
@@ -145,10 +171,19 @@ export default function NutritionPage() {
       </div>
       <NutritionBottomNav
         active={view}
+        onAiFoodLog={() => aiFoodLogInputRef.current?.click()}
         onDashboard={() => setView('dashboard')}
         onHome={() => navigate('/')}
         onLogFood={() => setSearchOpen(true)}
         onOpenRecipes={() => setView('recipes')}
+      />
+      <input
+        ref={aiFoodLogInputRef}
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        type="file"
+        onChange={(event) => void analyzeFoodPhoto(event.target.files?.[0])}
       />
       {searchOpen ? (
         <NutritionSearchSheet
@@ -219,6 +254,17 @@ export default function NutritionPage() {
           onClose={() => setLogDraft(null)}
           onSave={(input: NutritionDiaryEntryInput) => void nutrition.saveEntry(logDraft.entryId, input).then(() => setLogDraft(null))}
           unit={logDraft.unit}
+        />
+      ) : null}
+      {aiFoodLog ? (
+        <NutritionAiFoodLogReviewSheet
+          dateText={nutrition.selectedDate}
+          response={aiFoodLog}
+          onClose={() => setAiFoodLog(null)}
+          onSave={(input) => void nutrition.saveEntry(null, input).then((entry) => {
+            if (entry) setAiFoodLog(null);
+          })}
+          onSearch={(query, loggedAt) => nutrition.search(query, loggedAt)}
         />
       ) : null}
     </div>

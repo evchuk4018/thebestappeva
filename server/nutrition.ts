@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
 import { parseNutritionDiaryEntryInput, parseNutritionFoodInput, parseNutritionGoalsInput, parseNutritionHistoryQuery, parseNutritionRecipeInput } from '../shared/nutrition-contract';
+import { parseNutritionAiFoodLogRequest } from '../shared/nutrition-ai-food-log-contract';
 import { HttpError, getOptionalIntParam, getOptionalQueryParam } from './http';
 import { nutritionRepository } from './db/nutrition-repository';
+import { analyzeNutritionAiFoodLog } from './nutrition-ai-food-log';
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
@@ -38,6 +40,11 @@ export async function handleGetNutritionBootstrap(request: Request, response: Re
 
 export async function handleSearchNutritionItems(request: Request, response: Response) {
   sendJson(response, { items: nutritionRepository.searchItems(getOptionalQueryParam(request.query.query) ?? '', loggedAt(request.query.loggedAt)) });
+}
+
+export async function handlePostNutritionAiFoodLog(request: Request, response: Response) {
+  const input = parseOrBadRequest(() => parseNutritionAiFoodLogRequest(body(request)));
+  sendJson(response, await analyzeNutritionAiFoodLog(input.attachmentId, input.loggedAt));
 }
 
 export async function handleGetNutritionHistory(request: Request, response: Response) {

@@ -6,12 +6,14 @@ export function NutritionBottomNav({
   active,
   onDashboard,
   onHome,
+  onAiFoodLog,
   onLogFood,
   onOpenRecipes,
 }: {
   active: 'dashboard' | 'recipes';
   onDashboard: () => void;
   onHome: () => void;
+  onAiFoodLog: () => void;
   onLogFood: () => void;
   onOpenRecipes: () => void;
 }) {
@@ -23,6 +25,7 @@ export function NutritionBottomNav({
       <NutritionQuickActionMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
+        onAiFoodLog={onAiFoodLog}
         onLogFood={onLogFood}
         onOpenRecipes={onOpenRecipes}
       />

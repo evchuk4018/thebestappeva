@@ -219,6 +219,7 @@ test('image-analysis route retries one timed-out semantic extraction and logs th
     queryJson: async (_image, _instructions, _parser, options) => {
       semanticCalls += 1;
       if (semanticCalls === 1) {
+        if (options?.signal?.aborted) throw options.signal.reason;
         return await new Promise<never>((_resolve, reject) => {
           options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
         });
@@ -256,6 +257,7 @@ test('image-analysis route fails permanently after two timed-out attempts', asyn
   setImageAnalysisTestHooksForTests({
     analyzeFile: async () => ({ sceneGraph, debugImages: { contact: Buffer.from('debug') } }),
     queryJson: async (_image, _instructions, _parser, options) => {
+      if (options?.signal?.aborted) throw options.signal.reason;
       return await new Promise<never>((_resolve, reject) => {
         options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
       });
