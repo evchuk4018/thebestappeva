@@ -143,7 +143,13 @@ export default function NutritionPage() {
           />
         )}
       </div>
-      <NutritionBottomNav active={view} onDashboard={() => setView('dashboard')} onHome={() => navigate('/')} />
+      <NutritionBottomNav
+        active={view}
+        onDashboard={() => setView('dashboard')}
+        onHome={() => navigate('/')}
+        onLogFood={() => setSearchOpen(true)}
+        onOpenRecipes={() => setView('recipes')}
+      />
       {searchOpen ? (
         <NutritionSearchSheet
           query={searchQuery}
