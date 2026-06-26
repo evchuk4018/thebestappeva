@@ -132,8 +132,9 @@ Implementation notes:
 
 The app now includes a `/nutrition` module with:
 
-- a dark, mobile-first daily dashboard for calorie and macro targets
-- a single-timeline diary instead of breakfast/lunch/dinner buckets
+- a dark, mobile-style daily dashboard with an apple calorie ring, macro bars, and a weekly calorie summary
+- a two-tab nutrition footer for Dashboard and Home, with recipes reachable from the nutrition toolbar
+- an all-meals diary list instead of breakfast/lunch/dinner buckets
 - one fuzzy add-food search ranked by text match, recency, frequency, and time-of-day usage signals
 - several hundred seeded whole foods stored in the local SQLite database
 - manual branded-food creation with barcode placeholder fields
@@ -145,6 +146,7 @@ Implementation notes:
 
 - Local persistence: same-origin `/api/nutrition/*` APIs backed by the repo-owned SQLite database
 - Local owner guard: nutrition rows use `owner_id = local-user` until the app has a real auth layer
+- History API: `/api/nutrition/history` exposes diary lookup by exact date or inclusive date range
 - Seed behavior: branded foods are not seeded; they are created and stored locally by the user
 - Search ranking: food and recipe results blend fuzzy text relevance with personal usage frequency, recency decay, and coarse morning/midday/evening/late-night affinity
 - Favorites, coaching cards, community feeds, external nutrition APIs, and barcode scanning are intentionally not included in this first pass
@@ -166,7 +168,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
   - `Flash` uses a single fast request with `think: false`, no tools, and streams only the final answer text
 - the main `Tools` workspace lists installed tools, their functions, an enable/disable toggle, and local card search
 - the main `Skills` workspace supports local search across skill names, descriptions, status, and tool metadata
-- local starter tools now include `/automation`, `/calendar`, `/workout`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
+- local starter tools now include `/automation`, `/calendar`, `/nutrition`, `/workout`, `/date-time`, `/location`, `/timezone`, `/weather`, `/locale`, `/online-status`, `/web-search`, `/python.exec`, `/recent-chats`, `/chat-title-search`, and `/chat-summary`
 - the new `Automations` workspace stores scheduled runs and conversation triggers, supports optional linked skills plus tool overrides, searchable cards, and persisted run status such as next run, last run summary, last error, and linked chat id
 - scheduled automations run from an app-wide background runner whenever the SPA is open on any route, create a fresh `Thinking` chat for each occurrence, and perform a single catch-up run on the next open if a schedule was missed while the app was closed
 - conversation automations match simple case-insensitive phrases in the latest user message, inject extra automation instructions into that turn, and can promote a `Flash` send to `Thinking` when linked skills or tool overrides are required
@@ -178,6 +180,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - generated SVG candidates can be rendered back to PNG with `compare_generated_image`, which returns structured layout/color/text diffs and patch guidance for iterative repair loops
 - long PDF uploads automatically expose `/pdf-reader` for that chat, with `search_pdf`, `read_pdf_pages`, `read_pdf_page`, and `view_pdf_page`
 - the `/calendar` tool lets Thinking-mode models read and write calendar events, tasks, recurrence, occurrence overrides, calendars, categories, and settings; syllabus PDF workflows use existing PDF extraction first, then create date-only deadlines, timed meetings, exams, and recurring class sessions directly in `/calendar`
+- the `/nutrition` tool lets Thinking-mode models read and write goals, branded foods, recipes, diary entries, entry items, and diary history, including exact-date and inclusive date-range meal lookups plus direct meal logging
 - the `/workout` tool lets Thinking-mode models inspect exercise data, create and edit routines, manage the active workout session, list past completed workouts, fetch full workout details, and log completed workouts into history without replacing an unfinished active session
 - weather supports both typed place queries and current-browser-location lookups, while location remains coordinates-only in this pass
 - web search uses a local SearXNG instance through same-origin `/api/web-search`, and `fetch_url` uses `/api/fetch-url` to extract readable HTML page text
@@ -226,7 +229,7 @@ Implementation notes:
 - Attachment parser sidecars: `python/docling_sidecar.py` for documents and persistent-worker `python/image_analysis_sidecar.py` for structured image geometry/OCR extraction
 - Python exec sidecar: `python/exec_sidecar.py`, with best-effort local sandboxing, staged repo inputs, blocked network calls, and temp-only writes
 - System prompt assembly: shared browser-side builder under `src/components/ai-tab/system-prompt.ts`
-- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `/api/calendar/*`, same-origin `/api/workout/*`, `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
+- Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `/api/calendar/*`, same-origin `/api/nutrition/*`, same-origin `/api/workout/*`, `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
 - Automation APIs: same-origin `GET/POST /api/automations`, `GET/PUT/DELETE /api/automations/:automationId`, `POST /api/automations/:automationId/toggle`, `POST /api/automations/claim-due`, and `POST /api/automations/:automationId/report-run`
 - Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
 - Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { NutritionDiaryEntry, NutritionDiaryEntryInput, NutritionSearchItem } from '../../../shared/nutrition-contract';
+import { fetchNutritionHistory } from './nutrition-api';
 import { NutritionBottomNav } from './NutritionBottomNav';
 import { NutritionDashboard } from './NutritionDashboard';
 import { NutritionFoodFormModal } from './NutritionFoodFormModal';
@@ -9,7 +11,7 @@ import { NutritionLogModal } from './NutritionLogModal';
 import { NutritionRecipeEditor } from './NutritionRecipeEditor';
 import { NutritionRecipesView } from './NutritionRecipesView';
 import { NutritionSearchSheet } from './NutritionSearchSheet';
-import { addDays, todayKey } from './nutrition-utils';
+import { addDays, todayKey, weekRange } from './nutrition-utils';
 import { useNutrition } from './useNutrition';
 
 interface LogDraft {
@@ -59,7 +61,9 @@ function logDraftFromSearchItem(item: NutritionSearchItem): LogDraft {
 
 export default function NutritionPage() {
   const nutrition = useNutrition();
+  const navigate = useNavigate();
   const [view, setView] = useState<'dashboard' | 'recipes'>('dashboard');
+  const [weekEntries, setWeekEntries] = useState<NutritionDiaryEntry[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<NutritionSearchItem[]>([]);
@@ -76,6 +80,17 @@ export default function NutritionPage() {
     const loggedAt = new Date(`${nutrition.selectedDate}T12:00:00`).toISOString();
     void nutrition.search(searchQuery, loggedAt).then((items) => setSearchResults(items ?? []));
   }, [nutrition, nutrition.selectedDate, searchOpen, searchQuery]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const { startDate, endDate } = weekRange(nutrition.selectedDate);
+    void fetchNutritionHistory({ startDate, endDate }).then((entries) => {
+      if (isCurrent) setWeekEntries(entries);
+    }).catch(() => {
+      if (isCurrent) setWeekEntries([]);
+    });
+    return () => { isCurrent = false; };
+  }, [nutrition.selectedDate]);
 
   if (nutrition.busy || !bootstrap) {
     return <div className="grid h-full place-items-center bg-zinc-950 text-sm text-zinc-500">Loading nutrition...</div>;
@@ -97,10 +112,11 @@ export default function NutritionPage() {
           <NutritionDashboard
             entries={bootstrap.entries}
             goals={bootstrap.goals}
+            selectedDate={nutrition.selectedDate}
+            weekEntries={weekEntries}
             onEditGoals={() => setShowGoalsModal(true)}
             onDeleteEntry={(entryId) => void nutrition.deleteEntry(entryId)}
             onEditEntry={(entry) => setLogDraft(logDraftFromEntry(entry))}
-            onOpenSearch={() => setSearchOpen(true)}
           />
         ) : (
           <NutritionRecipesView
@@ -127,7 +143,7 @@ export default function NutritionPage() {
           />
         )}
       </div>
-      <NutritionBottomNav active={view} onChange={setView} />
+      <NutritionBottomNav active={view} onDashboard={() => setView('dashboard')} onHome={() => navigate('/')} />
       {searchOpen ? (
         <NutritionSearchSheet
           query={searchQuery}

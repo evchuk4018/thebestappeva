@@ -1,20 +1,26 @@
+import { BarChart3, Home } from 'lucide-react';
+
 export function NutritionBottomNav({
   active,
-  onChange,
+  onDashboard,
+  onHome,
 }: {
   active: 'dashboard' | 'recipes';
-  onChange: (value: 'dashboard' | 'recipes') => void;
+  onDashboard: () => void;
+  onHome: () => void;
 }) {
-  const itemClass = 'flex-1 rounded-2xl px-4 py-3 text-sm font-semibold transition';
+  const itemClass = 'flex flex-1 flex-col items-center justify-center gap-1 rounded-md px-3 py-2 text-xs transition';
 
   return (
-    <nav className="sticky bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur">
-      <div className="mx-auto flex max-w-md gap-3 rounded-[28px] border border-zinc-800 bg-zinc-900 p-2 shadow-2xl shadow-black/40">
-        <button onClick={() => onChange('dashboard')} className={`${itemClass} ${active === 'dashboard' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>
+    <nav className="sticky bottom-0 z-20 border-t border-[#2a2a2a] bg-[#202123] px-3 pb-3 pt-2">
+      <div className="mx-auto flex max-w-[390px] items-center gap-2">
+        <button onClick={onDashboard} className={`${itemClass} ${active === 'dashboard' ? 'text-white' : 'text-zinc-500 hover:text-zinc-200'}`}>
+          <span className={`rounded-md p-1 ${active === 'dashboard' ? 'bg-zinc-600' : ''}`}><BarChart3 size={20} /></span>
           Dashboard
         </button>
-        <button onClick={() => onChange('recipes')} className={`${itemClass} ${active === 'recipes' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>
-          Recipes
+        <button onClick={onHome} className={`${itemClass} text-zinc-500 hover:text-zinc-200`}>
+          <span className="rounded-md p-1"><Home size={20} /></span>
+          Home
         </button>
       </div>
     </nav>

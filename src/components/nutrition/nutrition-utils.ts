@@ -1,4 +1,4 @@
-import type { NutritionDiaryEntry, NutritionGoals, NutritionMacroValues } from '../../../shared/nutrition-contract';
+import type { NutritionDiaryEntry, NutritionMacroValues } from '../../../shared/nutrition-contract';
 
 export function todayKey() {
   return new Intl.DateTimeFormat('en-CA').format(new Date());
@@ -8,6 +8,22 @@ export function addDays(dateText: string, amount: number) {
   const value = new Date(`${dateText}T12:00:00`);
   value.setDate(value.getDate() + amount);
   return new Intl.DateTimeFormat('en-CA').format(value);
+}
+
+export function dateKey(isoText: string) {
+  return new Intl.DateTimeFormat('en-CA').format(new Date(isoText));
+}
+
+export function weekRange(dateText: string) {
+  const value = new Date(`${dateText}T12:00:00`);
+  const day = value.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const startDate = addDays(dateText, mondayOffset);
+  return { startDate, endDate: addDays(startDate, 6) };
+}
+
+export function shortDayLabel(dateText: string) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(new Date(`${dateText}T12:00:00`)).slice(0, 2);
 }
 
 export function entryTimeValue(isoText: string) {
@@ -32,15 +48,6 @@ export function sumMacros(items: NutritionMacroValues[]) {
 
 export function diaryTotals(entries: NutritionDiaryEntry[]) {
   return sumMacros(entries.map((entry) => entry.nutritionTotal));
-}
-
-export function macroProgress(current: NutritionMacroValues, goals: NutritionGoals) {
-  return [
-    { id: 'calories', label: 'Calories', value: current.calories, target: goals.caloriesTarget, accent: 'bg-orange-400' },
-    { id: 'protein', label: 'Protein', value: current.proteinG, target: goals.proteinTargetG, accent: 'bg-emerald-400' },
-    { id: 'carbs', label: 'Carbs', value: current.carbsG, target: goals.carbsTargetG, accent: 'bg-sky-400' },
-    { id: 'fat', label: 'Fat', value: current.fatG, target: goals.fatTargetG, accent: 'bg-amber-400' },
-  ];
 }
 
 export function quantityText(quantity: number, unit: 'gram' | 'serving', servingLabel: string | null) {

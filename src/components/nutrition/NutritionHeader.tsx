@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Menu, MoreVertical, Plus, Search, Soup } from 'lucide-react';
+import { useState } from 'react';
 
 export function NutritionHeader({
   dateLabel,
@@ -15,23 +16,47 @@ export function NutritionHeader({
   onPreviousDay: () => void;
   onSearch: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function run(action: () => void) {
+    setMenuOpen(false);
+    action();
+  }
+
   return (
-    <header className="border-b border-zinc-800 bg-[#101313] px-4 py-4">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-300">Nutrition</p>
-          <div className="mt-2 flex items-center gap-2 text-white">
-            <button onClick={onPreviousDay} className="rounded-full border border-zinc-700 p-2 text-zinc-300 hover:border-zinc-500 hover:text-white"><ChevronLeft size={18} /></button>
-            <h1 className="text-lg font-semibold">{dateLabel}</h1>
-            <button onClick={onNextDay} className="rounded-full border border-zinc-700 p-2 text-zinc-300 hover:border-zinc-500 hover:text-white"><ChevronRight size={18} /></button>
-          </div>
+    <header className="relative border-b border-[#252525] bg-[#1a1a1a] px-3 py-3">
+      <div className="mx-auto flex max-w-[390px] items-center justify-between gap-2">
+        <button onClick={() => setMenuOpen((open) => !open)} className="rounded-full p-2 text-zinc-100 hover:bg-zinc-800" aria-label="Open nutrition menu">
+          <Menu size={22} />
+        </button>
+        <button onClick={onPreviousDay} className="rounded-full p-2 text-zinc-100 hover:bg-zinc-800" aria-label="Previous day">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-white">
+          <CalendarDays size={19} />
+          <h1 className="truncate text-base font-bold">{dateLabel}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onSearch} className="rounded-full border border-zinc-700 p-3 text-zinc-200 hover:border-zinc-500 hover:text-white"><Search size={18} /></button>
-          <button onClick={onOpenRecipes} className="rounded-full border border-zinc-700 p-3 text-zinc-200 hover:border-zinc-500 hover:text-white">R</button>
-          <button onClick={onAddFood} className="rounded-full bg-emerald-500 p-3 text-zinc-950 shadow-lg shadow-emerald-950/40 hover:bg-emerald-400"><Plus size={18} /></button>
-        </div>
+        <button onClick={onNextDay} className="rounded-full p-2 text-zinc-100 hover:bg-zinc-800" aria-label="Next day">
+          <ChevronRight size={24} />
+        </button>
+        <button onClick={() => setMenuOpen((open) => !open)} className="rounded-full p-2 text-zinc-100 hover:bg-zinc-800" aria-label="More nutrition actions">
+          <MoreVertical size={22} />
+        </button>
       </div>
+
+      {menuOpen ? (
+        <div className="absolute right-3 top-[58px] z-30 w-48 overflow-hidden rounded-lg border border-zinc-700 bg-[#232323] py-1 shadow-2xl shadow-black/50">
+          <button onClick={() => run(onSearch)} className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-zinc-100 hover:bg-zinc-800">
+            <Search size={16} /> Search foods
+          </button>
+          <button onClick={() => run(onAddFood)} className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-zinc-100 hover:bg-zinc-800">
+            <Plus size={16} /> Add food
+          </button>
+          <button onClick={() => run(onOpenRecipes)} className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-zinc-100 hover:bg-zinc-800">
+            <Soup size={16} /> Recipes
+          </button>
+        </div>
+      ) : null}
     </header>
   );
 }

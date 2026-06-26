@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
-import type { NutritionDiaryEntryInput, NutritionDiaryItemInput, NutritionFoodInput, NutritionGoalsInput, NutritionRecipeInput, NutritionSearchItem } from '../../shared/nutrition-contract';
+import type { NutritionDiaryEntryInput, NutritionDiaryItemInput, NutritionFoodInput, NutritionGoalsInput, NutritionHistoryQuery, NutritionRecipeInput, NutritionSearchItem } from '../../shared/nutrition-contract';
 import { getDatabase } from './database';
 import { addMacros, resolveAmountG, roundNutrition, scaleMacros, scaleMacrosPer100g, timeSlotForIso, zeroMacros } from './nutrition-calculations';
 import { localNutritionOwnerId, mapDiaryEntry, mapDiaryItem, mapFood, mapGoals, mapRecipe, mapRecipeIngredient, type NutritionRow } from './nutrition-mappers';
@@ -42,23 +42,30 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
   const listRecipes = () => (database.prepare('SELECT * FROM nutrition_recipes WHERE owner_id = ? ORDER BY updated_at DESC, id DESC').all(owner) as NutritionRow[])
     .map((row) => recipeById(String(row.id))).filter(Boolean);
 
-  const listDiaryEntries = (selectedDate: string) => (database.prepare('SELECT * FROM nutrition_diary_entries WHERE owner_id = ? ORDER BY logged_at DESC, id DESC').all(owner) as NutritionRow[])
-    .filter((row) => dateKey(String(row.logged_at)) === selectedDate).map((row) => {
-      const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(String(row.id)) as NutritionRow[]).map((itemRow) => {
-        if (itemRow.item_type === 'recipe') {
-          const recipe = recipeById(String(itemRow.item_id));
-          if (!recipe) throw new Error('Recipe was not found.');
-          const nutrition = itemRow.unit === 'serving'
-            ? roundNutrition({ calories: recipe.nutritionPerServing.calories * Number(itemRow.quantity), proteinG: recipe.nutritionPerServing.proteinG * Number(itemRow.quantity), carbsG: recipe.nutritionPerServing.carbsG * Number(itemRow.quantity), fatG: recipe.nutritionPerServing.fatG * Number(itemRow.quantity) })
-            : scaleMacrosPer100g(recipe.nutritionTotal, Number(itemRow.amount_g) / Math.max(recipe.totalWeightG, 1) * 100);
-          return mapDiaryItem({ ...itemRow, item_name: recipe.name, brand_name: null }, nutrition);
-        }
-        const food = foodById(String(itemRow.item_id));
-        if (!food) throw new Error('Food was not found.');
-        return mapDiaryItem({ ...itemRow, item_name: food.name, brand_name: food.brandName }, scaleMacrosPer100g(food.nutritionPer100g, Number(itemRow.amount_g)));
-      });
-      return mapDiaryEntry(row, items, items.reduce((sum, item) => addMacros(sum, item.nutrition), zeroMacros()));
+  const hydrateDiaryEntry = (row: NutritionRow) => {
+    const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(String(row.id)) as NutritionRow[]).map((itemRow) => {
+      if (itemRow.item_type === 'recipe') {
+        const recipe = recipeById(String(itemRow.item_id));
+        if (!recipe) throw new Error('Recipe was not found.');
+        const nutrition = itemRow.unit === 'serving'
+          ? roundNutrition({ calories: recipe.nutritionPerServing.calories * Number(itemRow.quantity), proteinG: recipe.nutritionPerServing.proteinG * Number(itemRow.quantity), carbsG: recipe.nutritionPerServing.carbsG * Number(itemRow.quantity), fatG: recipe.nutritionPerServing.fatG * Number(itemRow.quantity) })
+          : scaleMacrosPer100g(recipe.nutritionTotal, Number(itemRow.amount_g) / Math.max(recipe.totalWeightG, 1) * 100);
+        return mapDiaryItem({ ...itemRow, item_name: recipe.name, brand_name: null }, nutrition);
+      }
+      const food = foodById(String(itemRow.item_id));
+      if (!food) throw new Error('Food was not found.');
+      return mapDiaryItem({ ...itemRow, item_name: food.name, brand_name: food.brandName }, scaleMacrosPer100g(food.nutritionPer100g, Number(itemRow.amount_g)));
     });
+    return mapDiaryEntry(row, items, items.reduce((sum, item) => addMacros(sum, item.nutrition), zeroMacros()));
+  };
+
+  const matchesHistory = (entryDate: string, query: NutritionHistoryQuery) =>
+    query.date ? entryDate === query.date : entryDate >= String(query.startDate) && entryDate <= String(query.endDate);
+
+  const listDiaryEntries = (query: NutritionHistoryQuery) => (database.prepare('SELECT * FROM nutrition_diary_entries WHERE owner_id = ? ORDER BY logged_at DESC, id DESC').all(owner) as NutritionRow[])
+    .filter((row) => matchesHistory(dateKey(String(row.logged_at)), query))
+    .slice(0, query.limit ?? Number.POSITIVE_INFINITY)
+    .map(hydrateDiaryEntry);
 
   const rebuildUsageStats = () => {
     database.prepare('DELETE FROM nutrition_usage_stats WHERE owner_id = ?').run(owner);
@@ -131,7 +138,11 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
         LEFT JOIN nutrition_recipes r ON r.id = di.item_id AND di.item_type = 'recipe'
         WHERE de.owner_id = ? ORDER BY de.logged_at DESC LIMIT 6
       `).all(owner) as NutritionRow[]).map((row) => String(row.item_name));
-      return { selectedDate, goals: this.getGoals(), entries: listDiaryEntries(selectedDate), recipes: listRecipes(), recentItemNames };
+      return { selectedDate, goals: this.getGoals(), entries: listDiaryEntries({ date: selectedDate }), recipes: listRecipes(), recentItemNames };
+    },
+    listDiaryEntries(query: NutritionHistoryQuery) {
+      this.ensureDefaults();
+      return listDiaryEntries(query);
     },
     searchItems(query: string, loggedAt: string, limit = 20): NutritionSearchItem[] {
       this.ensureDefaults();
@@ -173,7 +184,7 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
         saveDiaryItems(nextId, input.items);
         rebuildUsageStats();
       })();
-      return listDiaryEntries(dateKey(input.loggedAt)).find((entry) => entry.id === nextId)!;
+      return listDiaryEntries({ date: dateKey(input.loggedAt) }).find((entry) => entry.id === nextId)!;
     },
     addDiaryItem(entryId: string, item: NutritionDiaryItemInput) {
       const entry = entryInputById(entryId);

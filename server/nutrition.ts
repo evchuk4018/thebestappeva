@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { parseNutritionDiaryEntryInput, parseNutritionFoodInput, parseNutritionGoalsInput, parseNutritionRecipeInput } from '../shared/nutrition-contract';
-import { HttpError, getOptionalQueryParam } from './http';
+import { parseNutritionDiaryEntryInput, parseNutritionFoodInput, parseNutritionGoalsInput, parseNutritionHistoryQuery, parseNutritionRecipeInput } from '../shared/nutrition-contract';
+import { HttpError, getOptionalIntParam, getOptionalQueryParam } from './http';
 import { nutritionRepository } from './db/nutrition-repository';
 
 function sendJson(response: Response, payload: unknown) {
@@ -38,6 +38,16 @@ export async function handleGetNutritionBootstrap(request: Request, response: Re
 
 export async function handleSearchNutritionItems(request: Request, response: Response) {
   sendJson(response, { items: nutritionRepository.searchItems(getOptionalQueryParam(request.query.query) ?? '', loggedAt(request.query.loggedAt)) });
+}
+
+export async function handleGetNutritionHistory(request: Request, response: Response) {
+  const query = parseOrBadRequest(() => parseNutritionHistoryQuery({
+    date: request.query.date,
+    startDate: request.query.startDate,
+    endDate: request.query.endDate,
+    limit: getOptionalIntParam(request.query.limit, 20, 1, 100),
+  }));
+  sendJson(response, { entries: nutritionRepository.listDiaryEntries(query) });
 }
 
 export async function handleGetNutritionGoals(_request: Request, response: Response) {

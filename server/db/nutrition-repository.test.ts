@@ -86,6 +86,36 @@ test('stores diary entries, rebuilds usage stats, and boosts frequent morning fo
   assert.equal(results[0].name, 'Apple');
 });
 
+test('lists nutrition diary history by exact date and inclusive date range with limits', () => {
+  const { repository } = createTestRepository();
+  repository.ensureDefaults();
+
+  const breakfast = repository.saveDiaryEntry(null, {
+    loggedAt: '2026-06-24T08:00:00.000Z',
+    note: 'Breakfast',
+    items: [{ itemType: 'food', itemId: 'food_apple', quantity: 1, unit: 'serving', servingId: 'serving_1_cup' }],
+  });
+  repository.saveDiaryEntry(null, {
+    loggedAt: '2026-06-23T12:00:00.000Z',
+    note: 'Lunch',
+    items: [{ itemType: 'food', itemId: 'food_banana', quantity: 1, unit: 'serving', servingId: 'serving_1_medium' }],
+  });
+  repository.saveDiaryEntry(null, {
+    loggedAt: '2026-06-22T18:00:00.000Z',
+    note: 'Dinner',
+    items: [{ itemType: 'food', itemId: 'food_salmon', quantity: 1, unit: 'serving', servingId: 'serving_4_oz' }],
+  });
+
+  const exact = repository.listDiaryEntries({ date: '2026-06-24' });
+  const range = repository.listDiaryEntries({ startDate: '2026-06-22', endDate: '2026-06-24' });
+  const limited = repository.listDiaryEntries({ startDate: '2026-06-22', endDate: '2026-06-24', limit: 2 });
+
+  assert.equal(exact.length, 1);
+  assert.equal(exact[0].id, breakfast.id);
+  assert.deepEqual(range.map((entry) => entry.note), ['Breakfast', 'Lunch', 'Dinner']);
+  assert.deepEqual(limited.map((entry) => entry.note), ['Breakfast', 'Lunch']);
+});
+
 test('updates and deletes diary entries cleanly', () => {
   const { repository } = createTestRepository();
   repository.ensureDefaults();

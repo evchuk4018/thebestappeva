@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { NutritionDiaryEntry, NutritionGoals, NutritionRecipe } from '../../../shared/nutrition-contract';
 import HomePage from '../HomePage';
+import { NutritionBottomNav } from './NutritionBottomNav';
 import { NutritionDashboard } from './NutritionDashboard';
 import { NutritionRecipesView } from './NutritionRecipesView';
 import { NutritionSearchSheet } from './NutritionSearchSheet';
@@ -67,11 +68,19 @@ test('home page includes the nutrition launcher card', () => {
   assert.match(html, /Food logging, goals, search ranking, and quick-log recipes/);
 });
 
-test('renders nutrition dashboard totals and timeline cards', () => {
-  const html = renderToStaticMarkup(<NutritionDashboard entries={[entry]} goals={goals} onDeleteEntry={() => {}} onEditEntry={() => {}} onEditGoals={() => {}} onOpenSearch={() => {}} />);
-  assert.match(html, /Daily Budget/);
-  assert.match(html, /Timeline/);
+test('renders redesigned nutrition dashboard card and meals section', () => {
+  const html = renderToStaticMarkup(<NutritionDashboard entries={[entry]} goals={goals} selectedDate="2026-06-24" weekEntries={[entry]} onDeleteEntry={() => {}} onEditEntry={() => {}} onEditGoals={() => {}} />);
+  assert.match(html, /Calorie Budget/);
+  assert.match(html, /View All Meals/);
+  assert.match(html, /My Daily Advice/);
+  assert.match(html, /All Meals/);
   assert.match(html, /Lunch/);
+});
+
+test('renders nutrition dashboard and home bottom navigation', () => {
+  const html = renderToStaticMarkup(<NutritionBottomNav active="dashboard" onDashboard={() => {}} onHome={() => {}} />);
+  assert.match(html, /Dashboard/);
+  assert.match(html, /Home/);
 });
 
 test('renders add-new-food fallback in the nutrition search sheet', () => {

@@ -4,6 +4,7 @@ import { calendarTool } from './calendar-tool';
 import { dateTimeTool } from './date-time-tool';
 import { localeTool } from './locale-tool';
 import { locationTool } from './location-tool';
+import { nutritionTool } from './nutrition-tool';
 import { onlineStatusTool } from './online-status-tool';
 import { pythonExecTool } from './python-exec-tool';
 import { skillTool } from './skill-tool';
@@ -19,6 +20,7 @@ const toolRegistry: ToolRegistryEntry[] = [
   calendarTool,
   dateTimeTool,
   locationTool,
+  nutritionTool,
   timezoneTool,
   weatherTool,
   localeTool,

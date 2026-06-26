@@ -7,6 +7,7 @@ import type {
   NutritionFoodInput,
   NutritionGoals,
   NutritionGoalsInput,
+  NutritionHistoryQuery,
   NutritionRecipe,
   NutritionRecipeInput,
   NutritionSearchItem,
@@ -37,8 +38,16 @@ export async function searchNutritionItems(queryText: string, loggedAt: string):
   return (await json(query('/api/nutrition/search', { query: queryText, loggedAt }))).items ?? [];
 }
 
+export async function fetchNutritionGoals(): Promise<NutritionGoals> {
+  return (await json('/api/nutrition/goals')).item;
+}
+
 export async function saveNutritionGoals(input: NutritionGoalsInput): Promise<NutritionGoals> {
   return (await json('/api/nutrition/goals', { method: 'PUT', body: JSON.stringify(input) })).item;
+}
+
+export async function fetchNutritionRecipes(): Promise<NutritionRecipe[]> {
+  return (await json('/api/nutrition/recipes')).items ?? [];
 }
 
 export async function createNutritionBrandFood(input: NutritionFoodInput): Promise<NutritionFood> {
@@ -59,6 +68,15 @@ export async function updateNutritionRecipe(recipeId: string, input: NutritionRe
 
 export async function createNutritionEntry(input: NutritionDiaryEntryInput): Promise<NutritionDiaryEntry> {
   return (await json('/api/nutrition/entries', { method: 'POST', body: JSON.stringify(input) })).item;
+}
+
+export async function fetchNutritionHistory(history: NutritionHistoryQuery): Promise<NutritionDiaryEntry[]> {
+  return (await json(query('/api/nutrition/history', {
+    date: history.date,
+    startDate: history.startDate,
+    endDate: history.endDate,
+    limit: history.limit,
+  }))).entries ?? [];
 }
 
 export async function updateNutritionEntry(entryId: string, input: NutritionDiaryEntryInput): Promise<NutritionDiaryEntry> {

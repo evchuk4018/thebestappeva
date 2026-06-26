@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNutritionBrandFood, createNutritionEntry, createNutritionRecipe, deleteNutritionEntryItem, fetchNutritionBootstrap, saveNutritionGoals, searchNutritionItems, updateNutritionEntry } from './nutrition-api';
+import {
+  createNutritionBrandFood,
+  createNutritionEntry,
+  createNutritionRecipe,
+  deleteNutritionEntryItem,
+  fetchNutritionBootstrap,
+  fetchNutritionGoals,
+  fetchNutritionHistory,
+  fetchNutritionRecipes,
+  saveNutritionGoals,
+  searchNutritionItems,
+  updateNutritionEntry,
+} from './nutrition-api';
 
 const bootstrapPayload = {
   selectedDate: '2026-06-24',
@@ -10,21 +22,34 @@ const bootstrapPayload = {
   recentItemNames: [],
 };
 
-test('nutrition API loads bootstrap and search routes', async () => {
+test('nutrition API loads bootstrap, search, and read routes', async () => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
   globalThis.fetch = async (input, init) => {
     calls.push(`${init?.method ?? 'GET'} ${input}`);
-    const payload = String(input).includes('/search') ? { items: [] } : bootstrapPayload;
+    const url = String(input);
+    if (url.includes('/search')) return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/goals')) return new Response(JSON.stringify({ item: bootstrapPayload.goals }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/recipes')) return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/history')) return new Response(JSON.stringify({ entries: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const payload = bootstrapPayload;
     return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
 
   try {
     await fetchNutritionBootstrap('2026-06-24');
     await searchNutritionItems('apple', '2026-06-24T12:00:00.000Z');
+    await fetchNutritionGoals();
+    await fetchNutritionRecipes();
+    await fetchNutritionHistory({ date: '2026-06-24', limit: 3 });
+    await fetchNutritionHistory({ startDate: '2026-06-20', endDate: '2026-06-24' });
     assert.deepEqual(calls, [
       'GET /api/nutrition/bootstrap?date=2026-06-24',
       'GET /api/nutrition/search?query=apple&loggedAt=2026-06-24T12%3A00%3A00.000Z',
+      'GET /api/nutrition/goals',
+      'GET /api/nutrition/recipes',
+      'GET /api/nutrition/history?date=2026-06-24&limit=3',
+      'GET /api/nutrition/history?startDate=2026-06-20&endDate=2026-06-24',
     ]);
   } finally {
     globalThis.fetch = originalFetch;

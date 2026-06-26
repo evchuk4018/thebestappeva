@@ -137,6 +137,13 @@ export interface NutritionBootstrap {
   recentItemNames: string[];
 }
 
+export interface NutritionHistoryQuery {
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}
+
 function record(value: unknown, field: string) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Invalid ${field}. Expected an object.`);
   return value as Record<string, unknown>;
@@ -153,9 +160,21 @@ function numeric(value: unknown, field: string, minimum = 0) {
   return number;
 }
 
+function integer(value: unknown, field: string, minimum = 1) {
+  const number = numeric(value, field, minimum);
+  if (!Number.isInteger(number)) throw new Error(`Invalid ${field}. Expected an integer >= ${minimum}.`);
+  return number;
+}
+
 function iso(value: unknown, field: string) {
   const text = nonEmpty(value, field);
   if (Number.isNaN(Date.parse(text))) throw new Error(`Invalid ${field}. Expected an ISO timestamp.`);
+  return text;
+}
+
+function dateOnly(value: unknown, field: string) {
+  const text = nonEmpty(value, field);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error(`Invalid ${field}. Expected YYYY-MM-DD.`);
   return text;
 }
 
@@ -242,4 +261,27 @@ export function parseNutritionGoalsInput(value: unknown, field = 'Nutrition goal
     carbsTargetG: numeric(item.carbsTargetG, `${field}.carbsTargetG`),
     fatTargetG: numeric(item.fatTargetG, `${field}.fatTargetG`),
   };
+}
+
+export function parseNutritionHistoryQuery(value: unknown, field = 'Nutrition history query'): NutritionHistoryQuery {
+  const item = record(value, field);
+  const date = typeof item.date === 'string' && item.date.trim() ? dateOnly(item.date, `${field}.date`) : undefined;
+  const startDate = typeof item.startDate === 'string' && item.startDate.trim() ? dateOnly(item.startDate, `${field}.startDate`) : undefined;
+  const endDate = typeof item.endDate === 'string' && item.endDate.trim() ? dateOnly(item.endDate, `${field}.endDate`) : undefined;
+  const limit = item.limit === undefined || item.limit === null || item.limit === '' ? undefined : integer(item.limit, `${field}.limit`);
+
+  if (date && (startDate || endDate)) {
+    throw new Error(`Invalid ${field}. Provide either date or startDate/endDate, not both.`);
+  }
+  if (!date && Boolean(startDate) !== Boolean(endDate)) {
+    throw new Error(`Invalid ${field}. Provide both startDate and endDate together.`);
+  }
+  if (!date && !startDate && !endDate) {
+    throw new Error(`Invalid ${field}. Provide either date or startDate/endDate.`);
+  }
+  if (startDate && endDate && endDate < startDate) {
+    throw new Error(`Invalid ${field}.endDate. Expected a date on or after startDate.`);
+  }
+
+  return { date, startDate, endDate, limit };
 }

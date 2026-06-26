@@ -4,6 +4,7 @@ import {
   parseNutritionDiaryEntryInput,
   parseNutritionFoodInput,
   parseNutritionGoalsInput,
+  parseNutritionHistoryQuery,
   parseNutritionRecipeInput,
 } from './nutrition-contract';
 
@@ -67,4 +68,16 @@ test('rejects invalid diary units', () => {
     () => parseNutritionDiaryEntryInput({ loggedAt: '2026-06-24T12:00:00.000Z', items: [{ itemType: 'food', itemId: 'food_apple', quantity: 1, unit: 'cup' }] }),
     /Expected "gram" or "serving"/,
   );
+});
+
+test('parses nutrition history queries for exact dates and ranges', () => {
+  assert.deepEqual(parseNutritionHistoryQuery({ date: '2026-06-24', limit: 5 }), { date: '2026-06-24', startDate: undefined, endDate: undefined, limit: 5 });
+  assert.deepEqual(parseNutritionHistoryQuery({ startDate: '2026-06-20', endDate: '2026-06-24' }), { date: undefined, startDate: '2026-06-20', endDate: '2026-06-24', limit: undefined });
+});
+
+test('rejects invalid nutrition history queries', () => {
+  assert.throws(() => parseNutritionHistoryQuery({}), /Provide either date or startDate\/endDate/);
+  assert.throws(() => parseNutritionHistoryQuery({ date: '2026-06-24', startDate: '2026-06-20', endDate: '2026-06-24' }), /either date or startDate\/endDate/);
+  assert.throws(() => parseNutritionHistoryQuery({ startDate: '2026-06-24' }), /Provide both startDate and endDate together/);
+  assert.throws(() => parseNutritionHistoryQuery({ startDate: '2026-06-25', endDate: '2026-06-24' }), /on or after startDate/);
 });
