@@ -66,7 +66,7 @@ export function useOllamaModelState({
       return config;
     } catch (error) {
       setAvailability('unavailable');
-      setLastError(error instanceof Error ? error.message : 'Unable to reach the local AI server.');
+      setLastError(error instanceof Error ? error.message : 'Unable to load AI runtime configuration.');
       return null;
     }
   }

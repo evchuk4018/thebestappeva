@@ -2,51 +2,7 @@ import { normalizeOllamaError, OllamaClientError } from './common';
 import type { OllamaChatMessage, OllamaChatStreamEvent, OllamaChatToolCalls, OllamaToolDefinition } from './common';
 import type { ModelProvider } from '../../../shared/ai-runtime-contract';
 import type { RuntimeOptions } from './common';
-
-function parseJsonLine<T>(value: string) {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    throw new OllamaClientError('The local AI server returned invalid JSON.', 'response');
-  }
-}
-
-async function readJsonStream<T>(response: Response, onChunk: (chunk: T) => void) {
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new OllamaClientError(payload?.error?.trim() || `The local AI server failed with ${response.status}.`, 'response');
-  }
-
-  if (!response.body) {
-    throw new OllamaClientError('The local AI server did not return a readable response body.', 'response');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed) {
-        onChunk(parseJsonLine<T>(trimmed));
-      }
-    }
-  }
-
-  if (buffer.trim()) {
-    onChunk(parseJsonLine<T>(buffer.trim()));
-  }
-}
+import { streamJsonLines } from '../api';
 
 export async function streamChatWithModel(
   model: string,
@@ -61,28 +17,14 @@ export async function streamChatWithModel(
   } = {},
 ) {
   try {
-    const response = await fetch('/api/ai/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: options.signal,
-      body: JSON.stringify({
-        provider: options.provider ?? 'ollama',
-        model,
-        think: options.think,
-        messages,
-        tools: options.tools?.length ? options.tools : undefined,
-        runtimeOptions: options.runtimeOptions,
-      }),
-    });
-
     let replyModel = model;
     let content = '';
     let thinking = '';
     let toolCalls: OllamaChatToolCalls | undefined;
 
-    await readJsonStream<OllamaChatStreamEvent>(response, (event) => {
+    await streamJsonLines<OllamaChatStreamEvent>('/ai/chat/stream', (event) => {
       if (event.type === 'error') {
-        throw new OllamaClientError(event.error.trim() || 'The local AI server failed during streaming.', 'response');
+        throw new OllamaClientError(event.error.trim() || 'The AI API failed during streaming.', 'response');
       }
 
       replyModel = event.model ?? replyModel;
@@ -96,6 +38,17 @@ export async function streamChatWithModel(
         toolCalls = event.toolCalls;
       }
       options.onEvent?.(event);
+    }, {
+      method: 'POST',
+      signal: options.signal,
+      json: {
+        provider: options.provider ?? 'ollama',
+        model,
+        think: options.think,
+        messages,
+        tools: options.tools?.length ? options.tools : undefined,
+        runtimeOptions: options.runtimeOptions,
+      },
     });
 
     return {
@@ -105,7 +58,7 @@ export async function streamChatWithModel(
       toolCalls,
     };
   } catch (error) {
-    throw normalizeOllamaError(error, 'Unable to reach the local AI server.');
+    throw normalizeOllamaError(error, 'Unable to reach the AI API.');
   }
 }
 

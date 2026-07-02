@@ -198,7 +198,7 @@ export function useDocsRewrite(editor: Editor | null) {
         return;
       }
 
-      setError(cause instanceof Error ? cause.message : 'The local rewrite request failed.');
+      setError(cause instanceof Error ? cause.message : 'The rewrite request failed.');
       setStatus(pendingRewriteRef.current ? 'preview' : 'error');
     } finally {
       if (abortControllerRef.current === controller) {

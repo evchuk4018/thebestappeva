@@ -13,96 +13,80 @@ import type {
   NutritionSearchItem,
 } from '../../../shared/nutrition-contract';
 import { parseNutritionAiFoodLogResponse, type NutritionAiFoodLogResponse } from '../../../shared/nutrition-ai-food-log-contract';
-
-async function readJson(response: Response) {
-  const payload = await response.json().catch(() => ({ error: 'The local server returned invalid JSON.' }));
-  if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : `Request failed with ${response.status}.`);
-  return payload;
-}
-
-async function json(path: string, init?: RequestInit) {
-  return readJson(await fetch(path, { headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }, ...init }));
-}
-
-function query(path: string, params: Record<string, string | number | null | undefined>) {
-  const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
-  const url = new URL(path, baseUrl);
-  Object.entries(params).forEach(([key, value]) => { if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, String(value)); });
-  return `${url.pathname}${url.search}`;
-}
+import { requestJson } from '../../lib/api';
 
 export async function fetchNutritionBootstrap(date: string): Promise<NutritionBootstrap> {
-  return json(query('/api/nutrition/bootstrap', { date }));
+  return requestJson('/nutrition/bootstrap', { query: { date } });
 }
 
 export async function searchNutritionItems(queryText: string, loggedAt: string): Promise<NutritionSearchItem[]> {
-  return (await json(query('/api/nutrition/search', { query: queryText, loggedAt }))).items ?? [];
+  return (await requestJson<{ items?: NutritionSearchItem[] }>('/nutrition/search', { query: { query: queryText, loggedAt } })).items ?? [];
 }
 
 export async function analyzeNutritionFoodImage(attachmentId: string, loggedAt: string): Promise<NutritionAiFoodLogResponse> {
-  return parseNutritionAiFoodLogResponse(await json('/api/nutrition/ai-food-log', {
+  return parseNutritionAiFoodLogResponse(await requestJson('/nutrition/ai-food-log', {
     method: 'POST',
-    body: JSON.stringify({ attachmentId, loggedAt }),
+    json: { attachmentId, loggedAt },
   }));
 }
 
 export async function fetchNutritionGoals(): Promise<NutritionGoals> {
-  return (await json('/api/nutrition/goals')).item;
+  return (await requestJson<{ item: NutritionGoals }>('/nutrition/goals')).item;
 }
 
 export async function saveNutritionGoals(input: NutritionGoalsInput): Promise<NutritionGoals> {
-  return (await json('/api/nutrition/goals', { method: 'PUT', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionGoals }>('/nutrition/goals', { method: 'PUT', json: input })).item;
 }
 
 export async function fetchNutritionRecipes(): Promise<NutritionRecipe[]> {
-  return (await json('/api/nutrition/recipes')).items ?? [];
+  return (await requestJson<{ items?: NutritionRecipe[] }>('/nutrition/recipes')).items ?? [];
 }
 
 export async function createNutritionBrandFood(input: NutritionFoodInput): Promise<NutritionFood> {
-  return (await json('/api/nutrition/foods/brands', { method: 'POST', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionFood }>('/nutrition/foods/brands', { method: 'POST', json: input })).item;
 }
 
 export async function updateNutritionBrandFood(foodId: string, input: NutritionFoodInput): Promise<NutritionFood> {
-  return (await json(`/api/nutrition/foods/brands/${foodId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionFood }>(`/nutrition/foods/brands/${foodId}`, { method: 'PUT', json: input })).item;
 }
 
 export async function createNutritionRecipe(input: NutritionRecipeInput): Promise<NutritionRecipe> {
-  return (await json('/api/nutrition/recipes', { method: 'POST', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionRecipe }>('/nutrition/recipes', { method: 'POST', json: input })).item;
 }
 
 export async function updateNutritionRecipe(recipeId: string, input: NutritionRecipeInput): Promise<NutritionRecipe> {
-  return (await json(`/api/nutrition/recipes/${recipeId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionRecipe }>(`/nutrition/recipes/${recipeId}`, { method: 'PUT', json: input })).item;
 }
 
 export async function createNutritionEntry(input: NutritionDiaryEntryInput): Promise<NutritionDiaryEntry> {
-  return (await json('/api/nutrition/entries', { method: 'POST', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionDiaryEntry }>('/nutrition/entries', { method: 'POST', json: input })).item;
 }
 
 export async function fetchNutritionHistory(history: NutritionHistoryQuery): Promise<NutritionDiaryEntry[]> {
-  return (await json(query('/api/nutrition/history', {
+  return (await requestJson<{ entries?: NutritionDiaryEntry[] }>('/nutrition/history', { query: {
     date: history.date,
     startDate: history.startDate,
     endDate: history.endDate,
     limit: history.limit,
-  }))).entries ?? [];
+  } })).entries ?? [];
 }
 
 export async function updateNutritionEntry(entryId: string, input: NutritionDiaryEntryInput): Promise<NutritionDiaryEntry> {
-  return (await json(`/api/nutrition/entries/${entryId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionDiaryEntry }>(`/nutrition/entries/${entryId}`, { method: 'PUT', json: input })).item;
 }
 
 export async function deleteNutritionEntry(entryId: string): Promise<void> {
-  await json(`/api/nutrition/entries/${entryId}`, { method: 'DELETE' });
+  await requestJson(`/nutrition/entries/${entryId}`, { method: 'DELETE' });
 }
 
 export async function appendNutritionEntryItem(entryId: string, input: NutritionDiaryItemInput): Promise<NutritionDiaryEntry> {
-  return (await json(`/api/nutrition/entries/${entryId}/items`, { method: 'POST', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionDiaryEntry }>(`/nutrition/entries/${entryId}/items`, { method: 'POST', json: input })).item;
 }
 
 export async function updateNutritionEntryItem(entryId: string, itemId: string, input: NutritionDiaryItemInput): Promise<NutritionDiaryEntry> {
-  return (await json(`/api/nutrition/entries/${entryId}/items/${itemId}`, { method: 'PUT', body: JSON.stringify(input) })).item;
+  return (await requestJson<{ item: NutritionDiaryEntry }>(`/nutrition/entries/${entryId}/items/${itemId}`, { method: 'PUT', json: input })).item;
 }
 
 export async function deleteNutritionEntryItem(entryId: string, itemId: string): Promise<void> {
-  await json(`/api/nutrition/entries/${entryId}/items/${itemId}`, { method: 'DELETE' });
+  await requestJson(`/nutrition/entries/${entryId}/items/${itemId}`, { method: 'DELETE' });
 }

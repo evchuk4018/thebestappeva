@@ -1,4 +1,5 @@
 import type { PythonExecGeneratedFile } from './tools/python-exec-contract';
+import { resolveApiAssetUrl } from '../../lib/api';
 
 function parseCsv(text: string): string[][] {
   return text
@@ -65,7 +66,7 @@ function DataTable({ rows }: { rows: string[][] }) {
 }
 
 function GeneratedImage({ file }: { file: PythonExecGeneratedFile }) {
-  const src = file.downloadUrl ?? '';
+  const src = resolveApiAssetUrl(file.downloadUrl);
   if (!src) {
     return null;
   }
@@ -97,7 +98,7 @@ function GeneratedFileCard({ file }: { file: PythonExecGeneratedFile }) {
 }
 
 function FileDownloadRow({ file }: { file: PythonExecGeneratedFile }) {
-  const href = file.downloadUrl ?? '';
+  const href = resolveApiAssetUrl(file.downloadUrl);
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-[#232320] bg-[#11110f] px-2 py-1.5">
       <span className="truncate font-mono text-[11px] text-zinc-300">{file.path}</span>

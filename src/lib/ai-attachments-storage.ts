@@ -16,36 +16,7 @@ import {
   parseAiPdfPagesPayload,
   parseAiPdfSearchPayload,
 } from '../../shared/ai-pdf-reader-contract';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function buildInvalidApiResponseMessage(rawBody: string) {
-  const detail = /^\s*</.test(rawBody) ? 'HTML instead of JSON' : 'an invalid JSON response';
-  return `The local API returned ${detail}. Restart the development server so its routes match the loaded app.`;
-}
-
-async function readJsonResponse(response: Response) {
-  const rawBody = await response.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    throw new Error(buildInvalidApiResponseMessage(rawBody));
-  }
-
-  const error = isRecord(payload) && typeof payload.error === 'string' ? payload.error.trim() : '';
-  if (!response.ok) {
-    throw new Error(error || `The local server failed with ${response.status}.`);
-  }
-
-  if (isRecord(payload) && payload.ok === false) {
-    throw new Error(error || 'The local API reported an unsuccessful response.');
-  }
-
-  return payload;
-}
+import { readJsonTextResponse, requestApi } from './api';
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = '';
@@ -99,58 +70,52 @@ async function readImageDimensions(file: File) {
 
 export async function parseAiAttachmentFile(file: File) {
   const dimensions = await readImageDimensions(file);
-  const response = await fetch('/api/ai/attachments/parse', {
+  const response = await requestApi('/ai/attachments/parse', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    json: {
       fileName: file.name,
       contentType: file.type || 'application/octet-stream',
       base64Data: arrayBufferToBase64(await file.arrayBuffer()),
       ...dimensions,
-    }),
+    },
   });
 
-  return parseAiParsedAttachment(await readJsonResponse(response));
+  return parseAiParsedAttachment(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiAttachment(attachmentId: string) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}`);
-  return parseAiParsedAttachment(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}`);
+  return parseAiParsedAttachment(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiAttachmentContext(attachmentId: string, query: string) {
-  const url = new URL(`/api/ai/attachments/${attachmentId}/context`, window.location.origin);
-  if (query.trim()) {
-    url.searchParams.set('query', query.trim());
-  }
-
-  const response = await fetch(url);
-  return parseAiAttachmentContextPayload(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}/context`, { query: { query: query.trim() || undefined } });
+  return parseAiAttachmentContextPayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function deleteAiAttachment(attachmentId: string) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}`, { method: 'DELETE' });
-  await readJsonResponse(response);
+  const response = await requestApi(`/ai/attachments/${attachmentId}`, { method: 'DELETE' });
+  await readJsonTextResponse(response, { rejectOkFalse: true });
 }
 
 export async function askAiImageQuestion(attachmentId: string, question: string, options: AiImageToolRequestOptions = {}) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-query`, {
+  const response = await requestApi(`/ai/attachments/${attachmentId}/image-query`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
-    body: JSON.stringify({ question }),
+    headers: buildImageRequestHeaders(options),
+    json: { question },
     signal: options.signal,
   });
 
-  return parseAiImageQueryPayload(await readJsonResponse(response));
+  return parseAiImageQueryPayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function describeAiImage(attachmentId: string, options: AiImageToolRequestOptions = {}) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-describe`, {
+  const response = await requestApi(`/ai/attachments/${attachmentId}/image-describe`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
+    headers: buildImageRequestHeaders(options),
     signal: options.signal,
   });
-  return parseAiImageDescribePayload(await readJsonResponse(response));
+  return parseAiImageDescribePayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function analyzeAiImage(
@@ -159,13 +124,13 @@ export async function analyzeAiImage(
   detail: AiImageAnalysisDetail = 'layout',
   options: AiImageToolRequestOptions = {},
 ) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-analysis`, {
+  const response = await requestApi(`/ai/attachments/${attachmentId}/image-analysis`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
-    body: JSON.stringify({ refresh, detail }),
+    headers: buildImageRequestHeaders(options),
+    json: { refresh, detail },
     signal: options.signal,
   });
-  return parseAiImageAnalysisPayload(await readJsonResponse(response));
+  return parseAiImageAnalysisPayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function compareAiGeneratedImage(
@@ -176,47 +141,36 @@ export async function compareAiGeneratedImage(
   maxIterations?: number,
   options: AiImageToolRequestOptions = {},
 ) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/image-compare`, {
+  const response = await requestApi(`/ai/attachments/${attachmentId}/image-compare`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...buildImageRequestHeaders(options) },
-    body: JSON.stringify({ format: 'svg', content, refresh, iteration, maxIterations }),
+    headers: buildImageRequestHeaders(options),
+    json: { format: 'svg', content, refresh, iteration, maxIterations },
     signal: options.signal,
   });
-  return parseAiImageComparePayload(await readJsonResponse(response));
+  return parseAiImageComparePayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiAttachmentHealth() {
-  const response = await fetch('/api/ai/attachments/health');
-  return parseAiAttachmentHealth(await readJsonResponse(response));
+  const response = await requestApi('/ai/attachments/health');
+  return parseAiAttachmentHealth(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function searchAiPdf(attachmentId: string, query: string, limit = 10) {
-  const url = new URL(`/api/ai/attachments/${attachmentId}/pdf/search`, window.location.origin);
-  url.searchParams.set('query', query);
-  url.searchParams.set('limit', String(limit));
-  const response = await fetch(url);
-  return parseAiPdfSearchPayload(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}/pdf/search`, { query: { query, limit } });
+  return parseAiPdfSearchPayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiPdfPage(attachmentId: string, pageNumber: number) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}`);
-  return parseAiPdfPagePayload(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}`);
+  return parseAiPdfPagePayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiPdfPages(attachmentId: string, startPage?: number, endPage?: number) {
-  const url = new URL(`/api/ai/attachments/${attachmentId}/pdf/pages`, window.location.origin);
-  if (typeof startPage === 'number') {
-    url.searchParams.set('startPage', String(startPage));
-  }
-  if (typeof endPage === 'number') {
-    url.searchParams.set('endPage', String(endPage));
-  }
-
-  const response = await fetch(url);
-  return parseAiPdfPagesPayload(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}/pdf/pages`, { query: { startPage, endPage } });
+  return parseAiPdfPagesPayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }
 
 export async function loadAiPdfPageImage(attachmentId: string, pageNumber: number) {
-  const response = await fetch(`/api/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}/image`);
-  return parseAiPdfPageImagePayload(await readJsonResponse(response));
+  const response = await requestApi(`/ai/attachments/${attachmentId}/pdf/pages/${pageNumber}/image`);
+  return parseAiPdfPageImagePayload(await readJsonTextResponse(response, { rejectOkFalse: true }));
 }

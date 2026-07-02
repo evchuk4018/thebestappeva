@@ -1,50 +1,29 @@
 # AGENTS.md
 
-High-signal notes for OpenCode sessions working in this repo. See `README.md` for feature docs and `agent.md` for the repo policy.
+- Keep this file aligned with `AGENTS.md`: OpenCode loads `AGENTS.md`, while `README.md` and `npm run test:files` still reference `agent.md`.
 
 ## Commands
 
-- `npm run dev` — starts Vite dev server via `tsx watch`. Auto-bootstraps SearXNG (Docker) and repo-local Ollama (`.local-bin/ollama`) on Windows; the app still starts if either fails. Default port 3000, falls through to next free port; set `PORT` in `.env`.
-- `npm run ai:dev` — strict AI-ready variant: requires Ollama + `qwen3.5:9b` + SearXNG readiness, else fails fast with instructions.
-- `npm run build` — `vite build` (client bundle into `dist/`).
-- `npm run preview` — runs built bundle through `server/index.ts --preview`. Does NOT auto-start Docker/Ollama.
-- `npm run lint` — `tsc --noEmit`. This is the only typecheck; there is no separate `typecheck` script.
-- `npm run test:files` — enforces the 300-line limit across `src/**` plus owned root files (`README.md`, `agent.md`, `index.html`, `metadata.json`, `package.json`, `tsconfig.json`, `vite.config.ts`, `public/manifest.json`, `.env.example`). Ignores `node_modules`, `dist`, `package-lock.json`, generated content.
-- `npm test` — runs `test:files` then `test:pdf-reader` (a curated `tsx --test` invocation over ~50 test files).
-- `npm run test:image-analysis-smoke` — standalone smoke test for the image-analysis sidecar path.
-- `npm run searxng:up` / `searxng:down` — manual SearXNG container control.
+- `npm run dev` starts the Node host in dev mode (`server/index.ts` + Vite middleware). It tries to bootstrap SearXNG, Ollama, and `python.exec`, but continues if those checks fail.
+- `npm run ai:dev` is the strict startup path: it requires Ollama model `qwen3.5:9b`, SearXNG, and `python.exec` readiness before the app starts.
+- `npm run lint` is `tsc --noEmit`; there is no separate ESLint or typecheck command.
+- `npm test` runs `test:files` plus a long hardcoded `tsx --test` file list. For focused work, run one file directly with `npx tsx --test path/to/file.test.ts`.
+- Production-style smoke test: `npm run build` then `npm run preview`. `preview` serves `dist/` through `server/index.ts --preview` and does not bootstrap Docker or Ollama.
+- Suggested verification order before handoff: `npm run test:files` -> `npm run lint` -> `npm run build`.
 
-### Running a single test
+## Boundaries
 
-Tests use the Node built-in runner through `tsx --test`. Run one file directly:
+- `src/App.tsx` is the route map for `/ai`, `/docs`, `/calendar`, `/workout`, and `/nutrition`; workspace code lives under `src/components/*`.
+- `server/app.ts` is the API wiring entrypoint. Add or change HTTP routes there, and keep storage logic in `server/db/*`.
+- `shared/*` is the client/server contract boundary. Update shared contracts when request or response shapes change.
+- Runtime data is local-first: SQLite lives at `.local-data/thebestappeva.sqlite`, with attachments and Python exec workspaces also under `.local-data/`.
 
-```
-npx tsx --test server/ai-memory.test.ts
-```
+## Gotchas
 
-The `test:pdf-reader` script is just a hardcoded list of `*.test.ts` paths passed to `tsx --test`; there is no glob/test-name filter, so prefer invoking individual files as above.
-
-### Suggested verification order before pushing
-
-`npm run test:files` -> `npm run lint` -> `npm run build`.
-
-## Layout
-
-- `src/` — React 19 client. Largest surfaces live under `src/components/ai-tab` (AI chat + tools + artifacts) and `src/components/task-manager`. Editor stack is TipTap; rich text rendering via `react-markdown` + KaTeX.
-- `server/` — Express app (`server/app.ts`) started by `server/index.ts`. Hosts `/api/*` endpoints, serves Vite in dev, and owns SQLite via `better-sqlite3`.
-- `shared/` — contract tests and types shared between client and server; treat as the integration boundary.
-- `python/` — sidecars invoked by the server: `docling_sidecar.py` (PDF/DOCX/XLSX), `image_analysis_sidecar.py` (persistent OpenCV/RapidOCR worker), `exec_sidecar.py` (sandboxed `python.exec` tool). On Windows the server defaults to `py -3`; override per sidecar with the `AI_PARSER_PYTHON_*`, `AI_IMAGE_ANALYSIS_PYTHON_*`, `AI_PYTHON_EXEC_*` env vars.
-- `scripts/bootstrap/` — dev runtime bootstrapping (Ollama, SearXNG, app server). `scripts/check-file-lengths.mjs` backs the 300-line rule.
-- `.local-data/` — SQLite DB (`thebestappeva.sqlite`) and AI attachment storage; gitignored, regenerated at runtime.
-- `.local-bin/` — repo-local Ollama install on Windows; gitignored.
-
-## Conventions and gotchas
-
-- Path alias `@/*` maps to repo root (configured in `tsconfig.json`); use it for cross-package imports.
-- Authored project files must stay at or below 300 lines (see `agent.md` and `test:files`). New files in `src/**` are automatically subject to the check; root-level authored files must be added to `ROOT_FILES` in `scripts/check-file-lengths.mjs` to be checked.
-- `lint` is `tsc --noEmit` only — no ESLint/biome. Type errors are the gate; match existing formatting style manually.
-- Tailwind v4 is wired through `@tailwindcss/vite` (see `vite.shared.ts` / `vite.config.ts`), not a PostCSS config.
-- Secrets stay server-side: `DEEPSEEK_API_KEY`, `GEMINI_API_KEY` live in `.env` and are never exposed to the browser. Provider/model/vision-mode selection mirrors server-side but is sourced from browser localStorage on the client.
-- AI tooling is optional at runtime: `npm run dev` degrades gracefully without Ollama/Docker; only `/ai` features and web-search become unavailable. Don't assume sidecar or container availability in tests.
-- Tests intentionally do not require Docker/Ollama/Python; they exercise contracts and pure logic. Keep that property when adding tests.
-- `package.json` `name` is `react-example` (legacy); the real project name is `thebestappeva`.
+- `@/` resolves to the repo root, not `src/`.
+- The 300-line rule is enforced by `scripts/check-file-lengths.mjs` only for `src/**` plus specific root files; `server/**` and `python/**` are not checked by that script.
+- `vite.shared.ts` disables HMR and file watching when `DISABLE_HMR=true`; keep that path intact because it is used during agent edits.
+- Python sidecars default to `py -3` on Windows and `python3` elsewhere. Install `python/requirements-docling.txt` for document parsing and image-analysis support.
+- Keep tests service-independent: the current test suite is written not to require Docker, Ollama, or local Python availability.
+- Update docs when behavior, developer workflow, or repo structure changes.
+- Never use the browser tool as visual verification for this repo.

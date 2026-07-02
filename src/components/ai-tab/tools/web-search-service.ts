@@ -25,21 +25,7 @@ interface FetchUrlResponse extends Record<string, unknown> {
   title: string;
   truncated: boolean;
 }
-
-async function readApiResponse<T>(url: URL, signal?: AbortSignal) {
-  const response = await fetch(url, { signal });
-  const payload = (await response.json().catch(() => null)) as { error?: string } & Partial<T> | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.trim() || `Local request failed with ${response.status}.`);
-  }
-
-  if (!payload) {
-    throw new Error('The local server returned an empty response.');
-  }
-
-  return payload as T;
-}
+import { requestJson } from '../../../lib/api';
 
 export async function searchWeb(params: {
   categories?: string;
@@ -48,26 +34,17 @@ export async function searchWeb(params: {
   signal?: AbortSignal;
   timeRange?: string;
 }) {
-  const url = new URL('/api/web-search', window.location.origin);
-  url.searchParams.set('query', params.query);
-
-  if (params.categories) {
-    url.searchParams.set('categories', params.categories);
-  }
-
-  if (params.timeRange) {
-    url.searchParams.set('timeRange', params.timeRange);
-  }
-
-  if (typeof params.maxResults === 'number') {
-    url.searchParams.set('maxResults', String(params.maxResults));
-  }
-
-  return readApiResponse<WebSearchResponse>(url, params.signal);
+  return requestJson<WebSearchResponse>('/web-search', {
+    query: {
+      query: params.query,
+      categories: params.categories,
+      timeRange: params.timeRange,
+      maxResults: params.maxResults,
+    },
+    signal: params.signal,
+  });
 }
 
 export async function fetchUrl(params: { signal?: AbortSignal; url: string }) {
-  const requestUrl = new URL('/api/fetch-url', window.location.origin);
-  requestUrl.searchParams.set('url', params.url);
-  return readApiResponse<FetchUrlResponse>(requestUrl, params.signal);
+  return requestJson<FetchUrlResponse>('/fetch-url', { query: { url: params.url }, signal: params.signal });
 }

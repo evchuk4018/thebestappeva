@@ -9,7 +9,7 @@ test('reports stale HTML API responses before contract parsing', async () => {
   try {
     await assert.rejects(
       () => loadAiPdfPage('pdf-1', 1),
-      /local API returned HTML instead of JSON.*Restart the development server/,
+      /API returned HTML instead of JSON.*app and API may be out of sync/i,
     );
   } finally {
     globalThis.fetch = originalFetch;
