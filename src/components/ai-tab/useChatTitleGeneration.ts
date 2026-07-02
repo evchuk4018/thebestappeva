@@ -1,19 +1,19 @@
 import { Dispatch, SetStateAction, useEffect, useRef } from 'react';
-import type { Chat, OllamaModel } from './types';
+import type { Chat, RuntimeProviderOption } from './types';
 import {
   finalizeChatTitleGeneration,
   getChatTitleGenerationCandidate,
-  hasChatTitleModel,
+  resolveChatTitleGenerationModel,
   requestGeneratedChatTitle,
 } from './chat-title-generation';
 
 interface UseChatTitleGenerationOptions {
-  availableModels: OllamaModel[];
+  providerOptions: RuntimeProviderOption[];
   chats: Chat[];
   setChats: Dispatch<SetStateAction<Chat[]>>;
 }
 
-export function useChatTitleGeneration({ availableModels, chats, setChats }: UseChatTitleGenerationOptions) {
+export function useChatTitleGeneration({ providerOptions, chats, setChats }: UseChatTitleGenerationOptions) {
   const inFlightChatIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -26,8 +26,8 @@ export function useChatTitleGeneration({ availableModels, chats, setChats }: Use
       return;
     }
 
-    const modelAvailable = hasChatTitleModel(availableModels);
-    if (!modelAvailable) {
+    const model = resolveChatTitleGenerationModel(providerOptions);
+    if (!model) {
       setChats((currentChats) =>
         currentChats.map((chat) => {
           const candidate = candidates.find((currentCandidate) => currentCandidate.chatId === chat.id);
@@ -39,7 +39,7 @@ export function useChatTitleGeneration({ availableModels, chats, setChats }: Use
 
     for (const candidate of candidates) {
       inFlightChatIdsRef.current.add(candidate.chatId);
-      void requestGeneratedChatTitle(candidate)
+      void requestGeneratedChatTitle(candidate, model)
         .then((generatedTitle) => {
           setChats((currentChats) =>
             currentChats.map((chat) =>
@@ -51,5 +51,5 @@ export function useChatTitleGeneration({ availableModels, chats, setChats }: Use
           inFlightChatIdsRef.current.delete(candidate.chatId);
         });
     }
-  }, [availableModels, chats, setChats]);
+  }, [chats, providerOptions, setChats]);
 }

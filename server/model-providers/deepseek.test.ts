@@ -76,6 +76,29 @@ test('DeepSeek status reports the endpoint as unavailable when model discovery f
   assert.equal(status.models.length, 0);
 });
 
+test('DeepSeek requests explicitly disable thinking when think is false', async () => {
+  serverConfig.deepseekApiKey = 'super-secret-key';
+
+  let requestBody: Record<string, unknown> | null = null;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return jsonResponse({
+      model: 'deepseek-v4-flash',
+      choices: [{ message: { content: 'ok' } }],
+    });
+  };
+
+  const { createDeepSeekProvider } = await import('./deepseek');
+  const provider = createDeepSeekProvider();
+  await provider.callChatStream({
+    model: 'deepseek-v4-flash',
+    messages: [{ role: 'user', content: 'hi' }],
+    think: false,
+  });
+
+  assert.deepEqual(requestBody?.thinking, { type: 'disabled' });
+});
+
 test('DeepSeek tool deltas stay silent until the accumulated arguments parse successfully', () => {
   const pending = applyDeepSeekToolCallDeltas([], [
     { index: 0, id: 'tool-1', function: { name: 'list_recent_chats', arguments: '{"limit":' } },

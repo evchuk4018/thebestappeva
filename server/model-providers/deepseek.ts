@@ -16,6 +16,10 @@ const deepSeekModelAliases: Record<string, string> = {
 };
 const nonStreamingToolModels = new Set<string>();
 
+export function getDeepSeekDefaultModelName() {
+  return deepSeekModelOrder[0] ?? null;
+}
+
 interface DeepSeekModelsResponse {
   data?: Array<{ id?: unknown; name?: unknown }>;
   models?: Array<{ id?: unknown; name?: unknown }>;

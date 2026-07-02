@@ -148,7 +148,7 @@ function createChatSummaryTool(options: ChatContextToolOptions): ToolRegistryEnt
       id: 'chat-summary',
       label: 'Chat Summary',
       alias: '/chat-summary',
-      description: 'Loads one saved chat summary, generating it through the local memory-refresh flow when needed.',
+      description: 'Loads one saved chat summary, generating it through the background memory-refresh flow when needed.',
       enabledByDefault: true,
       functions: [
         {

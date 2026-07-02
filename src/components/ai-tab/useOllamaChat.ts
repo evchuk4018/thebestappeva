@@ -64,7 +64,7 @@ export function useOllamaChat() {
     setAvailability,
     setLastError,
   } = useOllamaModelState({ currentModel, currentProvider, hydrationStatus, setCurrentModel, setCurrentProvider });
-useChatTitleGeneration({ availableModels, chats, setChats });
+  useChatTitleGeneration({ providerOptions: runtimeConfig?.providerOptions ?? [], chats, setChats });
   const autoMemoryRefresh = useAutoMemoryRefresh({ getChats, getGeneratedUserMemory, getWorkspaceSnapshot, flushWorkspace, setGeneratedUserMemory, setChats });
   const skillsHook = useSkills();
   const automationsHook = useAutomations();

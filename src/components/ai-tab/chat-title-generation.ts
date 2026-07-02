@@ -1,8 +1,7 @@
 import { createChatTitle } from './helpers';
 import { streamChatWithModel } from './ollama-client';
-import type { Chat, OllamaModel } from './types';
+import type { Chat, RuntimeProviderOption } from './types';
 
-export const CHAT_TITLE_MODEL = 'qwen3.5:0.8b-q8_0';
 export const CHAT_TITLE_MAX_CHARS = 48;
 export const CHAT_TITLE_MAX_OUTPUT_TOKENS = 24;
 
@@ -135,20 +134,20 @@ export function finalizeChatTitleGeneration(
   };
 }
 
-export function hasChatTitleModel(models: OllamaModel[]) {
-  return models.some((model) => model.provider === 'ollama' && model.name === CHAT_TITLE_MODEL);
+export function resolveChatTitleGenerationModel(providerOptions: RuntimeProviderOption[]) {
+  return providerOptions.find((option) => option.value === 'deepseek')?.defaultModel ?? null;
 }
 
-export async function requestGeneratedChatTitle(candidate: ChatTitleGenerationCandidate) {
+export async function requestGeneratedChatTitle(candidate: ChatTitleGenerationCandidate, model: string) {
   try {
     const reply = await streamChatWithModel(
-      CHAT_TITLE_MODEL,
+      model,
       [
         { role: 'system', content: TITLE_SYSTEM_PROMPT },
         { role: 'user', content: candidate.prompt },
       ],
       {
-        provider: 'ollama',
+        provider: 'deepseek',
         think: false,
         runtimeOptions: {
           maxOutputTokens: CHAT_TITLE_MAX_OUTPUT_TOKENS,

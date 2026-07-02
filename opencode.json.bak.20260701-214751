@@ -1,0 +1,32 @@
+﻿{
+"$schema": "https://opencode.ai/config.json",
+"model": "hfglm/zai-org/GLM-5.2:together",
+"small_model": "hfglm/zai-org/GLM-5.2:together",
+"enabled_providers": ["hfglm"],
+"provider": {
+"hfglm": {
+"npm": "@ai-sdk/openai-compatible",
+"name": "Hugging Face GLM-5.2",
+"options": {
+"baseURL": "https://router.huggingface.co/v1"
+},
+"models": {
+"zai-org/GLM-5.2:together": {
+"name": "GLM-5.2 Together",
+"limit": {
+"context": 262144,
+"output": 32768
+},
+"options": {
+"reasoningEffort": "high"
+},
+"variants": {
+"high": {
+"reasoningEffort": "high"
+}
+}
+}
+}
+}
+}
+}

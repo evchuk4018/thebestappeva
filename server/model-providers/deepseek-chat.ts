@@ -71,7 +71,7 @@ function buildRequestBody(options: ProviderChatOptions, stream: boolean) {
     tools: options.tools?.length ? options.tools : undefined,
     max_tokens: options.runtimeOptions?.maxOutputTokens,
     temperature: options.runtimeOptions?.temperature,
-    thinking: options.think ? { type: 'enabled' } : undefined,
+    thinking: options.think ? { type: 'enabled' } : { type: 'disabled' },
   };
 }
 

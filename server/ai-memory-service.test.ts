@@ -53,17 +53,15 @@ test('extractLatestCompletedExchange returns the latest complete user-assistant 
 test('memory service preserves prior values when the background calls fail or return empty text', async () => {
   const { state, repository } = createRepository();
   let calls = 0;
+  const seenOptions: Array<{ model: string; think: boolean | undefined }> = [];
   const provider = {
-    getStatus: async () => ({
-      option: { value: 'ollama' as const, label: 'Ollama', configured: true, status: 'ready' as const, detail: 'ok', defaultModel: null, defaultModelLabel: null },
-      models: [{ name: 'qwen3.5:9b', provider: 'ollama' as const }],
-    }),
-    callChatStream: async () => {
+    callChatStream: async ({ model, think }: { model: string; think?: boolean }) => {
       calls += 1;
+      seenOptions.push({ model, think });
       if (calls === 1) {
         throw new Error('boom');
       }
-      return { model: 'qwen3.5:9b', content: 'The selected model returned an empty response.' };
+      return { model: 'deepseek-v4-flash', content: 'The selected model returned an empty response.' };
     },
   };
 
@@ -74,21 +72,23 @@ test('memory service preserves prior values when the background calls fail or re
   assert.equal(payload.memoryUpdated, false);
   assert.equal(payload.summaryUpdated, false);
   assert.equal(state.memory, 'Likes concise replies.');
+  assert.deepEqual(seenOptions, [
+    { model: 'deepseek-v4-flash', think: false },
+    { model: 'deepseek-v4-flash', think: false },
+  ]);
 });
 
 test('memory service saves successful memory and summary rewrites', async () => {
   const { state, repository } = createRepository();
   let calls = 0;
+  const seenOptions: Array<{ model: string; think: boolean | undefined }> = [];
   const provider = {
-    getStatus: async () => ({
-      option: { value: 'ollama' as const, label: 'Ollama', configured: true, status: 'ready' as const, detail: 'ok', defaultModel: null, defaultModelLabel: null },
-      models: [{ name: 'qwen3.5:9b', provider: 'ollama' as const }],
-    }),
-    callChatStream: async () => {
+    callChatStream: async ({ model, think }: { model: string; think?: boolean }) => {
       calls += 1;
+      seenOptions.push({ model, think });
       return calls === 1
-        ? { model: 'qwen3.5:9b', content: 'Prefers concise replies.\n\nPlanning a move to Boston.' }
-        : { model: 'qwen3.5:9b', content: 'The chat covers a Boston move.\n\nThe user asked for shorter replies.' };
+        ? { model: 'deepseek-v4-flash', content: 'Prefers concise replies.\n\nPlanning a move to Boston.' }
+        : { model: 'deepseek-v4-flash', content: 'The chat covers a Boston move.\n\nThe user asked for shorter replies.' };
     },
   };
 
@@ -99,6 +99,10 @@ test('memory service saves successful memory and summary rewrites', async () => 
   assert.equal(payload.summaryUpdatedAt, '2026-06-12T01:00:00.000Z');
   assert.equal(state.memory, 'Prefers concise replies.\n\nPlanning a move to Boston.');
   assert.equal(state.chat.summary, 'The chat covers a Boston move.\n\nThe user asked for shorter replies.');
+  assert.deepEqual(seenOptions, [
+    { model: 'deepseek-v4-flash', think: false },
+    { model: 'deepseek-v4-flash', think: false },
+  ]);
 });
 
 test('memory service propagates aborts without persisting partial refreshes', async () => {
@@ -110,12 +114,10 @@ test('memory service propagates aborts without persisting partial refreshes', as
     resolveStarted = resolve;
   });
   const provider = {
-    getStatus: async () => ({
-      option: { value: 'ollama' as const, label: 'Ollama', configured: true, status: 'ready' as const, detail: 'ok', defaultModel: null, defaultModelLabel: null },
-      models: [{ name: 'qwen3.5:9b', provider: 'ollama' as const }],
-    }),
-    callChatStream: async ({ signal }: { signal?: AbortSignal }) => {
+    callChatStream: async ({ signal, model, think }: { signal?: AbortSignal; model: string; think?: boolean }) => {
       sawSignal = signal === controller.signal;
+      assert.equal(model, 'deepseek-v4-flash');
+      assert.equal(think, false);
       resolveStarted();
       return await new Promise<never>((_resolve, reject) => {
         signal?.addEventListener('abort', () => reject(signal.reason), { once: true });

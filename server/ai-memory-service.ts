@@ -3,10 +3,8 @@ import type { ModelChatMessage } from '../shared/ai-runtime-contract';
 import type { AssistantMessage, Chat, UserMessage } from '../shared/ai-workspace-contract';
 import { HttpError } from './http';
 import { createAiWorkspaceRepository } from './db/ai-workspace-repository';
-import { createOllamaProvider } from './model-providers/ollama';
+import { createDeepSeekProvider, getDeepSeekDefaultModelName } from './model-providers/deepseek';
 import type { ModelProviderDefinition } from './model-providers/types';
-
-const backgroundModel = 'qwen3.5:9b';
 
 interface LatestExchange {
   userMessage: UserMessage;
@@ -20,7 +18,7 @@ interface MemoryRepository {
   updateChatSummary: (chatId: string, summary: string, summaryUpdatedAt: string | null) => Chat | null;
 }
 
-type MemoryModelProvider = Pick<ModelProviderDefinition, 'getStatus' | 'callChatStream'>;
+type MemoryModelProvider = Pick<ModelProviderDefinition, 'callChatStream'>;
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
@@ -89,9 +87,12 @@ function buildSummaryMessages(priorSummary: string, exchange: LatestExchange): M
   ];
 }
 
-async function isBackgroundModelAvailable(provider: MemoryModelProvider) {
-  const status = await provider.getStatus();
-  return status.option.status === 'ready' && status.models.some((model) => model.name === backgroundModel);
+function resolveBackgroundModel() {
+  const model = getDeepSeekDefaultModelName();
+  if (!model) {
+    throw new Error('No DeepSeek background model is configured.');
+  }
+  return model;
 }
 
 function isMeaningfulGeneratedText(value: string) {
@@ -101,15 +102,16 @@ function isMeaningfulGeneratedText(value: string) {
 
 async function rewriteBoundedNote(
   provider: MemoryModelProvider,
+  model: string,
   messages: ModelChatMessage[],
   maxParagraphs: number,
   signal?: AbortSignal,
 ) {
   throwIfAborted(signal);
   const reply = await provider.callChatStream({
-    model: backgroundModel,
+    model,
     messages,
-    think: true,
+    think: false,
     signal,
   });
   throwIfAborted(signal);
@@ -137,7 +139,7 @@ export function extractLatestCompletedExchange(chat: Chat): LatestExchange | nul
 
 export function createAiMemoryService(
   repository: MemoryRepository = createAiWorkspaceRepository(),
-  provider: MemoryModelProvider = createOllamaProvider(),
+  provider: MemoryModelProvider = createDeepSeekProvider(),
   now: () => string = () => new Date().toISOString(),
 ) {
   return {
@@ -166,19 +168,7 @@ export function createAiMemoryService(
       }
 
       throwIfAborted(options.signal);
-      if (!(await isBackgroundModelAvailable(provider))) {
-        return {
-          chatId,
-          generatedUserMemory,
-          summary: priorSummary,
-          summaryUpdatedAt: priorSummaryUpdatedAt,
-          memoryUpdated: false,
-          summaryUpdated: false,
-          memoryError: `${backgroundModel} is unavailable in local Ollama.`,
-          summaryError: `${backgroundModel} is unavailable in local Ollama.`,
-        };
-      }
-
+      const backgroundModel = resolveBackgroundModel();
       let nextMemory = generatedUserMemory;
       let nextSummary = priorSummary;
       let nextSummaryUpdatedAt = priorSummaryUpdatedAt;
@@ -188,7 +178,13 @@ export function createAiMemoryService(
       let summaryError: string | undefined;
 
       try {
-        const rewrittenMemory = await rewriteBoundedNote(provider, buildMemoryMessages(generatedUserMemory, exchange), 2, options.signal);
+        const rewrittenMemory = await rewriteBoundedNote(
+          provider,
+          backgroundModel,
+          buildMemoryMessages(generatedUserMemory, exchange),
+          2,
+          options.signal,
+        );
         if (!rewrittenMemory) {
           memoryError = 'The background model returned no usable memory update.';
         } else if (rewrittenMemory !== generatedUserMemory) {
@@ -204,7 +200,13 @@ export function createAiMemoryService(
       }
 
       try {
-        const rewrittenSummary = await rewriteBoundedNote(provider, buildSummaryMessages(priorSummary, exchange), 3, options.signal);
+        const rewrittenSummary = await rewriteBoundedNote(
+          provider,
+          backgroundModel,
+          buildSummaryMessages(priorSummary, exchange),
+          3,
+          options.signal,
+        );
         if (!rewrittenSummary) {
           summaryError = 'The background model returned no usable chat summary.';
         } else if (rewrittenSummary !== priorSummary) {

@@ -6,11 +6,31 @@ import {
   buildChatTitlePrompt,
   finalizeChatTitleGeneration,
   getChatTitleGenerationCandidate,
-  hasChatTitleModel,
   normalizeGeneratedChatTitle,
+  requestGeneratedChatTitle,
+  resolveChatTitleGenerationModel,
 } from './chat-title-generation';
 import { appendMessage } from './helpers';
 import { editUserMessageBranch } from './message-branches';
+
+const originalFetch = globalThis.fetch;
+
+function createStreamResponse(lines: string[]) {
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const line of lines) {
+        controller.enqueue(new TextEncoder().encode(`${line}\n`));
+      }
+      controller.close();
+    },
+  });
+
+  return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson' } });
+}
+
+test.afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 test('new chats start with a heuristic title and pending title generation', () => {
   const chat = createNewChat(createUserMessage('Plan a 4 day hypertrophy split with supersets'), 'thinking');
@@ -96,7 +116,38 @@ test('editing the first prompt after a generated title keeps the original title'
   assert.equal(editedChat.title, 'Upper/lower vs push/pull/legs');
 });
 
-test('detects whether the dedicated title model is installed', () => {
-  assert.equal(hasChatTitleModel([{ name: 'qwen3.5:0.8b-q8_0', provider: 'ollama' }]), true);
-  assert.equal(hasChatTitleModel([{ name: 'qwen3.5:9b', provider: 'ollama' }]), false);
+test('resolves the title-generation model from the DeepSeek provider config', () => {
+  assert.equal(
+    resolveChatTitleGenerationModel([
+      { value: 'ollama', label: 'Ollama', configured: true, status: 'ready', detail: 'ok', defaultModel: 'qwen3.5:9b', defaultModelLabel: 'Qwen' },
+      { value: 'deepseek', label: 'DeepSeek', configured: true, status: 'ready', detail: 'ok', defaultModel: 'deepseek-v4-flash', defaultModelLabel: 'DeepSeek V4 Flash' },
+    ]),
+    'deepseek-v4-flash',
+  );
+  assert.equal(resolveChatTitleGenerationModel([]), null);
+});
+
+test('requests generated chat titles through DeepSeek with thinking disabled', async () => {
+  const chat = appendMessage(
+    createNewChat(createUserMessage('Help me plan a fast weekend Boston trip.'), 'thinking'),
+    createAssistantMessage('Here is a two-day Boston plan with food, transit, and walkable neighborhoods.'),
+  );
+  const candidate = getChatTitleGenerationCandidate(chat);
+  assert.ok(candidate);
+
+  let requestBody: Record<string, unknown> | null = null;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return createStreamResponse([
+      JSON.stringify({ type: 'content', delta: 'Boston weekend trip plan', snapshot: 'Boston weekend trip plan', model: 'deepseek-v4-flash' }),
+      JSON.stringify({ type: 'done', model: 'deepseek-v4-flash' }),
+    ]);
+  };
+
+  const title = await requestGeneratedChatTitle(candidate, 'deepseek-v4-flash');
+
+  assert.equal(title, 'Boston weekend trip plan');
+  assert.equal(requestBody?.provider, 'deepseek');
+  assert.equal(requestBody?.model, 'deepseek-v4-flash');
+  assert.equal(requestBody?.think, false);
 });
