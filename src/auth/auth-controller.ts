@@ -65,7 +65,7 @@ function toSignedOutSnapshot(error: string | null): AuthSnapshot {
 }
 
 export function createAuthController({ client, confirmOwnerSession }: AuthControllerDependencies): AuthController {
-  let destroyed = false;
+  let active = false;
   let currentSnapshot: AuthSnapshot = {
     status: 'loading',
     ownerConfirmed: false,
@@ -73,19 +73,19 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
     error: null,
   };
   let suppressSignedOutEvent = false;
+  let authSubscription: AuthSubscription | null = null;
   const listeners = new Set<() => void>();
-  const authSubscription = client.auth.onAuthStateChange((event, session) => {
-    if (destroyed) {
+
+  function handleAuthChange(event: AuthChangeEvent, session: Session | null) {
+    if (!active) {
       return;
     }
-
     if (event === 'SIGNED_OUT') {
       const nextError = suppressSignedOutEvent ? currentSnapshot.error : (currentSnapshot.session ? 'Your session expired. Please sign in again.' : currentSnapshot.error);
       suppressSignedOutEvent = false;
       updateSnapshot(toSignedOutSnapshot(nextError));
       return;
     }
-
     if (event === 'TOKEN_REFRESHED' && session && currentSnapshot.ownerConfirmed) {
       updateSnapshot({
         status: 'authenticated',
@@ -95,7 +95,6 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
       });
       return;
     }
-
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session && currentSnapshot.ownerConfirmed) {
       updateSnapshot({
         status: 'authenticated',
@@ -104,7 +103,12 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
         error: null,
       });
     }
-  });
+  }
+
+  function startAuthSubscription() {
+    active = true;
+    authSubscription ??= client.auth.onAuthStateChange(handleAuthChange);
+  }
 
   function emit() {
     listeners.forEach((listener) => listener());
@@ -117,8 +121,9 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
 
   async function signOutWithSnapshot(error: string | null) {
     suppressSignedOutEvent = true;
-    await client.auth.signOut().catch(() => undefined);
     updateSnapshot(toSignedOutSnapshot(error));
+    await client.auth.signOut().catch(() => undefined);
+    suppressSignedOutEvent = false;
   }
 
   async function confirmSession(session: Session, forbiddenMessage: string) {
@@ -172,8 +177,9 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
 
   return {
     destroy() {
-      destroyed = true;
-      authSubscription.data.subscription.unsubscribe();
+      active = false;
+      authSubscription?.data.subscription.unsubscribe();
+      authSubscription = null;
       listeners.clear();
     },
     async getAccessToken() {
@@ -198,23 +204,30 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
         error: null,
       });
 
-      const result = await client.auth.signInWithPassword({ email, password });
+      const result = await client.auth.signInWithPassword({ email, password }).catch(() => null);
+      if (!result) {
+        updateSnapshot(toSignedOutSnapshot('Unable to reach Supabase Auth. Check VITE_SUPABASE_URL and your network connection.'));
+        return;
+      }
       if (result.error) {
-        updateSnapshot(toSignedOutSnapshot('Invalid email or password.'));
+        updateSnapshot(toSignedOutSnapshot(result.error.message.trim() || 'Invalid email or password.'));
         return;
       }
-      if (!result.data.session) {
-        updateSnapshot(toSignedOutSnapshot('Unable to start a session.'));
-        return;
-      }
-
-      updateSnapshot({
+    if (!result.data.session) {
+      updateSnapshot(toSignedOutSnapshot('Unable to start a session.'));
+      return;
+    }
+    updateSnapshot({
         status: 'loading',
         ownerConfirmed: false,
         session: result.data.session,
         error: null,
       });
-      await confirmSession(result.data.session, 'This account is not permitted to access this app.');
+      try {
+        await confirmSession(result.data.session, 'This account is not permitted to access this app.');
+      } catch (error) {
+        await signOutWithSnapshot(toErrorMessage(error, 'Unable to confirm your session.'));
+      }
     },
     async logout() {
       await signOutWithSnapshot(null);
@@ -244,6 +257,7 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
       return result.data.session.access_token;
     },
     async start() {
+      startAuthSubscription();
       let promise = initialBootstrapPromises.get(client);
       if (!promise) {
         promise = resolveInitialSession().catch((error) => ({
@@ -256,7 +270,7 @@ export function createAuthController({ client, confirmOwnerSession }: AuthContro
       }
 
       const result = await promise;
-      if (destroyed) {
+      if (!active) {
         return;
       }
 

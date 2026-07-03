@@ -149,6 +149,36 @@ test('requestJson refreshes once and retries one unauthorized response', async (
   assert.equal(authFailures, 0);
 });
 
+test('requestJson does not refresh or retry when authorization is explicit', async () => {
+  let fetchCalls = 0;
+  let refreshCalls = 0;
+  const failures: string[] = [];
+  registerApiAuthBridge({
+    refreshAccessToken: async () => {
+      refreshCalls += 1;
+      return 'fresh-token';
+    },
+    onAuthFailure: async (reason) => {
+      failures.push(reason);
+    },
+  });
+
+  globalThis.fetch = async (_input, init) => {
+    fetchCalls += 1;
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer provided-token');
+    return new Response(JSON.stringify({ ok: false, error: 'Authentication required.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  await assert.rejects(
+    () => requestJson('/auth/session', { headers: { Authorization: 'Bearer provided-token' } }),
+    (error: unknown) => error instanceof ApiError && error.status === 401,
+  );
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(refreshCalls, 0);
+  assert.deepEqual(failures, []);
+});
+
 test('requestJson marks the session invalid when refresh fails after a 401', async () => {
   const failures: string[] = [];
   registerApiAuthBridge({

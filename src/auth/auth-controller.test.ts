@@ -25,6 +25,8 @@ class FakeAuthClient implements AuthClientLike {
   session: Session | null;
   signInSession: Session | null;
   signInError: string | null = null;
+  signInFailure: Error | null = null;
+  getSessionWait: Promise<void> | null = null;
   refreshSessionValue: Session | null = null;
   private listener: ((event: AuthChangeEvent, session: Session | null) => void) | null = null;
 
@@ -41,10 +43,12 @@ class FakeAuthClient implements AuthClientLike {
   auth = {
     getSession: async () => {
       this.getSessionCalls += 1;
+      if (this.getSessionWait) await this.getSessionWait;
       return { data: { session: this.session }, error: null };
     },
     signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
       this.signInCalls.push({ email, password });
+      if (this.signInFailure) throw this.signInFailure;
       if (this.signInError) {
         return { data: { session: null }, error: { message: this.signInError } };
       }
@@ -97,6 +101,22 @@ test('restores and confirms an existing owner session on startup', async () => {
   controller.destroy();
 });
 
+test('leaves loading when startup owner confirmation fails unexpectedly', async () => {
+  const client = new FakeAuthClient(createSession('owner@example.com'));
+  const controller = createAuthController({
+    client,
+    confirmOwnerSession: async () => {
+      throw new Error('Confirmation timed out.');
+    },
+  });
+
+  await controller.start();
+
+  assert.equal(controller.getSnapshot().status, 'unauthenticated');
+  assert.equal(controller.getSnapshot().error, 'Confirmation timed out.');
+  controller.destroy();
+});
+
 test('reuses the in-flight startup confirmation across controller re-creation', async () => {
   const client = new FakeAuthClient(createSession('owner@example.com'));
   let releaseConfirmation: (() => void) | null = null;
@@ -124,6 +144,29 @@ test('reuses the in-flight startup confirmation across controller re-creation', 
   second.destroy();
 });
 
+test('restarts after strict mode cleanup during startup', async () => {
+  const client = new FakeAuthClient(null);
+  let releaseGetSession: (() => void) | null = null;
+  client.getSessionWait = new Promise<void>((resolve) => {
+    releaseGetSession = resolve;
+  });
+  const controller = createAuthController({
+    client,
+    confirmOwnerSession: async () => ({ email: 'owner@example.com' }),
+  });
+
+  const firstStart = controller.start();
+  await Promise.resolve();
+  controller.destroy();
+  const secondStart = controller.start();
+  releaseGetSession?.();
+  await Promise.all([firstStart, secondStart]);
+
+  assert.equal(client.getSessionCalls, 1);
+  assert.equal(controller.getSnapshot().status, 'unauthenticated');
+  controller.destroy();
+});
+
 test('logs in the owner with email and password', async () => {
   const client = new FakeAuthClient(null);
   client.signInSession = createSession('owner@example.com', 'token-login');
@@ -136,6 +179,50 @@ test('logs in the owner with email and password', async () => {
 
   assert.deepEqual(client.signInCalls, [{ email: 'owner@example.com', password: 'secret' }]);
   assert.equal(controller.getSnapshot().status, 'authenticated');
+  controller.destroy();
+});
+
+test('surfaces Supabase sign-in errors', async () => {
+  const client = new FakeAuthClient(null);
+  client.signInError = 'Email not confirmed';
+  const controller = createAuthController({
+    client,
+    confirmOwnerSession: async () => ({ email: 'owner@example.com' }),
+  });
+
+  await controller.login('owner@example.com', 'secret');
+
+  assert.equal(controller.getSnapshot().status, 'unauthenticated');
+  assert.equal(controller.getSnapshot().error, 'Email not confirmed');
+  controller.destroy();
+});
+
+test('returns to login when Supabase Auth cannot be reached', async () => {
+  const client = new FakeAuthClient(null);
+  client.signInFailure = new TypeError('fetch failed');
+  const controller = createAuthController({ client, confirmOwnerSession: async () => ({ email: 'owner@example.com' }) });
+  await controller.login('owner@example.com', 'secret');
+
+  assert.equal(controller.getSnapshot().status, 'unauthenticated');
+  assert.equal(controller.getSnapshot().error, 'Unable to reach Supabase Auth. Check VITE_SUPABASE_URL and your network connection.');
+  controller.destroy();
+});
+
+test('leaves loading when login owner confirmation fails unexpectedly', async () => {
+  const client = new FakeAuthClient(null);
+  client.signInSession = createSession('owner@example.com', 'token-login');
+  const controller = createAuthController({
+    client,
+    confirmOwnerSession: async () => {
+      throw new Error('Confirmation timed out.');
+    },
+  });
+
+  await controller.login('owner@example.com', 'secret');
+
+  assert.equal(client.signOutCalls, 1);
+  assert.equal(controller.getSnapshot().status, 'unauthenticated');
+  assert.equal(controller.getSnapshot().error, 'Confirmation timed out.');
   controller.destroy();
 });
 

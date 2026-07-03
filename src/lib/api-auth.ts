@@ -89,9 +89,10 @@ export async function fetchApiWithAuth(url: string, requestInit: RequestInit) {
     return fetch(url, requestInit);
   }
 
+  const hasExplicitAuthorization = new Headers(requestInit.headers ?? undefined).has('Authorization');
   const authenticatedRequestInit = await buildAuthenticatedRequestInit(requestInit);
   const response = await fetch(url, authenticatedRequestInit);
-  if (response.status !== 401) {
+  if (response.status !== 401 || hasExplicitAuthorization) {
     return response;
   }
 
