@@ -16,8 +16,9 @@ import type {
   SaveDocRequest,
 } from '../../shared/docs-contract';
 import { parseDocPreferences } from '../../shared/docs-contract';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
-import { readJsonSetting, writeJsonSetting } from './app-settings-repository';
+import { createAppSettingsRepository } from './app-settings-repository';
 
 const docsPreferencesKey = 'docs.preferences';
 const defaultVersionPageSize = 25;
@@ -101,15 +102,16 @@ function createVersion(doc: DocRecord, tab: DocTabRecord, kind: DocVersionKind, 
   };
 }
 
-function selectPreferences() {
-  return readJsonSetting(docsPreferencesKey, parseDocPreferences, defaultDocPreferences);
-}
-
-export function createDocsRepository(database: BetterSqlite3.Database = getDatabase()) {
+export function createDocsRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  ownerId = getCanonicalOwnerId(),
+) {
+  const settingsRepository = createAppSettingsRepository(database, ownerId);
   const upsertDoc = database.prepare(`
-    INSERT INTO docs_documents (id, title, created_at, updated_at, last_opened_at, starred, trashed_at, template_id, active_tab_id, layout_mode, zoom, page_settings_json)
-    VALUES (@id, @title, @created_at, @updated_at, @last_opened_at, @starred, @trashed_at, @template_id, @active_tab_id, @layout_mode, @zoom, @page_settings_json)
+    INSERT INTO docs_documents (id, owner_id, title, created_at, updated_at, last_opened_at, starred, trashed_at, template_id, active_tab_id, layout_mode, zoom, page_settings_json)
+    VALUES (@id, @owner_id, @title, @created_at, @updated_at, @last_opened_at, @starred, @trashed_at, @template_id, @active_tab_id, @layout_mode, @zoom, @page_settings_json)
     ON CONFLICT(id) DO UPDATE SET
+      owner_id = excluded.owner_id,
       title = excluded.title,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
@@ -123,9 +125,10 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       page_settings_json = excluded.page_settings_json
   `);
   const upsertTab = database.prepare(`
-    INSERT INTO docs_tabs (id, document_id, parent_tab_id, title, tab_order, outline_visible, content, content_format, text_content, created_at, updated_at)
-    VALUES (@id, @document_id, @parent_tab_id, @title, @tab_order, @outline_visible, @content, @content_format, @text_content, @created_at, @updated_at)
+    INSERT INTO docs_tabs (id, owner_id, document_id, parent_tab_id, title, tab_order, outline_visible, content, content_format, text_content, created_at, updated_at)
+    VALUES (@id, @owner_id, @document_id, @parent_tab_id, @title, @tab_order, @outline_visible, @content, @content_format, @text_content, @created_at, @updated_at)
     ON CONFLICT(id) DO UPDATE SET
+      owner_id = excluded.owner_id,
       document_id = excluded.document_id,
       parent_tab_id = excluded.parent_tab_id,
       title = excluded.title,
@@ -138,9 +141,10 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       updated_at = excluded.updated_at
   `);
   const upsertVersion = database.prepare(`
-    INSERT INTO docs_versions (id, document_id, tab_id, created_at, label, kind, content, content_format, snapshot_title)
-    VALUES (@id, @document_id, @tab_id, @created_at, @label, @kind, @content, @content_format, @snapshot_title)
+    INSERT INTO docs_versions (id, owner_id, document_id, tab_id, created_at, label, kind, content, content_format, snapshot_title)
+    VALUES (@id, @owner_id, @document_id, @tab_id, @created_at, @label, @kind, @content, @content_format, @snapshot_title)
     ON CONFLICT(id) DO UPDATE SET
+      owner_id = excluded.owner_id,
       document_id = excluded.document_id,
       tab_id = excluded.tab_id,
       created_at = excluded.created_at,
@@ -151,9 +155,10 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       snapshot_title = excluded.snapshot_title
   `);
   const upsertCitation = database.prepare(`
-    INSERT INTO docs_citations (id, document_id, label, details)
-    VALUES (@id, @document_id, @label, @details)
+    INSERT INTO docs_citations (id, owner_id, document_id, label, details)
+    VALUES (@id, @owner_id, @document_id, @label, @details)
     ON CONFLICT(id) DO UPDATE SET
+      owner_id = excluded.owner_id,
       document_id = excluded.document_id,
       label = excluded.label,
       details = excluded.details
@@ -162,6 +167,7 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
   function saveDocRow(doc: DocRecord) {
     upsertDoc.run({
       id: doc.id,
+      owner_id: ownerId,
       title: doc.title,
       created_at: doc.createdAt,
       updated_at: doc.updatedAt,
@@ -179,6 +185,7 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
   function saveTabRow(tab: DocTabRecord) {
     upsertTab.run({
       id: tab.id,
+      owner_id: ownerId,
       document_id: tab.docId,
       parent_tab_id: tab.parentTabId,
       title: tab.title,
@@ -195,6 +202,7 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
   function saveVersionRow(version: DocVersionDetail) {
     upsertVersion.run({
       id: version.id,
+      owner_id: ownerId,
       document_id: version.docId,
       tab_id: version.tabId,
       created_at: version.createdAt,
@@ -208,9 +216,11 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
 
   function listVersions(docId: string, cursor?: string | null, limit = defaultVersionPageSize): ListDocVersionsResponse {
     const query = cursor
-      ? `SELECT * FROM docs_versions WHERE document_id = ? AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?`
-      : `SELECT * FROM docs_versions WHERE document_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`;
-    const params = cursor ? [docId, decodeCursor(cursor).createdAt, decodeCursor(cursor).createdAt, decodeCursor(cursor).id, limit + 1] : [docId, limit + 1];
+      ? `SELECT * FROM docs_versions WHERE owner_id = ? AND document_id = ? AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?`
+      : `SELECT * FROM docs_versions WHERE owner_id = ? AND document_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`;
+    const params = cursor
+      ? [ownerId, docId, decodeCursor(cursor).createdAt, decodeCursor(cursor).createdAt, decodeCursor(cursor).id, limit + 1]
+      : [ownerId, docId, limit + 1];
     const rows = database.prepare(query).all(...params) as Row[];
     const versions = rows.slice(0, limit).map(mapVersionSummary);
     return { versions, nextCursor: rows.length > limit ? encodeCursor(versions.at(-1)!) : null };
@@ -218,11 +228,11 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
 
   function getDocBundle(docId: string, cursor?: string | null) {
     const openedAt = new Date().toISOString();
-    database.prepare('UPDATE docs_documents SET last_opened_at = ? WHERE id = ?').run(openedAt, docId);
-    const docRow = database.prepare('SELECT * FROM docs_documents WHERE id = ?').get(docId) as Row | undefined;
+    database.prepare('UPDATE docs_documents SET last_opened_at = ? WHERE owner_id = ? AND id = ?').run(openedAt, ownerId, docId);
+    const docRow = database.prepare('SELECT * FROM docs_documents WHERE owner_id = ? AND id = ?').get(ownerId, docId) as Row | undefined;
     if (!docRow) return null;
-    const tabs = (database.prepare('SELECT * FROM docs_tabs WHERE document_id = ? ORDER BY tab_order ASC, id ASC').all(docId) as Row[]).map(mapTab);
-    const citations = (database.prepare('SELECT * FROM docs_citations WHERE document_id = ? ORDER BY id ASC').all(docId) as Row[]).map(mapCitation);
+    const tabs = (database.prepare('SELECT * FROM docs_tabs WHERE owner_id = ? AND document_id = ? ORDER BY tab_order ASC, id ASC').all(ownerId, docId) as Row[]).map(mapTab);
+    const citations = (database.prepare('SELECT * FROM docs_citations WHERE owner_id = ? AND document_id = ? ORDER BY id ASC').all(ownerId, docId) as Row[]).map(mapCitation);
     const versionsPage = listVersions(docId, cursor);
     return {
       doc: mapDoc({ ...docRow, last_opened_at: openedAt }),
@@ -240,14 +250,15 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
 
   return {
     countDocs() {
-      return Number((database.prepare('SELECT COUNT(*) AS count FROM docs_documents').get() as { count: number }).count);
+      return Number((database.prepare('SELECT COUNT(*) AS count FROM docs_documents WHERE owner_id = ?').get(ownerId) as { count: number }).count);
     },
     listDocs(query?: string, sort?: DocPreferences['sort'], showTrash?: boolean): DocSearchIndexEntry[] {
       const rows = database.prepare(`
-        SELECT d.*, COALESCE((SELECT text_content FROM docs_tabs WHERE document_id = d.id ORDER BY tab_order ASC, id ASC LIMIT 1), '') AS preview
+        SELECT d.*, COALESCE((SELECT text_content FROM docs_tabs WHERE owner_id = d.owner_id AND document_id = d.id ORDER BY tab_order ASC, id ASC LIMIT 1), '') AS preview
         FROM docs_documents d
+        WHERE d.owner_id = ?
         ORDER BY d.last_opened_at DESC, d.id DESC
-      `).all() as Array<Row & { preview: string }>;
+      `).all(ownerId) as Array<Row & { preview: string }>;
       const normalized = query?.trim().toLowerCase() ?? '';
       const nextSort = sort ?? defaultDocPreferences.sort;
       return rows.map((row) => ({ id: String(row.id), title: String(row.title), updatedAt: String(row.updated_at), lastOpenedAt: String(row.last_opened_at), starred: Boolean(row.starred), trashedAt: row.trashed_at ? String(row.trashed_at) : null, preview: String(row.preview) }))
@@ -300,7 +311,7 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       const activeTabId = bundle.doc.activeTabId === tabId ? remainingTabs[0].id : bundle.doc.activeTabId;
       const nextDoc = { ...bundle.doc, activeTabId, updatedAt: new Date().toISOString() };
       database.transaction(() => {
-        database.prepare('DELETE FROM docs_tabs WHERE id = ?').run(tabId);
+        database.prepare('DELETE FROM docs_tabs WHERE owner_id = ? AND document_id = ? AND id = ?').run(ownerId, docId, tabId);
         saveDocRow(nextDoc);
         remainingTabs.forEach(saveTabRow);
       })();
@@ -323,18 +334,18 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       return getDocBundle(docId)!;
     },
     deleteDoc(docId: string) {
-      database.prepare('DELETE FROM docs_documents WHERE id = ?').run(docId);
+      database.prepare('DELETE FROM docs_documents WHERE owner_id = ? AND id = ?').run(ownerId, docId);
     },
     saveCitations(docId: string, citations: CitationSource[]) {
       database.transaction(() => {
-        database.prepare('DELETE FROM docs_citations WHERE document_id = ?').run(docId);
-        citations.forEach((citation) => upsertCitation.run({ id: citation.id, document_id: docId, label: citation.label, details: citation.details }));
+        database.prepare('DELETE FROM docs_citations WHERE owner_id = ? AND document_id = ?').run(ownerId, docId);
+        citations.forEach((citation) => upsertCitation.run({ id: citation.id, owner_id: ownerId, document_id: docId, label: citation.label, details: citation.details }));
       })();
       return citations;
     },
     listVersions,
     getVersion(docId: string, versionId: string) {
-      const row = database.prepare('SELECT * FROM docs_versions WHERE document_id = ? AND id = ?').get(docId, versionId) as Row | undefined;
+      const row = database.prepare('SELECT * FROM docs_versions WHERE owner_id = ? AND document_id = ? AND id = ?').get(ownerId, docId, versionId) as Row | undefined;
       if (!row) return null;
       return mapVersionDetail(row);
     },
@@ -349,14 +360,14 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
       return this.saveDoc({ doc: nextDoc, tab: nextTab, version: { kind: 'restore', label: `Restored - ${version.label}` } });
     },
     loadPreferences() {
-      return { ...defaultDocPreferences, ...selectPreferences() };
+      return { ...defaultDocPreferences, ...settingsRepository.readJsonSetting(docsPreferencesKey, parseDocPreferences, defaultDocPreferences) };
     },
     savePreferences(preferences: DocPreferences) {
-      writeJsonSetting(docsPreferencesKey, preferences);
+      settingsRepository.writeJsonSetting(docsPreferencesKey, preferences);
       return this.loadPreferences();
     },
     hasMigration(sourceKey: string) {
-      return Boolean(database.prepare('SELECT source_key FROM docs_migration_sources WHERE source_key = ?').get(sourceKey));
+      return Boolean(database.prepare('SELECT source_key FROM docs_migration_sources WHERE owner_id = ? AND source_key = ?').get(ownerId, sourceKey));
     },
     importMigration(payload: DocsMigrationImportRequest) {
       const docIds = new Set(payload.docs.map((doc) => doc.id));
@@ -369,13 +380,13 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
         payload.docs.forEach(saveDocRow);
         payload.tabs.forEach(saveTabRow);
         payload.versions.forEach(saveVersionRow);
-        payload.citations.forEach((citation) => upsertCitation.run({ id: citation.id, document_id: citation.docId, label: citation.label, details: citation.details }));
-        if (payload.preferences) writeJsonSetting(docsPreferencesKey, payload.preferences);
+        payload.citations.forEach((citation) => upsertCitation.run({ id: citation.id, owner_id: ownerId, document_id: citation.docId, label: citation.label, details: citation.details }));
+        if (payload.preferences) settingsRepository.writeJsonSetting(docsPreferencesKey, payload.preferences);
         database.prepare(`
-          INSERT INTO docs_migration_sources (source_key, imported_at)
-          VALUES (?, ?)
-          ON CONFLICT(source_key) DO UPDATE SET imported_at = excluded.imported_at
-        `).run(payload.sourceKey, new Date().toISOString());
+          INSERT INTO docs_migration_sources (owner_id, source_key, imported_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(owner_id, source_key) DO UPDATE SET imported_at = excluded.imported_at
+        `).run(ownerId, payload.sourceKey, new Date().toISOString());
       })();
 
       return {
@@ -388,4 +399,15 @@ export function createDocsRepository(database: BetterSqlite3.Database = getDatab
   };
 }
 
-export const docsRepository = createDocsRepository();
+let docsRepositorySingleton: ReturnType<typeof createDocsRepository> | null = null;
+
+function getDocsRepositorySingleton() {
+  docsRepositorySingleton ??= createDocsRepository();
+  return docsRepositorySingleton;
+}
+
+export const docsRepository = new Proxy({} as ReturnType<typeof createDocsRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getDocsRepositorySingleton(), property, receiver);
+  },
+});

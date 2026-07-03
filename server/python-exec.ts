@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { Request, Response } from 'express';
 import { serverConfig } from './config';
 import { HttpError } from './http';
@@ -106,7 +107,12 @@ export async function handlePythonExecFileDownload(request: Request, response: R
       throw new HttpError(404, 'The requested generated file was not found.');
     }
     const mediaType = detectMediaType(relativePath) ?? 'application/octet-stream';
-    response.status(200).set('Content-Type', mediaType).set('Content-Length', stat.size.toString());
+    const fileName = path.posix.basename(relativePath);
+    response
+      .status(200)
+      .set('Content-Type', mediaType)
+      .set('Content-Length', stat.size.toString())
+      .set('Content-Disposition', `inline; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     const stream = await fs.open(absolutePath, 'r');
     stream.createReadStream().pipe(response);
   } catch (error) {

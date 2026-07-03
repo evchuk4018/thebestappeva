@@ -1,7 +1,8 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import { AiPreferences, AiWorkspaceSnapshot, Chat, createEmptyAiWorkspaceSnapshot, parseAiPreferences, parseAiWorkspaceSnapshot } from '../../shared/ai-workspace-contract';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
-import { readJsonSetting, writeJsonSetting } from './app-settings-repository';
+import { createAppSettingsRepository } from './app-settings-repository';
 
 const selectedModelKey = 'ai.selected-model';
 const selectedProviderKey = 'ai.selected-provider';
@@ -23,12 +24,16 @@ function parseStoredChat(payloadJson: string, chatId: string) {
   }, `Stored chat "${chatId}"`).chats[0];
 }
 
-export function createAiWorkspaceRepository(database: BetterSqlite3.Database = getDatabase()) {
-  const selectChats = database.prepare('SELECT id, payload_json FROM ai_chats ORDER BY updated_at DESC, id DESC');
-  const selectChat = database.prepare('SELECT payload_json FROM ai_chats WHERE id = ?');
+export function createAiWorkspaceRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  ownerId = getCanonicalOwnerId(),
+) {
+  const settingsRepository = createAppSettingsRepository(database, ownerId);
+  const selectChats = database.prepare('SELECT id, payload_json FROM ai_chats WHERE owner_id = ? ORDER BY updated_at DESC, id DESC');
+  const selectChat = database.prepare('SELECT payload_json FROM ai_chats WHERE owner_id = ? AND id = ?');
   const insertChat = database.prepare(`
-    INSERT INTO ai_chats (id, title, mode, updated_at, payload_json)
-    VALUES (@id, @title, @mode, @updated_at, @payload_json)
+    INSERT INTO ai_chats (id, owner_id, title, mode, updated_at, payload_json)
+    VALUES (@id, @owner_id, @title, @mode, @updated_at, @payload_json)
   `);
   const updateChat = database.prepare(`
     UPDATE ai_chats
@@ -36,17 +41,17 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
         mode = @mode,
         updated_at = @updated_at,
         payload_json = @payload_json
-    WHERE id = @id
+    WHERE owner_id = @owner_id AND id = @id
   `);
-  const clearChats = database.prepare('DELETE FROM ai_chats');
+  const clearChats = database.prepare('DELETE FROM ai_chats WHERE owner_id = ?');
 
   function selectStoredChats(): Chat[] {
-    const rows = selectChats.all() as Array<{ id: string; payload_json: string }>;
+    const rows = selectChats.all(ownerId) as Array<{ id: string; payload_json: string }>;
     return rows.map((row) => parseStoredChat(row.payload_json, row.id));
   }
 
   function loadGeneratedUserMemory() {
-    return readJsonSetting(database, generatedUserMemoryKey, (value, field) => parseAiWorkspaceSnapshot({
+    return settingsRepository.readJsonSetting(generatedUserMemoryKey, (value, field) => parseAiWorkspaceSnapshot({
       ...createEmptyAiWorkspaceSnapshot(),
       generatedUserMemory: value,
     }, field).generatedUserMemory, '');
@@ -57,17 +62,15 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
       return {
         chats: selectStoredChats(),
         generatedUserMemory: loadGeneratedUserMemory(),
-        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
-        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
-        visionMode: readJsonSetting(database, visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
-        enabledTools: readJsonSetting(
-          database,
+        selectedProvider: settingsRepository.readJsonSetting(selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
+        selectedModel: settingsRepository.readJsonSetting(selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
+        visionMode: settingsRepository.readJsonSetting(visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
+        enabledTools: settingsRepository.readJsonSetting(
           enabledToolsKey,
           (value, field) => parseAiWorkspaceSnapshot({ ...createEmptyAiWorkspaceSnapshot(), enabledTools: value }, field).enabledTools,
           {},
         ),
-        customSystemPrompt: readJsonSetting(
-          database,
+        customSystemPrompt: settingsRepository.readJsonSetting(
           customSystemPromptKey,
           (value, field) => parseAiWorkspaceSnapshot({ ...createEmptyAiWorkspaceSnapshot(), customSystemPrompt: value }, field).customSystemPrompt,
           '',
@@ -76,17 +79,17 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
     },
     loadAiPreferences(): AiPreferences {
       return {
-        selectedProvider: readJsonSetting(database, selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
-        selectedModel: readJsonSetting(database, selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
-        visionMode: readJsonSetting(database, visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
+        selectedProvider: settingsRepository.readJsonSetting(selectedProviderKey, parseAiPreferences, defaultAiPreferences).selectedProvider,
+        selectedModel: settingsRepository.readJsonSetting(selectedModelKey, parseAiPreferences, defaultAiPreferences).selectedModel,
+        visionMode: settingsRepository.readJsonSetting(visionModeKey, parseAiPreferences, defaultAiPreferences).visionMode,
       };
     },
     loadGeneratedUserMemory,
     saveGeneratedUserMemory(value: string) {
-      writeJsonSetting(database, generatedUserMemoryKey, value);
+      settingsRepository.writeJsonSetting(generatedUserMemoryKey, value);
     },
     findChatById(chatId: string) {
-      const row = selectChat.get(chatId) as { payload_json: string } | undefined;
+      const row = selectChat.get(ownerId, chatId) as { payload_json: string } | undefined;
       return row ? parseStoredChat(row.payload_json, chatId) : null;
     },
     updateChatSummary(chatId: string, summary: string, summaryUpdatedAt: string | null) {
@@ -102,6 +105,7 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
       } satisfies Chat;
       updateChat.run({
         id: nextChat.id,
+        owner_id: ownerId,
         title: nextChat.title,
         mode: nextChat.mode,
         updated_at: nextChat.updatedAt,
@@ -111,10 +115,11 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
     },
     saveAiWorkspace(snapshot: AiWorkspaceSnapshot) {
       const transaction = database.transaction((nextSnapshot: AiWorkspaceSnapshot) => {
-        clearChats.run();
+        clearChats.run(ownerId);
         for (const chat of nextSnapshot.chats) {
           insertChat.run({
             id: chat.id,
+            owner_id: ownerId,
             title: chat.title,
             mode: chat.mode,
             updated_at: chat.updatedAt,
@@ -122,12 +127,12 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
           });
         }
 
-        writeJsonSetting(database, selectedProviderKey, { selectedProvider: nextSnapshot.selectedProvider });
-        writeJsonSetting(database, selectedModelKey, { selectedModel: nextSnapshot.selectedModel });
-        writeJsonSetting(database, visionModeKey, { visionMode: nextSnapshot.visionMode });
-        writeJsonSetting(database, enabledToolsKey, nextSnapshot.enabledTools);
-        writeJsonSetting(database, customSystemPromptKey, nextSnapshot.customSystemPrompt);
-        writeJsonSetting(database, generatedUserMemoryKey, nextSnapshot.generatedUserMemory);
+        settingsRepository.writeJsonSetting(selectedProviderKey, { selectedProvider: nextSnapshot.selectedProvider });
+        settingsRepository.writeJsonSetting(selectedModelKey, { selectedModel: nextSnapshot.selectedModel });
+        settingsRepository.writeJsonSetting(visionModeKey, { visionMode: nextSnapshot.visionMode });
+        settingsRepository.writeJsonSetting(enabledToolsKey, nextSnapshot.enabledTools);
+        settingsRepository.writeJsonSetting(customSystemPromptKey, nextSnapshot.customSystemPrompt);
+        settingsRepository.writeJsonSetting(generatedUserMemoryKey, nextSnapshot.generatedUserMemory);
       });
 
       transaction(snapshot);
@@ -135,13 +140,24 @@ export function createAiWorkspaceRepository(database: BetterSqlite3.Database = g
   };
 }
 
-export const aiWorkspaceRepository = createAiWorkspaceRepository();
+let aiWorkspaceRepositorySingleton: ReturnType<typeof createAiWorkspaceRepository> | null = null;
 
-export const loadAiWorkspace = () => aiWorkspaceRepository.loadAiWorkspace();
-export const loadAiPreferences = () => aiWorkspaceRepository.loadAiPreferences();
-export const loadGeneratedUserMemory = () => aiWorkspaceRepository.loadGeneratedUserMemory();
-export const saveGeneratedUserMemory = (value: string) => aiWorkspaceRepository.saveGeneratedUserMemory(value);
-export const findChatById = (chatId: string) => aiWorkspaceRepository.findChatById(chatId);
+function getAiWorkspaceRepositorySingleton() {
+  aiWorkspaceRepositorySingleton ??= createAiWorkspaceRepository();
+  return aiWorkspaceRepositorySingleton;
+}
+
+export const aiWorkspaceRepository = new Proxy({} as ReturnType<typeof createAiWorkspaceRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getAiWorkspaceRepositorySingleton(), property, receiver);
+  },
+});
+
+export const loadAiWorkspace = () => getAiWorkspaceRepositorySingleton().loadAiWorkspace();
+export const loadAiPreferences = () => getAiWorkspaceRepositorySingleton().loadAiPreferences();
+export const loadGeneratedUserMemory = () => getAiWorkspaceRepositorySingleton().loadGeneratedUserMemory();
+export const saveGeneratedUserMemory = (value: string) => getAiWorkspaceRepositorySingleton().saveGeneratedUserMemory(value);
+export const findChatById = (chatId: string) => getAiWorkspaceRepositorySingleton().findChatById(chatId);
 export const updateChatSummary = (chatId: string, summary: string, summaryUpdatedAt: string | null) =>
-  aiWorkspaceRepository.updateChatSummary(chatId, summary, summaryUpdatedAt);
-export const saveAiWorkspace = (snapshot: AiWorkspaceSnapshot) => aiWorkspaceRepository.saveAiWorkspace(snapshot);
+  getAiWorkspaceRepositorySingleton().updateChatSummary(chatId, summary, summaryUpdatedAt);
+export const saveAiWorkspace = (snapshot: AiWorkspaceSnapshot) => getAiWorkspaceRepositorySingleton().saveAiWorkspace(snapshot);

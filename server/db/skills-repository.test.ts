@@ -16,7 +16,7 @@ test('creates skills schema tables and indexes', () => {
   const tables = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'skills%' ORDER BY name`).all() as Array<{ name: string }>;
   const indexes = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_skills_%' ORDER BY name`).all() as Array<{ name: string }>;
   assert.deepEqual(tables.map((entry) => entry.name), ['skills']);
-  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_skills_enabled', 'idx_skills_name', 'idx_skills_updated_at']);
+  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_skills_owner_enabled', 'idx_skills_owner_name', 'idx_skills_owner_updated_at']);
 });
 
 test('supports skill CRUD, toggle, and lookup', () => {
@@ -73,4 +73,19 @@ test('returns null when updating or toggling a missing skill', () => {
   const { repository } = createTestRepository();
   assert.equal(repository.updateSkill('missing', { name: 'x' }), null);
   assert.equal(repository.setSkillEnabled('missing', true), null);
+});
+
+test('scopes skills by owner while allowing duplicate names across owners', () => {
+  const { database, repository } = createTestRepository();
+  const otherRepository = createSkillsRepository(database, 'other-owner');
+  const canonical = repository.createSkill({ name: 'writer', description: 'mine', instructions: 'mine' });
+  const other = otherRepository.createSkill({ name: 'writer', description: 'other', instructions: 'other' });
+
+  assert.equal(repository.listSkills().length, 1);
+  assert.equal(otherRepository.listSkills().length, 1);
+  assert.equal(repository.getSkill(other.id), null);
+  assert.equal(repository.updateSkill(other.id, { description: 'nope' }), null);
+  assert.equal(repository.deleteSkill(other.id), false);
+  assert.equal(otherRepository.getSkill(other.id)?.description, 'other');
+  assert.equal(repository.getSkill(canonical.id)?.description, 'mine');
 });

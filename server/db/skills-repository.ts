@@ -6,6 +6,7 @@ import {
   UpdateSkillRequest,
 } from '../../shared/skills-contract';
 import { createSkillId } from '../../shared/skills-helpers';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
 
 type Row = Record<string, string | number | null>;
@@ -38,6 +39,7 @@ function toSummary(skill: SkillRecord): SkillSummary {
 
 interface SkillRow {
   id: string;
+  owner_id: string;
   name: string;
   description: string;
   instructions: string;
@@ -48,13 +50,16 @@ interface SkillRow {
   updated_at: string;
 }
 
-export function createSkillsRepository(database: BetterSqlite3.Database = getDatabase()) {
-  const selectSkill = database.prepare('SELECT * FROM skills WHERE id = ?');
-  const selectSkillByName = database.prepare('SELECT * FROM skills WHERE name = ?');
-  const listSkillsStatement = database.prepare('SELECT * FROM skills ORDER BY name ASC');
+export function createSkillsRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  ownerId = getCanonicalOwnerId(),
+) {
+  const selectSkill = database.prepare('SELECT * FROM skills WHERE owner_id = ? AND id = ?');
+  const selectSkillByName = database.prepare('SELECT * FROM skills WHERE owner_id = ? AND name = ?');
+  const listSkillsStatement = database.prepare('SELECT * FROM skills WHERE owner_id = ? ORDER BY name ASC');
   const insertSkill = database.prepare(`
-    INSERT INTO skills (id, name, description, instructions, enabled, compatible_modes_json, metadata_json, created_at, updated_at)
-    VALUES (@id, @name, @description, @instructions, @enabled, @compatible_modes_json, @metadata_json, @created_at, @updated_at)
+    INSERT INTO skills (id, owner_id, name, description, instructions, enabled, compatible_modes_json, metadata_json, created_at, updated_at)
+    VALUES (@id, @owner_id, @name, @description, @instructions, @enabled, @compatible_modes_json, @metadata_json, @created_at, @updated_at)
   `);
   const updateSkillStatement = database.prepare(`
     UPDATE skills
@@ -65,14 +70,15 @@ export function createSkillsRepository(database: BetterSqlite3.Database = getDat
         compatible_modes_json = @compatible_modes_json,
         metadata_json = @metadata_json,
         updated_at = @updated_at
-    WHERE id = @id
+    WHERE owner_id = @owner_id AND id = @id
   `);
-  const deleteSkillStatement = database.prepare('DELETE FROM skills WHERE id = ?');
-  const setEnabledStatement = database.prepare('UPDATE skills SET enabled = ?, updated_at = ? WHERE id = ?');
+  const deleteSkillStatement = database.prepare('DELETE FROM skills WHERE owner_id = ? AND id = ?');
+  const setEnabledStatement = database.prepare('UPDATE skills SET enabled = ?, updated_at = ? WHERE owner_id = ? AND id = ?');
 
   function serializeSkill(skill: SkillRecord): SkillRow {
     return {
       id: skill.id,
+      owner_id: ownerId,
       name: skill.name,
       description: skill.description,
       instructions: skill.instructions,
@@ -85,17 +91,17 @@ export function createSkillsRepository(database: BetterSqlite3.Database = getDat
   }
 
   function getSkill(id: string): SkillRecord | null {
-    const row = selectSkill.get(id) as Row | undefined;
+    const row = selectSkill.get(ownerId, id) as Row | undefined;
     return row ? mapSkill(row) : null;
   }
 
   function getSkillByName(name: string): SkillRecord | null {
-    const row = selectSkillByName.get(name) as Row | undefined;
+    const row = selectSkillByName.get(ownerId, name) as Row | undefined;
     return row ? mapSkill(row) : null;
   }
 
   function listSkills(): SkillRecord[] {
-    return (listSkillsStatement.all() as Row[]).map(mapSkill);
+    return (listSkillsStatement.all(ownerId) as Row[]).map(mapSkill);
   }
 
   function listSkillSummaries(): SkillSummary[] {
@@ -152,12 +158,12 @@ export function createSkillsRepository(database: BetterSqlite3.Database = getDat
     const existing = getSkill(id);
     if (!existing) return null;
     const now = new Date().toISOString();
-    setEnabledStatement.run(enabled ? 1 : 0, now, id);
+    setEnabledStatement.run(enabled ? 1 : 0, now, ownerId, id);
     return { ...existing, enabled, updatedAt: now };
   }
 
   function deleteSkill(id: string): boolean {
-    const result = deleteSkillStatement.run(id);
+    const result = deleteSkillStatement.run(ownerId, id);
     return result.changes > 0;
   }
 
@@ -174,4 +180,15 @@ export function createSkillsRepository(database: BetterSqlite3.Database = getDat
   };
 }
 
-export const skillsRepository = createSkillsRepository();
+let skillsRepositorySingleton: ReturnType<typeof createSkillsRepository> | null = null;
+
+function getSkillsRepositorySingleton() {
+  skillsRepositorySingleton ??= createSkillsRepository();
+  return skillsRepositorySingleton;
+}
+
+export const skillsRepository = new Proxy({} as ReturnType<typeof createSkillsRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getSkillsRepositorySingleton(), property, receiver);
+  },
+});

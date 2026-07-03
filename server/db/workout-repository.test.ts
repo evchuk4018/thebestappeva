@@ -165,3 +165,34 @@ test('forces stale autosaves to keep the expiry finish time', () => {
   assert.equal(saved?.finishedAt, '2026-06-24T12:00:00.000Z');
   assert.equal(saved?.exercises[0].notes, 'late update');
 });
+
+test('scopes workout session and child-table reads and deletes by owner', () => {
+  const database = new BetterSqlite3(':memory:');
+  database.pragma('foreign_keys = ON');
+  ensureDatabaseSchema(database);
+  const repository = createWorkoutRepository(database, () => '2026-06-24T12:00:00.000Z');
+  const otherRepository = createWorkoutRepository(database, () => '2026-06-24T12:00:00.000Z', 'other-owner');
+
+  database.prepare('INSERT INTO workout_exercises (id, owner_id, name, category, equipment, is_preset, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+    .run('ex-mine', 'owner-local-default', 'Mine Exercise', 'Push', 'Barbell', '2026-06-24T12:00:00.000Z', '2026-06-24T12:00:00.000Z');
+  database.prepare('INSERT INTO workout_exercises (id, owner_id, name, category, equipment, is_preset, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+    .run('ex-other', 'other-owner', 'Other Exercise', 'Pull', 'Cable', '2026-06-24T12:00:00.000Z', '2026-06-24T12:00:00.000Z');
+  database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, finished_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?)')
+    .run('session-mine', 'owner-local-default', 'Mine Session', '2026-06-24T10:00:00.000Z', '2026-06-24T11:00:00.000Z', '2026-06-24T11:00:00.000Z');
+  database.prepare('INSERT INTO workout_sessions (id, owner_id, routine_id, name, started_at, finished_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?)')
+    .run('session-other', 'other-owner', 'Other Session', '2026-06-24T10:00:00.000Z', '2026-06-24T11:00:00.000Z', '2026-06-24T11:00:00.000Z');
+  database.prepare('INSERT INTO workout_session_exercises (id, owner_id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?, ?)')
+    .run('sex-mine', 'owner-local-default', 'session-mine', 'ex-mine', 0, 'mine');
+  database.prepare('INSERT INTO workout_session_exercises (id, owner_id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?, ?)')
+    .run('sex-other', 'other-owner', 'session-other', 'ex-other', 0, 'other');
+  database.prepare('INSERT INTO workout_sets (id, owner_id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run('set-mine', 'owner-local-default', 'sex-mine', 0, 2, 8, 185, 1);
+  database.prepare('INSERT INTO workout_sets (id, owner_id, session_exercise_id, set_index, rir, reps, weight, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run('set-other', 'other-owner', 'sex-other', 0, 1, 10, 120, 1);
+
+  assert.equal(repository.getSession('session-other'), null);
+  assert.equal(otherRepository.getSession('session-mine'), null);
+  assert.deepEqual(repository.listFinishedSessions({ limit: 10 }).map((session) => session.id), ['session-mine']);
+  assert.equal(repository.deleteSession('session-other'), false);
+  assert.equal(otherRepository.getSession('session-other')?.exercises[0].sets[0].id, 'set-other');
+});

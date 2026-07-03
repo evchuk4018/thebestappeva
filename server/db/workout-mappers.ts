@@ -1,7 +1,6 @@
 import type { WorkoutExercise, WorkoutHistoryEntry, WorkoutRoutine, WorkoutRoutineExercise, WorkoutSession, WorkoutSessionExercise, WorkoutSet } from '../../shared/workout-contract';
 
 export type WorkoutRow = Record<string, string | number | null>;
-export const localWorkoutOwnerId = 'local-user';
 
 export function mapExercise(row: WorkoutRow): WorkoutExercise {
   return {

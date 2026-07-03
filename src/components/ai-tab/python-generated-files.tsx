@@ -1,5 +1,5 @@
+import { downloadApiBlob, useApiObjectUrl } from '../../lib/api-resources';
 import type { PythonExecGeneratedFile } from './tools/python-exec-contract';
-import { resolveApiAssetUrl } from '../../lib/api';
 
 function parseCsv(text: string): string[][] {
   return text
@@ -66,19 +66,24 @@ function DataTable({ rows }: { rows: string[][] }) {
 }
 
 function GeneratedImage({ file }: { file: PythonExecGeneratedFile }) {
-  const src = resolveApiAssetUrl(file.downloadUrl);
+  const { error, objectUrl } = useApiObjectUrl(file.downloadUrl);
+  const src = objectUrl;
   if (!src) {
-    return null;
+    return (
+      <div className="rounded-lg border border-[#232320] bg-[#11110f] p-3 text-xs text-zinc-400">
+        {error ?? `Loading ${file.path}...`}
+      </div>
+    );
   }
   return (
-    <a href={src} target="_blank" rel="noreferrer" className="block">
+    <button className="block text-left" onClick={() => window.open(src, '_blank', 'noopener,noreferrer')} type="button">
       <img
         src={src}
         alt={file.path}
         className="max-h-72 w-auto rounded-lg border border-[#232320]"
       />
       <span className="mt-1 block text-[11px] text-zinc-500">{file.path}</span>
-    </a>
+    </button>
   );
 }
 
@@ -98,20 +103,17 @@ function GeneratedFileCard({ file }: { file: PythonExecGeneratedFile }) {
 }
 
 function FileDownloadRow({ file }: { file: PythonExecGeneratedFile }) {
-  const href = resolveApiAssetUrl(file.downloadUrl);
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-[#232320] bg-[#11110f] px-2 py-1.5">
       <span className="truncate font-mono text-[11px] text-zinc-300">{file.path}</span>
       <span className="text-[10px] text-zinc-500">{file.sizeBytes} bytes</span>
-      {href ? (
-        <a
-          href={href}
-          download={file.path.split('/').pop()}
-          className="rounded border border-[#2a3d54] bg-[#16202a] px-2 py-0.5 text-[10px] text-[#8db4d0] hover:bg-[#1f2e3a]"
-        >
-          Download
-        </a>
-      ) : null}
+      <button
+        className="rounded border border-[#2a3d54] bg-[#16202a] px-2 py-0.5 text-[10px] text-[#8db4d0] hover:bg-[#1f2e3a]"
+        onClick={() => void downloadApiBlob(file.downloadUrl, file.path.split('/').pop() ?? 'download')}
+        type="button"
+      >
+        Download
+      </button>
     </div>
   );
 }

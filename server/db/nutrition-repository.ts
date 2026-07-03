@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
 import type { NutritionDiaryEntryInput, NutritionDiaryItemInput, NutritionFoodInput, NutritionGoalsInput, NutritionHistoryQuery, NutritionRecipeInput, NutritionSearchItem } from '../../shared/nutrition-contract';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
 import { addMacros, resolveAmountG, roundNutrition, scaleMacros, scaleMacrosPer100g, timeSlotForIso, zeroMacros } from './nutrition-calculations';
-import { localNutritionOwnerId, mapDiaryEntry, mapDiaryItem, mapFood, mapGoals, mapRecipe, mapRecipeIngredient, type NutritionRow } from './nutrition-mappers';
+import { mapDiaryEntry, mapDiaryItem, mapFood, mapGoals, mapRecipe, mapRecipeIngredient, type NutritionRow } from './nutrition-mappers';
 import { rankSearchItems } from './nutrition-search';
 import { nutritionSeedFoods } from './nutrition-seed';
 
@@ -11,8 +12,11 @@ function id(prefix: string) { return `${prefix}_${crypto.randomUUID()}`; }
 function now() { return new Date().toISOString(); }
 function dateKey(isoText: string) { return new Intl.DateTimeFormat('en-CA', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).format(new Date(isoText)); }
 
-export function createNutritionRepository(database: BetterSqlite3.Database = getDatabase(), getNow = now) {
-  const owner = localNutritionOwnerId;
+export function createNutritionRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  getNow = now,
+  owner = getCanonicalOwnerId(),
+) {
 
   const foodById = (foodId: string) => {
     const row = database.prepare('SELECT * FROM nutrition_foods WHERE owner_id = ? AND id = ?').get(owner, foodId) as NutritionRow | undefined;
@@ -24,9 +28,9 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
 
   const recipeIngredients = (recipeId: string) => (database.prepare(`
     SELECT ri.*, f.name AS food_name, f.source_type AS food_source_type, f.brand_name, f.calories_per_100g, f.protein_g_per_100g, f.carbs_g_per_100g, f.fat_g_per_100g
-    FROM nutrition_recipe_ingredients ri JOIN nutrition_foods f ON f.id = ri.food_id
-    WHERE ri.recipe_id = ? ORDER BY ri.order_index, ri.id
-  `).all(recipeId) as NutritionRow[]).map((row) => mapRecipeIngredient(row, scaleMacrosPer100g({
+    FROM nutrition_recipe_ingredients ri JOIN nutrition_foods f ON f.owner_id = ri.owner_id AND f.id = ri.food_id
+    WHERE ri.owner_id = ? AND ri.recipe_id = ? ORDER BY ri.order_index, ri.id
+  `).all(owner, recipeId) as NutritionRow[]).map((row) => mapRecipeIngredient(row, scaleMacrosPer100g({
     calories: Number(row.calories_per_100g), proteinG: Number(row.protein_g_per_100g), carbsG: Number(row.carbs_g_per_100g), fatG: Number(row.fat_g_per_100g),
   }, Number(row.amount_g))));
 
@@ -43,7 +47,7 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
     .map((row) => recipeById(String(row.id))).filter(Boolean);
 
   const hydrateDiaryEntry = (row: NutritionRow) => {
-    const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(String(row.id)) as NutritionRow[]).map((itemRow) => {
+    const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE owner_id = ? AND entry_id = ? ORDER BY id').all(owner, String(row.id)) as NutritionRow[]).map((itemRow) => {
       if (itemRow.item_type === 'recipe') {
         const recipe = recipeById(String(itemRow.item_id));
         if (!recipe) throw new Error('Recipe was not found.');
@@ -71,8 +75,8 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
     database.prepare('DELETE FROM nutrition_usage_stats WHERE owner_id = ?').run(owner);
     const rows = database.prepare(`
       SELECT di.item_type, di.item_id, de.logged_at FROM nutrition_diary_items di
-      JOIN nutrition_diary_entries de ON de.id = di.entry_id WHERE de.owner_id = ?
-    `).all(owner) as NutritionRow[];
+      JOIN nutrition_diary_entries de ON de.owner_id = di.owner_id AND de.id = di.entry_id WHERE di.owner_id = ? AND de.owner_id = ?
+    `).all(owner, owner) as NutritionRow[];
     const aggregate = new Map<string, Record<string, number | string>>();
     rows.forEach((row) => {
       const key = `${row.item_type}:${row.item_id}`;
@@ -88,27 +92,27 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
   };
 
   const saveDiaryItems = (entryId: string, items: NutritionDiaryItemInput[]) => {
-    database.prepare('DELETE FROM nutrition_diary_items WHERE entry_id = ?').run(entryId);
-    const insert = database.prepare('INSERT INTO nutrition_diary_items (id, entry_id, item_type, item_id, quantity, unit, amount_g, serving_id, serving_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    database.prepare('DELETE FROM nutrition_diary_items WHERE owner_id = ? AND entry_id = ?').run(owner, entryId);
+    const insert = database.prepare('INSERT INTO nutrition_diary_items (id, owner_id, entry_id, item_type, item_id, quantity, unit, amount_g, serving_id, serving_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     items.forEach((item) => {
       if (item.itemType === 'recipe') {
         const recipe = recipeById(item.itemId);
         if (!recipe) throw new Error(`Recipe "${item.itemId}" was not found.`);
         const amountG = item.unit === 'gram' ? item.quantity : recipe.totalWeightG / Math.max(recipe.servings, 1) * item.quantity;
-        insert.run(id('ndi'), entryId, item.itemType, item.itemId, item.quantity, item.unit, amountG, item.servingId ?? null, item.unit === 'serving' ? '1 serving' : 'gram');
+        insert.run(id('ndi'), owner, entryId, item.itemType, item.itemId, item.quantity, item.unit, amountG, item.servingId ?? null, item.unit === 'serving' ? '1 serving' : 'gram');
         return;
       }
       const food = foodById(item.itemId);
       if (!food) throw new Error(`Food "${item.itemId}" was not found.`);
       const serving = item.servingId ? food.servings.find((candidate) => candidate.id === item.servingId) ?? food.servings[0] ?? null : food.servings[0] ?? null;
-      insert.run(id('ndi'), entryId, item.itemType, item.itemId, item.quantity, item.unit, resolveAmountG(food, item.quantity, item.unit, item.servingId), serving?.id ?? null, item.unit === 'serving' ? serving?.label ?? '1 serving' : 'gram');
+      insert.run(id('ndi'), owner, entryId, item.itemType, item.itemId, item.quantity, item.unit, resolveAmountG(food, item.quantity, item.unit, item.servingId), serving?.id ?? null, item.unit === 'serving' ? serving?.label ?? '1 serving' : 'gram');
     });
   };
 
   const entryInputById = (entryId: string) => {
     const entry = database.prepare('SELECT * FROM nutrition_diary_entries WHERE owner_id = ? AND id = ?').get(owner, entryId) as NutritionRow | undefined;
     if (!entry) return null;
-    const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(entryId) as NutritionRow[]).map((row) => ({
+    const items = (database.prepare('SELECT * FROM nutrition_diary_items WHERE owner_id = ? AND entry_id = ? ORDER BY id').all(owner, entryId) as NutritionRow[]).map((row) => ({
       itemType: row.item_type === 'recipe' ? 'recipe' : 'food',
       itemId: String(row.item_id),
       quantity: Number(row.quantity),
@@ -133,11 +137,11 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
       const recentItemNames = (database.prepare(`
         SELECT DISTINCT CASE WHEN di.item_type = 'recipe' THEN r.name ELSE f.name END AS item_name
         FROM nutrition_diary_items di
-        JOIN nutrition_diary_entries de ON de.id = di.entry_id
-        LEFT JOIN nutrition_foods f ON f.id = di.item_id AND di.item_type = 'food'
-        LEFT JOIN nutrition_recipes r ON r.id = di.item_id AND di.item_type = 'recipe'
-        WHERE de.owner_id = ? ORDER BY de.logged_at DESC LIMIT 6
-      `).all(owner) as NutritionRow[]).map((row) => String(row.item_name));
+        JOIN nutrition_diary_entries de ON de.owner_id = di.owner_id AND de.id = di.entry_id
+        LEFT JOIN nutrition_foods f ON f.owner_id = di.owner_id AND f.id = di.item_id AND di.item_type = 'food'
+        LEFT JOIN nutrition_recipes r ON r.owner_id = di.owner_id AND r.id = di.item_id AND di.item_type = 'recipe'
+        WHERE di.owner_id = ? AND de.owner_id = ? ORDER BY de.logged_at DESC LIMIT 6
+      `).all(owner, owner) as NutritionRow[]).map((row) => String(row.item_name));
       return { selectedDate, goals: this.getGoals(), entries: listDiaryEntries({ date: selectedDate }), recipes: listRecipes(), recentItemNames };
     },
     listDiaryEntries(query: NutritionHistoryQuery) {
@@ -168,11 +172,11 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
       input.ingredients.forEach((ingredient) => { if (!foodById(ingredient.foodId)) throw new Error(`Food "${ingredient.foodId}" was not found.`); });
       const nextId = recipeId ?? id('recipe');
       const createdAt = recipeId ? String((recipeRowById(recipeId)?.created_at ?? getNow())) : getNow();
-      const insertIngredient = database.prepare('INSERT INTO nutrition_recipe_ingredients (id, recipe_id, food_id, amount_g, order_index) VALUES (?, ?, ?, ?, ?)');
+      const insertIngredient = database.prepare('INSERT INTO nutrition_recipe_ingredients (id, owner_id, recipe_id, food_id, amount_g, order_index) VALUES (?, ?, ?, ?, ?, ?)');
       database.transaction(() => {
         database.prepare('INSERT INTO nutrition_recipes (id, owner_id, name, note, servings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, note = excluded.note, servings = excluded.servings, updated_at = excluded.updated_at').run(nextId, owner, input.name, input.note ?? '', input.servings, createdAt, getNow());
-        database.prepare('DELETE FROM nutrition_recipe_ingredients WHERE recipe_id = ?').run(nextId);
-        input.ingredients.forEach((ingredient, index) => insertIngredient.run(id('nri'), nextId, ingredient.foodId, ingredient.amountG, ingredient.orderIndex ?? index));
+        database.prepare('DELETE FROM nutrition_recipe_ingredients WHERE owner_id = ? AND recipe_id = ?').run(owner, nextId);
+        input.ingredients.forEach((ingredient, index) => insertIngredient.run(id('nri'), owner, nextId, ingredient.foodId, ingredient.amountG, ingredient.orderIndex ?? index));
       })();
       return recipeById(nextId)!;
     },
@@ -194,7 +198,7 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
     updateDiaryItem(entryId: string, itemId: string, item: NutritionDiaryItemInput) {
       const entry = entryInputById(entryId);
       if (!entry) return null;
-      const rows = (database.prepare('SELECT id FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(entryId) as NutritionRow[]).map((row) => String(row.id));
+      const rows = (database.prepare('SELECT id FROM nutrition_diary_items WHERE owner_id = ? AND entry_id = ? ORDER BY id').all(owner, entryId) as NutritionRow[]).map((row) => String(row.id));
       return this.saveDiaryEntry(entryId, { ...entry, items: entry.items.map((current, index) => rows[index] === itemId ? item : current) });
     },
     deleteDiaryEntry(entryId: string) {
@@ -205,7 +209,7 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
     deleteDiaryItem(entryId: string, itemId: string) {
       const entry = entryInputById(entryId);
       if (!entry) return false;
-      const rows = (database.prepare('SELECT id FROM nutrition_diary_items WHERE entry_id = ? ORDER BY id').all(entryId) as NutritionRow[]).map((row) => String(row.id));
+      const rows = (database.prepare('SELECT id FROM nutrition_diary_items WHERE owner_id = ? AND entry_id = ? ORDER BY id').all(owner, entryId) as NutritionRow[]).map((row) => String(row.id));
       const items = entry.items.filter((_, index) => rows[index] !== itemId);
       if (!items.length) return this.deleteDiaryEntry(entryId);
       this.saveDiaryEntry(entryId, { ...entry, items });
@@ -222,4 +226,15 @@ export function createNutritionRepository(database: BetterSqlite3.Database = get
   };
 }
 
-export const nutritionRepository = createNutritionRepository();
+let nutritionRepositorySingleton: ReturnType<typeof createNutritionRepository> | null = null;
+
+function getNutritionRepositorySingleton() {
+  nutritionRepositorySingleton ??= createNutritionRepository();
+  return nutritionRepositorySingleton;
+}
+
+export const nutritionRepository = new Proxy({} as ReturnType<typeof createNutritionRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getNutritionRepositorySingleton(), property, receiver);
+  },
+});

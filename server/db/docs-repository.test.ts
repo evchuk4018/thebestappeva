@@ -16,7 +16,7 @@ test('creates docs schema tables and indexes', () => {
   const tables = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'docs_%' ORDER BY name`).all() as Array<{ name: string }>;
   const indexes = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_docs_%' ORDER BY name`).all() as Array<{ name: string }>;
   assert.deepEqual(tables.map((entry) => entry.name), ['docs_citations', 'docs_documents', 'docs_migration_sources', 'docs_tabs', 'docs_versions']);
-  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_docs_citations_document_id', 'idx_docs_documents_updated_at', 'idx_docs_tabs_document_id', 'idx_docs_versions_document_created']);
+  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_docs_citations_owner_document_id', 'idx_docs_documents_owner_updated_at', 'idx_docs_tabs_owner_document_id', 'idx_docs_versions_owner_document_created']);
 });
 
 test('supports document CRUD, tab reorder, and citations', () => {
@@ -102,4 +102,22 @@ test('imports migrations idempotently and rolls back invalid payloads', () => {
     versions: [{ id: 'version-bad', docId: 'missing-doc', tabId: null, createdAt: new Date().toISOString(), label: 'Bad', kind: 'auto', content: '<p>x</p>', contentFormat: 'html', snapshotTitle: 'Bad' }],
   }), /invalid document relationships/);
   assert.equal(repository.hasMigration('browser-b'), false);
+});
+
+test('scopes document reads, writes, and deletes by owner', () => {
+  const { database, repository } = createTestRepository();
+  const otherRepository = createDocsRepository(database, 'other-owner');
+  const canonical = repository.createDoc('blank');
+  const other = otherRepository.createDoc('blank');
+
+  assert.equal(repository.getDocBundle(other.doc.id), null);
+  assert.equal(repository.listDocs().length, 1);
+  assert.equal(otherRepository.listDocs().length, 1);
+
+  repository.deleteDoc(other.doc.id);
+  assert.equal(otherRepository.getDocBundle(other.doc.id)?.doc.id, other.doc.id);
+
+  const updated = repository.saveCitations(canonical.doc.id, [{ id: 'citation-1', label: 'Only mine', details: 'Details' }]);
+  assert.equal(updated.length, 1);
+  assert.equal(otherRepository.getDocBundle(other.doc.id)?.citations.length, 0);
 });

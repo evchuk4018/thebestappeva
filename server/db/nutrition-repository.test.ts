@@ -136,3 +136,29 @@ test('updates and deletes diary entries cleanly', () => {
   assert.equal(repository.deleteDiaryEntry(entry.id), true);
   assert.equal(repository.bootstrap('2026-06-24').entries.length, 0);
 });
+
+test('scopes nutrition entry and child-item reads and deletes by owner', () => {
+  const database = new BetterSqlite3(':memory:');
+  database.pragma('foreign_keys = ON');
+  ensureDatabaseSchema(database);
+  const repository = createNutritionRepository(database, () => '2026-06-24T12:00:00.000Z');
+  const otherRepository = createNutritionRepository(database, () => '2026-06-24T12:00:00.000Z', 'other-owner');
+
+  database.prepare('INSERT INTO nutrition_foods (id, owner_id, source_type, name, brand_name, barcode_text, servings_json, calories_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)')
+    .run('food-mine', 'owner-local-default', 'brand', 'Mine Food', '[]', 100, 10, 10, 10, '2026-06-24T12:00:00.000Z', '2026-06-24T12:00:00.000Z');
+  database.prepare('INSERT INTO nutrition_foods (id, owner_id, source_type, name, brand_name, barcode_text, servings_json, calories_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)')
+    .run('food-other', 'other-owner', 'brand', 'Other Food', '[]', 200, 20, 20, 20, '2026-06-24T12:00:00.000Z', '2026-06-24T12:00:00.000Z');
+  database.prepare('INSERT INTO nutrition_diary_entries (id, owner_id, logged_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run('entry-mine', 'owner-local-default', '2026-06-24T08:00:00.000Z', 'Mine', '2026-06-24T08:00:00.000Z', '2026-06-24T08:00:00.000Z');
+  database.prepare('INSERT INTO nutrition_diary_entries (id, owner_id, logged_at, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run('entry-other', 'other-owner', '2026-06-24T09:00:00.000Z', 'Other', '2026-06-24T09:00:00.000Z', '2026-06-24T09:00:00.000Z');
+  database.prepare('INSERT INTO nutrition_diary_items (id, owner_id, entry_id, item_type, item_id, quantity, unit, amount_g, serving_id, serving_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)')
+    .run('item-mine', 'owner-local-default', 'entry-mine', 'food', 'food-mine', 100, 'gram', 100);
+  database.prepare('INSERT INTO nutrition_diary_items (id, owner_id, entry_id, item_type, item_id, quantity, unit, amount_g, serving_id, serving_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)')
+    .run('item-other', 'other-owner', 'entry-other', 'food', 'food-other', 100, 'gram', 100);
+
+  assert.deepEqual(repository.listDiaryEntries({ date: '2026-06-24' }).map((entry) => entry.id), ['entry-mine']);
+  assert.deepEqual(otherRepository.listDiaryEntries({ date: '2026-06-24' }).map((entry) => entry.id), ['entry-other']);
+  assert.equal(repository.deleteDiaryEntry('entry-other'), false);
+  assert.equal(otherRepository.listDiaryEntries({ date: '2026-06-24' })[0].items[0].id, 'item-other');
+});

@@ -35,6 +35,9 @@ const defaultVisionModels = ['qwen3-vl:8b', 'qwen2.5vl:7b', 'qwen3-vl:4b', 'qwen
 export const serverConfig = {
   host: readStringEnv('HOST', '0.0.0.0'),
   port: readNumberEnv('PORT', 3000),
+  supabaseUrl: process.env.SUPABASE_URL?.trim() || '',
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY?.trim() || '',
+  appOwnerEmail: process.env.APP_OWNER_EMAIL?.trim() || '',
   modelProvider: normalizeModelProvider(process.env.MODEL_PROVIDER),
   ollamaHost: readStringEnv('OLLAMA_HOST', 'http://127.0.0.1:11434').replace(/\/+$/, ''),
   ollamaModel: readStringEnv('OLLAMA_MODEL', 'qwen3.5:9b-q4_K_M'),
@@ -70,7 +73,7 @@ export const serverConfig = {
   visionMaxCallsPerMessage: readNumberEnv('VISION_MAX_CALLS_PER_MESSAGE', 4),
   geminiBaseUrl: readStringEnv('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, ''),
   geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',
-aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserCommand),
+  aiPythonExecCommand: readStringEnv('AI_PYTHON_EXEC_COMMAND', defaultParserCommand),
   aiPythonExecArgs: readStringListEnv('AI_PYTHON_EXEC_ARGS').length ? readStringListEnv('AI_PYTHON_EXEC_ARGS') : defaultParserArgs,
   aiPythonExecTimeoutMs: readNumberEnv('AI_PYTHON_EXEC_TIMEOUT_MS', 30000),
   aiPythonExecMaxCodeChars: readNumberEnv('AI_PYTHON_EXEC_MAX_CODE_CHARS', 20000),

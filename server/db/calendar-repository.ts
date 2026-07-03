@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
 import type { CalendarCategory, CalendarEvent, CalendarEventInput, CalendarList, CalendarSettings, CalendarTask, CalendarTaskInput } from '../../shared/calendar-contract';
 import { expandEvent, markConflicts, recurrenceFromInput, type CalendarExceptionRow } from '../calendar-recurrence';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
-import { defaultCalendarSettings, localCalendarOwnerId, mapCalendar, mapCategory, mapEvent, mapRecurrence, mapSettings, mapTask, type CalendarRow } from './calendar-mappers';
+import { defaultCalendarSettings, mapCalendar, mapCategory, mapEvent, mapRecurrence, mapSettings, mapTask, type CalendarRow } from './calendar-mappers';
 
 const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
 
@@ -62,8 +63,22 @@ function taskInput(task: CalendarTask): CalendarTaskInput {
   };
 }
 
-export function createCalendarRepository(database: BetterSqlite3.Database = getDatabase()) {
-  const owner = localCalendarOwnerId;
+export function createCalendarRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  owner = getCanonicalOwnerId(),
+) {
+  let lastUndoCreatedAt = '';
+
+  function nextUndoCreatedAt() {
+    const current = now();
+    if (current > lastUndoCreatedAt) {
+      lastUndoCreatedAt = current;
+      return current;
+    }
+
+    lastUndoCreatedAt = new Date(Date.parse(lastUndoCreatedAt) + 1).toISOString();
+    return lastUndoCreatedAt;
+  }
 
   function recurrence(targetKind: 'event' | 'task', targetId: string) {
     const row = database.prepare('SELECT * FROM calendar_recurrence_rules WHERE owner_id = ? AND target_kind = ? AND target_id = ?').get(owner, targetKind, targetId) as CalendarRow | undefined;
@@ -72,7 +87,7 @@ export function createCalendarRepository(database: BetterSqlite3.Database = getD
 
   function saveUndo(entityKind: string, entityId: string, actionKind: string, before: unknown, after: unknown) {
     database.prepare('INSERT INTO calendar_undo_actions (id, owner_id, action_kind, entity_kind, entity_id, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id('undo'), owner, actionKind, entityKind, entityId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, now());
+      .run(id('undo'), owner, actionKind, entityKind, entityId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, nextUndoCreatedAt());
   }
 
   function saveRecurrence(targetKind: 'event' | 'task', targetId: string, startsAt: string, input: CalendarEventInput['recurrence']) {

@@ -72,3 +72,32 @@ test('supports structured table edits and linked docs export', () => {
   assert.equal(secondExport.docId, firstExport.docId);
   assert.equal(artifactsRepo.getArtifact('chat-1', created.artifactId)?.linkedDocId, firstExport.docId);
 });
+
+test('scopes artifact reads, updates, versions, and deletes by owner', () => {
+  const { database, docsRepo } = createTestRepositories();
+  const canonicalRepo = createAiArtifactsRepository(database, { docsRepo });
+  const otherDocsRepo = createDocsRepository(database, 'other-owner');
+  const otherRepo = createAiArtifactsRepository(database, { docsRepo: otherDocsRepo, ownerId: 'other-owner' });
+
+  const canonicalArtifact = canonicalRepo.createArtifact('chat-1', {
+    title: 'Mine',
+    type: 'markdown',
+    content: 'Alpha',
+    contextPolicy: { mode: 'chunked' },
+  });
+  const otherArtifact = otherRepo.createArtifact('chat-1', {
+    title: 'Theirs',
+    type: 'markdown',
+    content: 'Beta',
+    contextPolicy: { mode: 'chunked' },
+  });
+
+  assert.deepEqual(canonicalRepo.listArtifacts('chat-1').map((artifact) => artifact.artifactId), [canonicalArtifact.artifactId]);
+  assert.equal(canonicalRepo.getArtifact('chat-1', otherArtifact.artifactId), null);
+  assert.deepEqual(canonicalRepo.listVersions('chat-1', otherArtifact.artifactId), []);
+  assert.throws(() => canonicalRepo.updateArtifact('chat-1', { artifactId: otherArtifact.artifactId, content: 'Gamma', reason: 'Nope' }), /was not found/i);
+
+  canonicalRepo.deleteArtifact('chat-1', otherArtifact.artifactId);
+
+  assert.equal(otherRepo.getArtifact('chat-1', otherArtifact.artifactId)?.title, 'Theirs');
+});

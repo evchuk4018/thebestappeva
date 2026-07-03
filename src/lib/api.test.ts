@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { registerApiAuthBridge, resetApiAuthBridgeForTests } from './api-auth';
 import { ApiError, requestJson, resolveApiAssetUrl, resolveApiUrl, streamJsonLines } from './api';
 import { resetAppConfigForTests, setAppConfigForTests } from './app-config';
 
@@ -20,6 +21,7 @@ function createStreamResponse(lines: string[]) {
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+  resetApiAuthBridgeForTests();
   resetAppConfigForTests();
 });
 
@@ -79,4 +81,95 @@ test('streamJsonLines preserves abort errors', async () => {
     () => streamJsonLines('/ai/chat/stream', () => undefined, { signal: controller.signal }),
     (error: unknown) => error instanceof DOMException && error.name === 'AbortError',
   );
+});
+
+test('requestJson attaches the latest bearer token and preserves caller headers', async () => {
+  registerApiAuthBridge({
+    getAccessToken: async () => 'token-123',
+  });
+
+  let authorization = '';
+  let customHeader = '';
+  globalThis.fetch = async (_input, init) => {
+    authorization = new Headers(init?.headers).get('Authorization') ?? '';
+    customHeader = new Headers(init?.headers).get('x-client') ?? '';
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  await requestJson('/ai/runtime-config', { headers: { 'x-client': 'present' } });
+
+  assert.equal(authorization, 'Bearer token-123');
+  assert.equal(customHeader, 'present');
+});
+
+test('requestJson skips bearer attachment when unauthenticated', async () => {
+  registerApiAuthBridge({
+    getAccessToken: async () => null,
+  });
+
+  let authorization: string | null = 'sentinel';
+  globalThis.fetch = async (_input, init) => {
+    authorization = new Headers(init?.headers).get('Authorization');
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  await requestJson('/ai/runtime-config');
+
+  assert.equal(authorization, null);
+});
+
+test('requestJson refreshes once and retries one unauthorized response', async () => {
+  const calls: string[] = [];
+  let refreshCalls = 0;
+  let authFailures = 0;
+  registerApiAuthBridge({
+    getAccessToken: async () => 'expired-token',
+    refreshAccessToken: async () => {
+      refreshCalls += 1;
+      return 'fresh-token';
+    },
+    onAuthFailure: async () => {
+      authFailures += 1;
+    },
+  });
+
+  globalThis.fetch = async (_input, init) => {
+    calls.push(new Headers(init?.headers).get('Authorization') ?? '');
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({ ok: false, error: 'Authentication required.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  await requestJson('/ai/runtime-config');
+
+  assert.deepEqual(calls, ['Bearer expired-token', 'Bearer fresh-token']);
+  assert.equal(refreshCalls, 1);
+  assert.equal(authFailures, 0);
+});
+
+test('requestJson marks the session invalid when refresh fails after a 401', async () => {
+  const failures: string[] = [];
+  registerApiAuthBridge({
+    getAccessToken: async () => 'expired-token',
+    refreshAccessToken: async () => null,
+    onAuthFailure: async (reason) => {
+      failures.push(reason);
+    },
+  });
+
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify({ ok: false, error: 'Authentication required.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  await assert.rejects(
+    () => requestJson('/ai/runtime-config'),
+    (error: unknown) => error instanceof ApiError && error.status === 401,
+  );
+
+  assert.equal(fetchCalls, 1);
+  assert.deepEqual(failures, ['refresh-failed']);
 });

@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import type BetterSqlite3 from 'better-sqlite3';
 import type { WorkoutExerciseInput, WorkoutLoggedSessionInput, WorkoutRoutineInput, WorkoutSession } from '../../shared/workout-contract';
+import { getCanonicalOwnerId } from '../ownership';
 import { defaultRoutines, presetExercises } from './workout-seed';
 import { getDatabase } from './database';
-import { localWorkoutOwnerId, mapExercise, mapHistoryEntry, mapRoutine, mapRoutineExercise, mapSession, mapSessionExercise, mapSet, type WorkoutRow } from './workout-mappers';
+import { mapExercise, mapHistoryEntry, mapRoutine, mapRoutineExercise, mapSession, mapSessionExercise, mapSet, type WorkoutRow } from './workout-mappers';
 import { getWorkoutSessionExpiry, isWorkoutSessionExpired } from './workout-session-expiry';
 import { createWorkoutSessionWriter } from './workout-session-writes';
 
@@ -26,9 +27,12 @@ function setSummary(row: WorkoutRow) {
   return `${weight} x ${reps}${rir}`;
 }
 
-export function createWorkoutRepository(database: BetterSqlite3.Database = getDatabase(), getNow = now) {
-  const owner = localWorkoutOwnerId;
-  const writer = createWorkoutSessionWriter(database, id);
+export function createWorkoutRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  getNow = now,
+  owner = getCanonicalOwnerId(),
+) {
+  const writer = createWorkoutSessionWriter(database, id, owner);
 
   function exerciseByName(name: string) {
     return database.prepare('SELECT * FROM workout_exercises WHERE owner_id = ? AND name = ?').get(owner, name) as WorkoutRow | undefined;
@@ -45,9 +49,9 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
   function routineExercises(routineId: string) {
     return (database.prepare(`
       SELECT re.*, e.name AS exercise_name FROM workout_routine_exercises re
-      JOIN workout_exercises e ON e.id = re.exercise_id
-      WHERE re.routine_id = ? ORDER BY re.order_index, re.id
-    `).all(routineId) as WorkoutRow[]).map(mapRoutineExercise);
+      JOIN workout_exercises e ON e.owner_id = re.owner_id AND e.id = re.exercise_id
+      WHERE re.owner_id = ? AND re.routine_id = ? ORDER BY re.order_index, re.id
+    `).all(owner, routineId) as WorkoutRow[]).map(mapRoutineExercise);
   }
 
   function lastPerformed(exerciseId: string, currentSessionId: string) {
@@ -58,18 +62,18 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       ORDER BY s.finished_at DESC, s.id DESC LIMIT 1
     `).get(owner, currentSessionId, exerciseId) as WorkoutRow | undefined;
     if (!row) return null;
-    const sets = database.prepare('SELECT * FROM workout_sets WHERE session_exercise_id = ? AND completed = 1 ORDER BY set_index LIMIT 4').all(row.id) as WorkoutRow[];
+    const sets = database.prepare('SELECT * FROM workout_sets WHERE owner_id = ? AND session_exercise_id = ? AND completed = 1 ORDER BY set_index LIMIT 4').all(owner, row.id) as WorkoutRow[];
     return sets.length ? `Last: ${sets.map(setSummary).join(' | ')}` : null;
   }
 
   function sessionExercises(sessionId: string) {
     const rows = database.prepare(`
       SELECT se.*, e.name AS exercise_name FROM workout_session_exercises se
-      JOIN workout_exercises e ON e.id = se.exercise_id
-      WHERE se.session_id = ? ORDER BY se.order_index, se.id
-    `).all(sessionId) as WorkoutRow[];
+      JOIN workout_exercises e ON e.owner_id = se.owner_id AND e.id = se.exercise_id
+      WHERE se.owner_id = ? AND se.session_id = ? ORDER BY se.order_index, se.id
+    `).all(owner, sessionId) as WorkoutRow[];
     return rows.map((row) => {
-      const sets = (database.prepare('SELECT * FROM workout_sets WHERE session_exercise_id = ? ORDER BY set_index, id').all(row.id) as WorkoutRow[]).map(mapSet);
+      const sets = (database.prepare('SELECT * FROM workout_sets WHERE owner_id = ? AND session_exercise_id = ? ORDER BY set_index, id').all(owner, row.id) as WorkoutRow[]).map(mapSet);
       return mapSessionExercise(row, sets, lastPerformed(String(row.exercise_id), sessionId));
     });
   }
@@ -80,9 +84,9 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
   }
 
   function saveRoutineExercises(routineId: string, exercises: WorkoutRoutineInput['exercises']) {
-    database.prepare('DELETE FROM workout_routine_exercises WHERE routine_id = ?').run(routineId);
-    const insert = database.prepare('INSERT INTO workout_routine_exercises (id, routine_id, exercise_id, order_index, target_sets, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-    exercises.forEach((exercise, index) => insert.run(id('rex'), routineId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.targetSets ?? 3, getNow()));
+    database.prepare('DELETE FROM workout_routine_exercises WHERE owner_id = ? AND routine_id = ?').run(owner, routineId);
+    const insert = database.prepare('INSERT INTO workout_routine_exercises (id, owner_id, routine_id, exercise_id, order_index, target_sets, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    exercises.forEach((exercise, index) => insert.run(id('rex'), owner, routineId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.targetSets ?? 3, getNow()));
   }
 
   function finishExpiredSessions(referenceTime = getNow()) {
@@ -151,20 +155,20 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
         SELECT s.*,
           COALESCE((SELECT GROUP_CONCAT(name, '|') FROM (
             SELECT e.name AS name FROM workout_session_exercises se
-            JOIN workout_exercises e ON e.id = se.exercise_id
-            WHERE se.session_id = s.id ORDER BY se.order_index, se.id
+            JOIN workout_exercises e ON e.owner_id = se.owner_id AND e.id = se.exercise_id
+            WHERE se.owner_id = s.owner_id AND se.session_id = s.id ORDER BY se.order_index, se.id
           )), '') AS exercise_names,
-          COALESCE((SELECT COUNT(*) FROM workout_session_exercises se WHERE se.session_id = s.id), 0) AS exercise_count,
-          COALESCE((SELECT COUNT(*) FROM workout_sets ws JOIN workout_session_exercises se ON se.id = ws.session_exercise_id WHERE se.session_id = s.id AND ws.completed = 1), 0) AS completed_set_count
+          COALESCE((SELECT COUNT(*) FROM workout_session_exercises se WHERE se.owner_id = s.owner_id AND se.session_id = s.id), 0) AS exercise_count,
+          COALESCE((SELECT COUNT(*) FROM workout_sets ws JOIN workout_session_exercises se ON se.owner_id = ws.owner_id AND se.id = ws.session_exercise_id WHERE se.owner_id = s.owner_id AND se.session_id = s.id AND ws.completed = 1), 0) AS completed_set_count
         FROM workout_sessions s
         WHERE s.owner_id = ? AND s.finished_at IS NOT NULL
           AND (? IS NULL OR LOWER(s.name) LIKE ? OR EXISTS(
             SELECT 1 FROM workout_session_exercises se
-            JOIN workout_exercises e ON e.id = se.exercise_id
-            WHERE se.session_id = s.id AND LOWER(e.name) LIKE ?
+            JOIN workout_exercises e ON e.owner_id = se.owner_id AND e.id = se.exercise_id
+            WHERE se.owner_id = s.owner_id AND se.session_id = s.id AND LOWER(e.name) LIKE ?
           ))
           AND (? IS NULL OR EXISTS(
-            SELECT 1 FROM workout_session_exercises se WHERE se.session_id = s.id AND se.exercise_id = ?
+            SELECT 1 FROM workout_session_exercises se WHERE se.owner_id = s.owner_id AND se.session_id = s.id AND se.exercise_id = ?
           ))
         ORDER BY s.finished_at DESC, s.updated_at DESC, s.id DESC
         LIMIT ?
@@ -176,7 +180,7 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
       const createdAt = getNow();
       database.prepare('INSERT INTO workout_exercises (id, owner_id, name, category, equipment, is_preset, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
         .run(exerciseId, owner, input.name.trim(), input.category ?? 'Custom', input.equipment ?? 'Other', createdAt, createdAt);
-      return mapExercise(database.prepare('SELECT * FROM workout_exercises WHERE id = ?').get(exerciseId) as WorkoutRow);
+      return mapExercise(database.prepare('SELECT * FROM workout_exercises WHERE owner_id = ? AND id = ?').get(owner, exerciseId) as WorkoutRow);
     },
     saveRoutine(routineId: string | null, input: WorkoutRoutineInput) {
       const routine = routineId ? database.prepare('SELECT * FROM workout_routines WHERE owner_id = ? AND id = ?').get(owner, routineId) as WorkoutRow | undefined : null;
@@ -247,8 +251,8 @@ export function createWorkoutRepository(database: BetterSqlite3.Database = getDa
           .run(sessionId, owner, input.routineId ?? null, input.name.trim(), input.startedAt, input.finishedAt, getNow());
         input.exercises.forEach((exercise, index) => {
           const sessionExerciseId = id('sex');
-          database.prepare('INSERT INTO workout_session_exercises (id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?)')
-            .run(sessionExerciseId, sessionId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.notes ?? '');
+          database.prepare('INSERT INTO workout_session_exercises (id, owner_id, session_id, exercise_id, order_index, notes) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(sessionExerciseId, owner, sessionId, exercise.exerciseId, exercise.orderIndex ?? index, exercise.notes ?? '');
           exercise.sets.forEach((set, setIndex) => writer.insertSessionSet(sessionExerciseId, set.setIndex ?? setIndex, set));
         });
       })();

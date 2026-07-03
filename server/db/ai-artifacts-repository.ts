@@ -19,7 +19,8 @@ import {
   summarizeMarkdown,
 } from '../ai-artifacts-markdown';
 import type { DocTabRecord } from '../../shared/docs-contract';
-import { createDocsRepository, docsRepository } from './docs-repository';
+import { getCanonicalOwnerId } from '../ownership';
+import { createDocsRepository } from './docs-repository';
 import { getDatabase } from './database';
 
 type Row = Record<string, string | number | null>;
@@ -72,15 +73,16 @@ function createArtifactId() {
 
 export function createAiArtifactsRepository(
   database: BetterSqlite3.Database = getDatabase(),
-  options: { docsRepo?: ReturnType<typeof createDocsRepository> } = {},
+  options: { docsRepo?: ReturnType<typeof createDocsRepository>; ownerId?: string } = {},
 ) {
-  const docsRepo = options.docsRepo ?? docsRepository;
-  const selectArtifact = database.prepare('SELECT * FROM ai_artifacts WHERE id = ? AND chat_id = ?');
-  const listArtifactsStatement = database.prepare('SELECT * FROM ai_artifacts WHERE chat_id = ? ORDER BY updated_at DESC, id DESC');
-  const selectVersions = database.prepare('SELECT * FROM ai_artifact_versions WHERE artifact_id = ? ORDER BY created_at DESC, id DESC');
+  const ownerId = options.ownerId ?? getCanonicalOwnerId();
+  const docsRepo = options.docsRepo ?? createDocsRepository(database, ownerId);
+  const selectArtifact = database.prepare('SELECT * FROM ai_artifacts WHERE owner_id = ? AND id = ? AND chat_id = ?');
+  const listArtifactsStatement = database.prepare('SELECT * FROM ai_artifacts WHERE owner_id = ? AND chat_id = ? ORDER BY updated_at DESC, id DESC');
+  const selectVersions = database.prepare('SELECT * FROM ai_artifact_versions WHERE owner_id = ? AND artifact_id = ? ORDER BY created_at DESC, id DESC');
   const insertArtifact = database.prepare(`
-    INSERT INTO ai_artifacts (id, chat_id, title, type, schema_version, content_markdown, context_policy_json, citations_json, linked_doc_id, last_exported_at, created_at, updated_at)
-    VALUES (@id, @chat_id, @title, @type, @schema_version, @content_markdown, @context_policy_json, @citations_json, @linked_doc_id, @last_exported_at, @created_at, @updated_at)
+    INSERT INTO ai_artifacts (id, owner_id, chat_id, title, type, schema_version, content_markdown, context_policy_json, citations_json, linked_doc_id, last_exported_at, created_at, updated_at)
+    VALUES (@id, @owner_id, @chat_id, @title, @type, @schema_version, @content_markdown, @context_policy_json, @citations_json, @linked_doc_id, @last_exported_at, @created_at, @updated_at)
   `);
   const updateArtifactStatement = database.prepare(`
     UPDATE ai_artifacts
@@ -92,15 +94,15 @@ export function createAiArtifactsRepository(
         linked_doc_id = @linked_doc_id,
         last_exported_at = @last_exported_at,
         updated_at = @updated_at
-    WHERE id = @id AND chat_id = @chat_id
+    WHERE owner_id = @owner_id AND id = @id AND chat_id = @chat_id
   `);
   const insertVersion = database.prepare(`
-    INSERT INTO ai_artifact_versions (id, artifact_id, title, type, content_markdown, context_policy_json, citations_json, linked_doc_id, last_exported_at, actor, reason, created_at)
-    VALUES (@id, @artifact_id, @title, @type, @content_markdown, @context_policy_json, @citations_json, @linked_doc_id, @last_exported_at, @actor, @reason, @created_at)
+    INSERT INTO ai_artifact_versions (id, owner_id, artifact_id, title, type, content_markdown, context_policy_json, citations_json, linked_doc_id, last_exported_at, actor, reason, created_at)
+    VALUES (@id, @owner_id, @artifact_id, @title, @type, @content_markdown, @context_policy_json, @citations_json, @linked_doc_id, @last_exported_at, @actor, @reason, @created_at)
   `);
 
   function getArtifact(chatId: string, artifactId: string) {
-    const row = selectArtifact.get(artifactId, chatId) as Row | undefined;
+    const row = selectArtifact.get(ownerId, artifactId, chatId) as Row | undefined;
     return row ? mapRecord(row) : null;
   }
 
@@ -108,6 +110,7 @@ export function createAiArtifactsRepository(
     const versionId = createVersionId();
     insertVersion.run({
       id: versionId,
+      owner_id: ownerId,
       artifact_id: artifact.artifactId,
       title: artifact.title,
       type: artifact.type,
@@ -126,6 +129,7 @@ export function createAiArtifactsRepository(
   function persistArtifact(artifact: ArtifactRecord) {
     updateArtifactStatement.run({
       id: artifact.artifactId,
+      owner_id: ownerId,
       chat_id: artifact.sessionId,
       title: artifact.title,
       type: artifact.type,
@@ -160,6 +164,7 @@ export function createAiArtifactsRepository(
       };
       insertArtifact.run({
         id: artifact.artifactId,
+        owner_id: ownerId,
         chat_id: artifact.sessionId,
         title: artifact.title,
         type: artifact.type,
@@ -175,11 +180,11 @@ export function createAiArtifactsRepository(
       return getArtifact(chatId, artifact.artifactId)!;
     },
     listArtifacts(chatId: string, includePreview = false) {
-      return (listArtifactsStatement.all(chatId) as Row[]).map((row) => mapSummary(row, String(row.content_markdown), includePreview));
+      return (listArtifactsStatement.all(ownerId, chatId) as Row[]).map((row) => mapSummary(row, String(row.content_markdown), includePreview));
     },
     getArtifact,
     listVersions(chatId: string, artifactId: string) {
-      return getArtifact(chatId, artifactId) ? (selectVersions.all(artifactId) as Row[]).map(mapVersion) : [];
+      return getArtifact(chatId, artifactId) ? (selectVersions.all(ownerId, artifactId) as Row[]).map(mapVersion) : [];
     },
     updateArtifact(chatId: string, request: UpdateArtifactRequest, actor: UpdateActor = 'assistant') {
       return database.transaction(() => {
@@ -232,7 +237,7 @@ export function createAiArtifactsRepository(
     restoreVersion(chatId: string, artifactId: string, versionId: string) {
       return database.transaction(() => {
         const current = getArtifact(chatId, artifactId);
-        const version = (database.prepare('SELECT * FROM ai_artifact_versions WHERE artifact_id = ? AND id = ?').get(artifactId, versionId) as Row | undefined);
+        const version = (database.prepare('SELECT * FROM ai_artifact_versions WHERE owner_id = ? AND artifact_id = ? AND id = ?').get(ownerId, artifactId, versionId) as Row | undefined);
         if (!current || !version) throw new Error(`Artifact version "${versionId}" was not found.`);
         snapshotArtifact(current, 'system', `Restore from ${versionId}`);
         const nextArtifact: ArtifactRecord = {
@@ -279,9 +284,20 @@ export function createAiArtifactsRepository(
       })();
     },
     deleteArtifact(chatId: string, artifactId: string) {
-      database.prepare('DELETE FROM ai_artifacts WHERE id = ? AND chat_id = ?').run(artifactId, chatId);
+      database.prepare('DELETE FROM ai_artifacts WHERE owner_id = ? AND id = ? AND chat_id = ?').run(ownerId, artifactId, chatId);
     },
   };
 }
 
-export const aiArtifactsRepository = createAiArtifactsRepository();
+let aiArtifactsRepositorySingleton: ReturnType<typeof createAiArtifactsRepository> | null = null;
+
+function getAiArtifactsRepositorySingleton() {
+  aiArtifactsRepositorySingleton ??= createAiArtifactsRepository();
+  return aiArtifactsRepositorySingleton;
+}
+
+export const aiArtifactsRepository = new Proxy({} as ReturnType<typeof createAiArtifactsRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getAiArtifactsRepositorySingleton(), property, receiver);
+  },
+});

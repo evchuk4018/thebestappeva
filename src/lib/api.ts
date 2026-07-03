@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './app-config';
+import { fetchApiWithAuth } from './api-auth';
 
 export type ApiQueryValue = string | number | boolean | null | undefined;
 
@@ -117,7 +118,8 @@ export function resolveApiAssetUrl(path: string | null | undefined) {
 }
 
 export async function requestApi(path: string, options: ApiRequestOptions = {}) {
-  return fetch(resolveApiUrl(path, options.query), buildRequestInit(options));
+  const url = resolveApiUrl(path, options.query);
+  return fetchApiWithAuth(url, buildRequestInit(options));
 }
 
 export async function readJsonResponse<T>(response: Response): Promise<T> {

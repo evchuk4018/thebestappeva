@@ -2,8 +2,6 @@ import type { CalendarCategory, CalendarEvent, CalendarList, CalendarRecurrence,
 
 export type CalendarRow = Record<string, string | number | null>;
 
-export const localCalendarOwnerId = 'local-user';
-
 export const defaultCalendarSettings: CalendarSettings = {
   timezone: 'America/New_York',
   weekStart: 'sun',

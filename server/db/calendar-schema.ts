@@ -1,4 +1,5 @@
 import type BetterSqlite3 from 'better-sqlite3';
+import { normalizeOwnerIds } from './schema-utils';
 
 export function ensureCalendarSchema(database: BetterSqlite3.Database) {
   database.exec(`
@@ -139,4 +140,14 @@ export function ensureCalendarSchema(database: BetterSqlite3.Database) {
     CREATE INDEX IF NOT EXISTS idx_calendar_task_recurrence_task ON calendar_task_recurrence_rules(owner_id, task_id);
     CREATE INDEX IF NOT EXISTS idx_calendar_undo_owner_created ON calendar_undo_actions(owner_id, created_at DESC, id DESC);
   `);
+
+  normalizeOwnerIds(database, 'calendar_calendars');
+  normalizeOwnerIds(database, 'calendar_categories');
+  normalizeOwnerIds(database, 'calendar_events');
+  normalizeOwnerIds(database, 'calendar_recurrence_rules');
+  normalizeOwnerIds(database, 'calendar_recurrence_exceptions');
+  normalizeOwnerIds(database, 'calendar_tasks');
+  normalizeOwnerIds(database, 'calendar_task_recurrence_rules');
+  normalizeOwnerIds(database, 'calendar_settings');
+  normalizeOwnerIds(database, 'calendar_undo_actions');
 }

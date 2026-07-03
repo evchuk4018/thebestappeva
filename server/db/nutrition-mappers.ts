@@ -10,7 +10,6 @@ import type {
 } from '../../shared/nutrition-contract';
 
 export type NutritionRow = Record<string, string | number | null>;
-export const localNutritionOwnerId = 'local-user';
 
 function parseServings(value: string | number | null) {
   const parsed = typeof value === 'string' ? JSON.parse(value) : [];

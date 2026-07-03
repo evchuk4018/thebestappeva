@@ -62,7 +62,7 @@ async function executeReadPages(args: Record<string, unknown>) {
 
 test('read_pdf_pages defaults to the server-managed whole-document range', async () => {
   const { requestedUrl, result } = await executeReadPages({});
-  const url = new URL(requestedUrl);
+  const url = new URL(requestedUrl, 'http://local.test');
   assert.equal(url.search, '');
   assert(!('deferred' in result));
   assert.equal(result.ok, true);
@@ -71,7 +71,7 @@ test('read_pdf_pages defaults to the server-managed whole-document range', async
 
 test('read_pdf_pages forwards explicit page bounds', async () => {
   const { requestedUrl } = await executeReadPages({ startPage: 4, endPage: 9 });
-  const url = new URL(requestedUrl);
+  const url = new URL(requestedUrl, 'http://local.test');
   assert.equal(url.searchParams.get('startPage'), '4');
   assert.equal(url.searchParams.get('endPage'), '9');
 });

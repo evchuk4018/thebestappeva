@@ -16,7 +16,7 @@ test('creates automation schema tables and indexes', () => {
   const tables = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'automations%' ORDER BY name`).all() as Array<{ name: string }>;
   const indexes = database.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_automations_%' ORDER BY name`).all() as Array<{ name: string }>;
   assert.deepEqual(tables.map((entry) => entry.name), ['automations']);
-  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_automations_due', 'idx_automations_enabled', 'idx_automations_name']);
+  assert.deepEqual(indexes.map((entry) => entry.name), ['idx_automations_owner_due', 'idx_automations_owner_enabled', 'idx_automations_owner_name']);
 });
 
 test('supports automation CRUD, enable toggles, and run reporting', () => {
@@ -43,4 +43,33 @@ test('supports automation CRUD, enable toggles, and run reporting', () => {
   const updated = repository.updateAutomation(created.id, { description: 'Updated.' });
   assert.equal(updated?.description, 'Updated.');
   assert.equal(repository.deleteAutomation(created.id), true);
+});
+
+test('scopes automations by owner while allowing duplicate names across owners', () => {
+  const { database, repository } = createTestRepository();
+  const otherRepository = createAutomationsRepository(database, 'other-owner');
+  const canonical = repository.createAutomation({
+    name: 'daily-recap',
+    description: 'Mine',
+    kind: 'conversation',
+    trigger: { phrases: ['mine'] },
+    action: { prompt: 'Mine', linkedSkillId: null, linkedSkillName: null, requiredTools: [], disabledTools: [] },
+    enabled: true,
+    nextRunAt: null,
+  });
+  const other = otherRepository.createAutomation({
+    name: 'daily-recap',
+    description: 'Other',
+    kind: 'conversation',
+    trigger: { phrases: ['other'] },
+    action: { prompt: 'Other', linkedSkillId: null, linkedSkillName: null, requiredTools: [], disabledTools: [] },
+    enabled: true,
+    nextRunAt: null,
+  });
+
+  assert.equal(repository.getAutomation(other.id), null);
+  assert.equal(repository.updateAutomation(other.id, { description: 'Nope' }), null);
+  assert.equal(repository.deleteAutomation(other.id), false);
+  assert.equal(otherRepository.getAutomation(other.id)?.description, 'Other');
+  assert.equal(repository.getAutomation(canonical.id)?.description, 'Mine');
 });

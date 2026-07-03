@@ -47,6 +47,19 @@ const sceneGraph = {
   },
 };
 
+function readHeader(headers: HeadersInit | undefined, name: string) {
+  if (!headers) {
+    return undefined;
+  }
+  if (headers instanceof Headers) {
+    return headers.get(name) ?? undefined;
+  }
+  if (Array.isArray(headers)) {
+    return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+  }
+  return Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+}
+
 test('extract_image_scene proxies the structured analysis route', async () => {
   const originalFetch = globalThis.fetch;
   let requestBody = '';
@@ -79,7 +92,7 @@ test('extract_image_scene proxies the structured analysis route', async () => {
     assert.equal(result.data?.imageId, attachment.id);
     assert.equal(result.data?.detail, 'semantic');
     assert.match(requestBody, /"detail":"semantic"/);
-    assert.equal((requestHeaders as Record<string, string>)['x-ai-tool-call-id'], 'tool-1');
+    assert.equal(readHeader(requestHeaders, 'x-ai-tool-call-id'), 'tool-1');
     assert.deepEqual((result.data?.sceneGraph as { objects: Array<{ line?: number[] }> }).objects[1]?.line, [111, 0, 111, 100]);
   } finally {
     globalThis.fetch = originalFetch;

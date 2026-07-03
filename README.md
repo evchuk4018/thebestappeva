@@ -6,10 +6,24 @@ This is a Vite + React app with AI, Docs, Calendar, Workout, and Nutrition works
 
 Prerequisites: Node.js 20+
 
+This app now requires Supabase Auth configuration before the UI can be opened beyond the login screen. Disable public sign-ups in your Supabase project and create the owner account manually before deployment.
+
 ```bash
 npm install
 npm run dev
 ```
+
+Required auth environment variables:
+
+```bash
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+APP_OWNER_EMAIL=
+```
+
+Browser code only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The server validates bearer tokens with the server-side `SUPABASE_URL` and `SUPABASE_ANON_KEY`, then allows only the normalized `APP_OWNER_EMAIL` account.
 
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
 The Node host runs through `tsx watch`, so backend and shared-code changes restart it automatically. Generated data under `.local-data`, `dist`, and `node_modules` is excluded from restart watching.
@@ -96,7 +110,7 @@ The app now includes a `/calendar` module with:
 Implementation notes:
 
 - Local persistence: same-origin `/api/calendar/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: calendar rows use `owner_id = local-user` until the app has a real auth layer
+- Local owner guard: calendar rows are scoped to the canonical server-side owner until the app has a real auth layer
 - Recurrence: `rrule` stores normalized recurrence rows plus the generated RRULE text
 - Reminders, sharing, attendees, invitations, RSVPs, booking pages, collaboration, and calendar import are intentionally not included
 
@@ -123,7 +137,7 @@ The app now includes a `/workout` module with:
 Implementation notes:
 
 - Local persistence: same-origin `/api/workout/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: workout rows use `owner_id = local-user` until the app has a real auth layer
+- Local owner guard: workout rows are scoped to the canonical server-side owner until the app has a real auth layer
 - Session model: only one unfinished workout is active at a time; starting another routine resumes that active session unless it has crossed the 24-hour auto-finish limit
 - History API: `/api/workout/history`, `/api/workout/sessions/:sessionId`, and `/api/workout/sessions/log` expose finished-session summaries, full session detail, and create-only completed workout logging
 - Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
@@ -146,7 +160,7 @@ The app now includes a `/nutrition` module with:
 Implementation notes:
 
 - Local persistence: same-origin `/api/nutrition/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: nutrition rows use `owner_id = local-user` until the app has a real auth layer
+- Local owner guard: nutrition rows are scoped to the canonical server-side owner until the app has a real auth layer
 - History API: `/api/nutrition/history` exposes diary lookup by exact date or inclusive date range
 - Seed behavior: branded foods are not seeded; they are created and stored locally by the user
 - Search ranking: food and recipe results blend fuzzy text relevance with personal usage frequency, recency decay, and coarse morning/midday/evening/late-night affinity

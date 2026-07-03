@@ -1,6 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import type { AutomationRecord, CreateAutomationRequest, ReportAutomationRunRequest, UpdateAutomationRequest } from '../../shared/automations-contract';
 import { createAutomationId } from '../../shared/automations-helpers';
+import { getCanonicalOwnerId } from '../ownership';
 import { getDatabase } from './database';
 
 type Row = Record<string, string | number | null>;
@@ -47,42 +48,45 @@ function serializeAutomation(automation: AutomationRecord) {
   };
 }
 
-export function createAutomationsRepository(database: BetterSqlite3.Database = getDatabase()) {
-  const selectAll = database.prepare('SELECT * FROM automations ORDER BY updated_at DESC, id DESC');
-  const selectById = database.prepare('SELECT * FROM automations WHERE id = ?');
-  const selectByName = database.prepare('SELECT * FROM automations WHERE name = ?');
-  const selectDue = database.prepare(`SELECT * FROM automations WHERE kind = 'schedule' AND enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at ASC, id ASC`);
+export function createAutomationsRepository(
+  database: BetterSqlite3.Database = getDatabase(),
+  ownerId = getCanonicalOwnerId(),
+) {
+  const selectAll = database.prepare('SELECT * FROM automations WHERE owner_id = ? ORDER BY updated_at DESC, id DESC');
+  const selectById = database.prepare('SELECT * FROM automations WHERE owner_id = ? AND id = ?');
+  const selectByName = database.prepare('SELECT * FROM automations WHERE owner_id = ? AND name = ?');
+  const selectDue = database.prepare(`SELECT * FROM automations WHERE owner_id = ? AND kind = 'schedule' AND enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at ASC, id ASC`);
   const insert = database.prepare(`
-    INSERT INTO automations (id, name, description, kind, trigger_json, action_json, enabled, next_run_at, last_triggered_at, last_completed_at, last_run_status, last_run_summary, last_error, last_chat_id, created_at, updated_at)
-    VALUES (@id, @name, @description, @kind, @trigger_json, @action_json, @enabled, @next_run_at, @last_triggered_at, @last_completed_at, @last_run_status, @last_run_summary, @last_error, @last_chat_id, @created_at, @updated_at)
+    INSERT INTO automations (id, owner_id, name, description, kind, trigger_json, action_json, enabled, next_run_at, last_triggered_at, last_completed_at, last_run_status, last_run_summary, last_error, last_chat_id, created_at, updated_at)
+    VALUES (@id, @owner_id, @name, @description, @kind, @trigger_json, @action_json, @enabled, @next_run_at, @last_triggered_at, @last_completed_at, @last_run_status, @last_run_summary, @last_error, @last_chat_id, @created_at, @updated_at)
   `);
   const update = database.prepare(`
     UPDATE automations
     SET name = @name, description = @description, kind = @kind, trigger_json = @trigger_json, action_json = @action_json, enabled = @enabled, next_run_at = @next_run_at,
         last_triggered_at = @last_triggered_at, last_completed_at = @last_completed_at, last_run_status = @last_run_status, last_run_summary = @last_run_summary,
         last_error = @last_error, last_chat_id = @last_chat_id, updated_at = @updated_at
-    WHERE id = @id
+    WHERE owner_id = @owner_id AND id = @id
   `);
-  const remove = database.prepare('DELETE FROM automations WHERE id = ?');
+  const remove = database.prepare('DELETE FROM automations WHERE owner_id = ? AND id = ?');
   const updateRun = database.prepare(`
     UPDATE automations
     SET enabled = @enabled, next_run_at = @next_run_at, last_triggered_at = @last_triggered_at, last_completed_at = @last_completed_at, last_run_status = @last_run_status,
         last_run_summary = @last_run_summary, last_error = @last_error, last_chat_id = @last_chat_id, updated_at = @updated_at
-    WHERE id = @id
+    WHERE owner_id = @owner_id AND id = @id
   `);
 
   function getAutomation(id: string) {
-    const row = selectById.get(id) as Row | undefined;
+    const row = selectById.get(ownerId, id) as Row | undefined;
     return row ? mapAutomation(row) : null;
   }
 
   function getAutomationByName(name: string) {
-    const row = selectByName.get(name) as Row | undefined;
+    const row = selectByName.get(ownerId, name) as Row | undefined;
     return row ? mapAutomation(row) : null;
   }
 
   return {
-    listAutomations: () => (selectAll.all() as Row[]).map(mapAutomation),
+    listAutomations: () => (selectAll.all(ownerId) as Row[]).map(mapAutomation),
     getAutomation,
     getAutomationByName,
     createAutomation(request: Omit<CreateAutomationRequest, 'enabled'> & Pick<AutomationRecord, 'action' | 'enabled' | 'nextRunAt'>) {
@@ -105,7 +109,7 @@ export function createAutomationsRepository(database: BetterSqlite3.Database = g
         createdAt: now,
         updatedAt: now,
       };
-      insert.run(serializeAutomation(automation));
+      insert.run({ owner_id: ownerId, ...serializeAutomation(automation) });
       return automation;
     },
     updateAutomation(id: string, request: UpdateAutomationRequest & Partial<Pick<AutomationRecord, 'nextRunAt'>>) {
@@ -117,22 +121,22 @@ export function createAutomationsRepository(database: BetterSqlite3.Database = g
         nextRunAt: request.nextRunAt === undefined ? existing.nextRunAt : request.nextRunAt,
         updatedAt: new Date().toISOString(),
       };
-      update.run(serializeAutomation(next));
+      update.run({ owner_id: ownerId, ...serializeAutomation(next) });
       return next;
     },
     setAutomationEnabled(id: string, enabled: boolean, nextRunAt: string | null) {
       const existing = getAutomation(id);
       if (!existing) return null;
       const next = { ...existing, enabled, nextRunAt, updatedAt: new Date().toISOString() };
-      update.run(serializeAutomation(next));
+      update.run({ owner_id: ownerId, ...serializeAutomation(next) });
       return next;
     },
     deleteAutomation(id: string) {
-      return remove.run(id).changes > 0;
+      return remove.run(ownerId, id).changes > 0;
     },
     claimDue(nowIso: string, resolveClaim: (automation: AutomationRecord) => { claimedRunAt: string; nextRunAt: string | null }) {
       const transaction = database.transaction(() => {
-        const due = (selectDue.all(nowIso) as Row[]).map(mapAutomation);
+        const due = (selectDue.all(ownerId, nowIso) as Row[]).map(mapAutomation);
         return due.map((automation) => {
           const claim = resolveClaim(automation);
           const next: AutomationRecord = {
@@ -144,7 +148,7 @@ export function createAutomationsRepository(database: BetterSqlite3.Database = g
             lastError: null,
             updatedAt: nowIso,
           };
-          updateRun.run(serializeAutomation(next));
+          updateRun.run({ owner_id: ownerId, ...serializeAutomation(next) });
           return { automation: next, claimedRunAt: claim.claimedRunAt };
         });
       });
@@ -162,10 +166,21 @@ export function createAutomationsRepository(database: BetterSqlite3.Database = g
         lastChatId: report.chatId ?? null,
         updatedAt: new Date().toISOString(),
       };
-      updateRun.run(serializeAutomation(next));
+      updateRun.run({ owner_id: ownerId, ...serializeAutomation(next) });
       return next;
     },
   };
 }
 
-export const automationsRepository = createAutomationsRepository();
+let automationsRepositorySingleton: ReturnType<typeof createAutomationsRepository> | null = null;
+
+function getAutomationsRepositorySingleton() {
+  automationsRepositorySingleton ??= createAutomationsRepository();
+  return automationsRepositorySingleton;
+}
+
+export const automationsRepository = new Proxy({} as ReturnType<typeof createAutomationsRepository>, {
+  get(_target, property, receiver) {
+    return Reflect.get(getAutomationsRepositorySingleton(), property, receiver);
+  },
+});

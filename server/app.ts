@@ -41,6 +41,10 @@ import {
 import { handlePostAiMemoryRefresh } from './ai-memory';
 import { handleGetAiPreferences, handleGetAiWorkspace, handlePutAiWorkspace } from './ai-workspace';
 import { serverConfig } from './config';
+import { normalizeEmail, readServerAuthConfig, validateResolvedServerAuthConfig, type ServerAuthConfig } from './auth/config';
+import { createRequireOwnerMiddleware } from './auth/require-owner';
+import { getRequestAuthContext } from './auth/request-context';
+import { createSupabaseTokenValidator, type AccessTokenValidator } from './auth/supabase';
 import { getDatabase } from './db/database';
 import { handleUrlFetch } from './url-fetch';
 import { handlePythonExec, handlePythonExecFileDownload } from './python-exec';
@@ -153,6 +157,23 @@ const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, '..');
 const devPortAttempts = 20;
 
+interface CreateAppOptions {
+  authConfig?: Partial<ServerAuthConfig>;
+  attachFrontend?: boolean;
+  environment?: string;
+  ownerEmail?: string;
+  tokenValidator?: AccessTokenValidator;
+}
+
+function resolveAuthConfig(options: CreateAppOptions) {
+  const baseAuthConfig = readServerAuthConfig();
+  return validateResolvedServerAuthConfig({
+    ...baseAuthConfig,
+    ...options.authConfig,
+    ownerEmail: normalizeEmail(options.authConfig?.ownerEmail ?? baseAuthConfig.ownerEmail),
+  }, options.environment);
+}
+
 function isAddressInUseError(error: unknown) {
   return error instanceof Error && 'code' in error && error.code === 'EADDRINUSE';
 }
@@ -195,6 +216,13 @@ async function listenWithDevFallback(app: Express, mode: 'dev' | 'preview') {
 }
 
 function registerApiRoutes(app: Express) {
+  app.get('/api/auth/session', (request, response) => {
+    const authContext = getRequestAuthContext(request);
+    response
+      .set('Cache-Control', 'no-store')
+      .status(200)
+      .json({ ok: true, user: { email: authContext.email } });
+  });
   app.get('/api/ai/attachments/health', (_req, res) => void handleGetAiAttachmentHealth(_req, res));
   app.post('/api/ai/attachments/parse', express.json({ limit: '35mb' }), (req, res) => void handleParseAiAttachment(req, res));
   app.use(express.json({ limit: '2mb' }));
@@ -368,16 +396,23 @@ function attachPreviewApp(app: Express) {
   });
 }
 
-export async function createApp(mode: 'dev' | 'preview') {
+export async function createApp(mode: 'dev' | 'preview', options: CreateAppOptions = {}) {
   getDatabase();
+  const authConfig = resolveAuthConfig(options);
   const app = express();
   app.disable('x-powered-by');
+  app.use('/api', createRequireOwnerMiddleware({
+    ownerEmail: options.ownerEmail ?? authConfig.ownerEmail,
+    tokenValidator: options.tokenValidator ?? createSupabaseTokenValidator(authConfig),
+  }));
   registerApiRoutes(app);
 
-  if (mode === 'preview') {
-    attachPreviewApp(app);
-  } else {
-    await attachDevApp(app);
+  if (options.attachFrontend !== false) {
+    if (mode === 'preview') {
+      attachPreviewApp(app);
+    } else {
+      await attachDevApp(app);
+    }
   }
 
   registerErrorHandler(app);
