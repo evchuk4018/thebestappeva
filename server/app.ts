@@ -46,6 +46,8 @@ import { createRequireOwnerMiddleware } from './auth/require-owner';
 import { getRequestAuthContext } from './auth/request-context';
 import { createSupabaseTokenValidator, type AccessTokenValidator } from './auth/supabase';
 import { getDatabase } from './db/database';
+import { closePostgresPool, installPostgresPoolShutdownHandlers } from './db/postgres';
+import { validatePostgresConfig, type PostgresConfigSource } from './db/postgres-config';
 import { handleUrlFetch } from './url-fetch';
 import { handlePythonExec, handlePythonExecFileDownload } from './python-exec';
 import { handleWebSearch } from './web-search';
@@ -162,6 +164,7 @@ interface CreateAppOptions {
   attachFrontend?: boolean;
   environment?: string;
   ownerEmail?: string;
+  postgresConfig?: PostgresConfigSource;
   tokenValidator?: AccessTokenValidator;
 }
 
@@ -397,6 +400,7 @@ function attachPreviewApp(app: Express) {
 }
 
 export async function createApp(mode: 'dev' | 'preview', options: CreateAppOptions = {}) {
+  validatePostgresConfig(options.postgresConfig, options.environment);
   getDatabase();
   const authConfig = resolveAuthConfig(options);
   const app = express();
@@ -420,8 +424,12 @@ export async function createApp(mode: 'dev' | 'preview', options: CreateAppOptio
 }
 
 export async function startApp(mode: 'dev' | 'preview') {
+  installPostgresPoolShutdownHandlers();
   const app = await createApp(mode);
   const { server, port } = await listenWithDevFallback(app, mode);
+  server.once('close', () => {
+    void closePostgresPool();
+  });
   console.log(`Local app server running at http://127.0.0.1:${port} (${mode})`);
   return server;
 }

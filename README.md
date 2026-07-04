@@ -4,16 +4,17 @@ This is a Vite + React app with AI, Docs, Calendar, Workout, and Nutrition works
 
 ## Local setup
 
-Prerequisites: Node.js 20+
+Prerequisites: Node.js 20+ and Docker for local Postgres.
 
 This app now requires Supabase Auth configuration before the UI can be opened beyond the login screen. Disable public sign-ups in your Supabase project and create the owner account manually before deployment.
 
 ```bash
 npm install
+npm run db:up
 npm run dev
 ```
 
-Required auth environment variables:
+Required environment variables:
 
 ```bash
 VITE_SUPABASE_URL=
@@ -21,13 +22,16 @@ VITE_SUPABASE_ANON_KEY=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 APP_OWNER_EMAIL=
+DATABASE_URL=
+POSTGRES_TEST_DATABASE_URL=
 ```
 
 Browser code only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The server validates bearer tokens with the server-side `SUPABASE_URL` and `SUPABASE_ANON_KEY`, then allows only the normalized `APP_OWNER_EMAIL` account.
+`DATABASE_URL` is required for development, test, preview, and production startup. `POSTGRES_TEST_DATABASE_URL` is optional, but when tests run with it or `DATABASE_URL`, the target must be a clearly local test database so tests cannot accidentally use development or production data.
 
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
 The Node host runs through `tsx watch`, so backend and shared-code changes restart it automatically. Generated data under `.local-data`, `dist`, and `node_modules` is excluded from restart watching.
-The local Node host also creates a SQLite database for server-owned app persistence at `.local-data/thebestappeva.sqlite`. Override that path with `LOCAL_DB_PATH` when needed.
+Local Postgres uses `docker-compose.postgres.yml` with separate dev and test services: `npm run db:up`, `npm run db:down`, `npm run db:reset`, and `npm run db:test`. Feature repositories still use the existing SQLite store until their explicit migration phase, so do not remove `LOCAL_DB_PATH` yet.
 On Windows, `npm run dev` now also ensures a repo-local Ollama install under `.local-bin/ollama`, starts `ollama serve` if needed, and then continues booting the app. If the Ollama bootstrap fails, the app still starts but local AI features may be unavailable.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
@@ -51,6 +55,7 @@ Run these checks before pushing changes:
 
 ```bash
 npm run test:files
+npm run test:postgres
 npm run lint
 npm run build
 ```

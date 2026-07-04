@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: thebestappeva-postgres
+    ports:
+      - "127.0.0.1:54322:5432"
+    environment:
+      POSTGRES_USER: thebestappeva
+      POSTGRES_PASSWORD: thebestappeva_local
+      POSTGRES_DB: thebestappeva_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thebestappeva -d thebestappeva_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: thebestappeva-postgres-test
+    ports:
+      - "127.0.0.1:54323:5432"
+    environment:
+      POSTGRES_USER: thebestappeva
+      POSTGRES_PASSWORD: thebestappeva_test
+      POSTGRES_DB: thebestappeva_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thebestappeva -d thebestappeva_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
+  postgres-test-data:

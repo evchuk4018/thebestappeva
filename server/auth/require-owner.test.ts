@@ -24,8 +24,11 @@ async function withApp<T>(
       supabaseUrl: options.authConfig?.SUPABASE_URL ?? 'https://supabase.test',
       supabaseAnonKey: options.authConfig?.SUPABASE_ANON_KEY ?? 'anon-key',
     },
-    environment: options.environment,
+    environment: options.environment ?? 'test',
     ownerEmail: options.ownerEmail,
+    postgresConfig: {
+      databaseUrl: 'postgresql://app:password@127.0.0.1:5432/thebestappeva_test',
+    },
     tokenValidator,
   });
   const server = await new Promise<import('node:http').Server>((resolve) => {
@@ -151,6 +154,9 @@ test('fails production startup when auth config is missing', async () => {
         supabaseAnonKey: '',
       },
       environment: 'production',
+      postgresConfig: {
+        databaseUrl: 'postgresql://app:password@127.0.0.1:5432/thebestappeva',
+      },
       tokenValidator: createTokenValidator({}),
     }),
     /Missing required authentication configuration: SUPABASE_URL, SUPABASE_ANON_KEY, APP_OWNER_EMAIL\./,

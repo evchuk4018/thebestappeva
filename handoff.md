@@ -1,62 +1,79 @@
-# Handoff
+# Postgres Migration Handoff
 
-## Completed
+## Current Phase
 
-- Added single-owner Supabase auth across the app.
-- Gated the SPA before mount-time API consumers run.
-- Centralized bearer-token attachment in the shared API client.
-- Added one-refresh/one-retry handling for `401` responses.
-- Protected the full `/api` namespace with server-side owner validation.
-- Added `GET /api/auth/session` for owner confirmation.
-- Replaced protected browser-native file/image URL usage with authenticated blob fetching for generated Python files.
-- Added auth-focused frontend and server tests.
-- Updated `.env.example`, `README.md`, `package.json`, and installed `@supabase/supabase-js`.
+Postgres infrastructure setup is complete for this phase. Feature repositories were intentionally not migrated.
 
-## Main Files
+## Completed Work
 
-- `src/lib/supabase-client.ts`
-- `src/auth/AuthProvider.tsx`
-- `src/auth/RequireOwner.tsx`
-- `src/auth/LoginPage.tsx`
-- `src/auth/auth-controller.ts`
-- `src/lib/api-auth.ts`
-- `src/lib/api-resources.ts`
-- `src/lib/api.ts`
-- `server/auth/config.ts`
-- `server/auth/supabase.ts`
-- `server/auth/require-owner.ts`
-- `server/auth/request-context.ts`
+- Replaced the previous auth handoff with the required Postgres migration handoff structure.
+- Added mandatory Postgres configuration validation for development, test, preview, and production startup.
+- Added optional test database URL support with local/test-name safety checks.
+- Added a server-side Postgres pool module with shared pool creation, transaction support, explicit cleanup, and process signal cleanup.
+- Added startup validation before the real server imports route modules, so missing Postgres config fails clearly before feature repositories initialize.
+- Added Docker Compose services for local Postgres 17 dev and test databases.
+- Added npm scripts for database start, stop, reset, and focused Postgres tests.
+- Added focused tests for missing configuration, pool creation, test database safety, pool cleanup, transaction behavior, and development/production startup validation.
+- Updated docs and agent instructions for the mandatory Postgres setup.
+
+## Files Changed
+
+- `.env.example`
+- `AGENTS.md`
+- `README.md`
+- `agent.md`
+- `docker-compose.postgres.yml`
+- `handoff.md`
+- `package-lock.json`
+- `package.json`
+- `server/app-postgres-startup.test.ts`
 - `server/app.ts`
+- `server/auth/require-owner.test.ts`
 - `server/config.ts`
-- `server/python-exec.ts`
+- `server/db/postgres-config.test.ts`
+- `server/db/postgres-config.ts`
+- `server/db/postgres.test.ts`
+- `server/db/postgres.ts`
+- `server/index.ts`
+- `server/startup.ts`
 
-## Required Env
+## Database Migrations Added
 
-```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-APP_OWNER_EMAIL=
-```
+- None.
 
-## Supabase Setup Notes
+## Commands and Tests Run
 
-- Disable public sign-ups in the Supabase project.
-- Create the owner account manually before deployment.
-- Browser code only uses the `VITE_` values.
-- Server-side token validation uses `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+- `npm install pg @types/pg`
+- `npm install --save-dev @types/pg`
+- `npm run test:postgres` passed.
+- `npx tsx --test server/auth/require-owner.test.ts` initially failed because one auth-only startup fixture did not provide Postgres config; after fixing the fixture, it passed.
+- `npm run test:files` passed.
+- `npm run lint` passed.
+- `npm run build` passed with the existing large chunk warning.
 
-## Verification Run
+## Decisions and Invariants
 
-- `npm run test:api-client`
-- `npx tsx --test server/auth/require-owner.test.ts`
-- `npm run lint`
-- `npm test`
-- `npm run build`
+- No credentials, connection strings, access tokens, or user content are recorded here.
+- `DATABASE_URL` is required for all runtime modes.
+- `POSTGRES_TEST_DATABASE_URL` is optional; when test mode uses it or `DATABASE_URL`, the target must be local and clearly named as a test database.
+- The Postgres pool layer has no SQLite fallback.
+- Feature repositories remain out of scope for this infrastructure phase and still use the existing SQLite store until explicit migration work begins.
+- Browser code must not query Supabase tables.
 
-## Notes
+## Known Issues or Blockers
 
-- `package-lock.json` changed because `@supabase/supabase-js` was installed.
-- There were unrelated pre-existing worktree changes in `server/db/*`, `server/ownership.ts`, and some existing tests. They were left untouched.
-- Current protected blob handling was implemented for Python generated files. If other protected resources later move to direct `<img>`, `<a>`, or `window.open` flows, they should use the same authenticated blob pattern.
+- Existing server repositories are synchronous SQLite repositories. Explicit async repository contracts and a full composition root are still missing.
+- Because route modules still statically import existing repository singletons, direct imports of `server/app.ts` can still load SQLite-backed modules before `createApp()` runs. The CLI startup path validates Postgres before dynamically importing `server/app.ts`.
+
+## Migration Verification Status
+
+- Infrastructure verification passed through focused Postgres tests, the affected `createApp()` auth test, file-length checks, TypeScript, and production build.
+- No feature data migration was attempted or added.
+
+## Next Exact Step
+
+Introduce explicit async repository contracts and a server composition root, then migrate the first feature repository to Postgres with a real schema migration and repository-level tests.
+
+## Last Commit
+
+- Before this session: `80cadbc changes`.
