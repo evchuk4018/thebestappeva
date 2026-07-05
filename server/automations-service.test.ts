@@ -16,10 +16,10 @@ function createTestService() {
   return { service: createAutomationsService(automations, skills), skills };
 }
 
-test('resolves linked skills by name when creating automations', () => {
+test('resolves linked skills by name when creating automations', async () => {
   const { service, skills } = createTestService();
-  const skill = skills.createSkill({ name: 'writer', description: 'Draft', instructions: 'Write clearly.' });
-  const automation = service.createAutomation({
+  const skill = await skills.createSkill({ name: 'writer', description: 'Draft', instructions: 'Write clearly.' });
+  const automation = await service.createAutomation({
     name: 'daily-recap',
     description: 'Run every morning.',
     kind: 'conversation',
@@ -30,9 +30,9 @@ test('resolves linked skills by name when creating automations', () => {
   assert.equal(automation.action.linkedSkillName, 'writer');
 });
 
-test('rejects missing linked skills', () => {
+test('rejects missing linked skills', async () => {
   const { service } = createTestService();
-  assert.throws(() => service.createAutomation({
+  await assert.rejects(() => service.createAutomation({
     name: 'daily-recap',
     description: 'Run every morning.',
     kind: 'conversation',

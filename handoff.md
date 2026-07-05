@@ -2,88 +2,91 @@
 
 ## Current Phase
 
-Postgres adapters are implemented and wired for application settings, AI workspace/chats/generated memory, AI artifacts/artifact versions, and Docs documents/tabs/versions/citations. Calendar, Workout, Nutrition, Skills, and Automations were intentionally not migrated in this session.
+Postgres adapters are implemented and wired for application settings, AI workspace/chats/generated memory, AI artifacts/artifact versions, Docs documents/tabs/versions/citations, Calendar, Workout, Nutrition, Skills, and Automations.
 
 ## Completed Work
 
-- Read the prior handoff, current repository interfaces, and the SQLite implementations before editing.
-- Added async Postgres repository adapters for app settings, AI workspace, Docs, and AI artifacts.
-- Kept SQL and Postgres row mapping inside the new adapter layer while returning existing shared domain types.
-- Scoped all new Postgres repository operations by validated authenticated Supabase UUID `owner_id`.
-- Switched AI workspace, Docs, AI artifacts, AI memory refresh, and image vision preference reads to per-request Postgres repositories built from `request.authContext.userId`.
-- Added explicit AI workspace revision responses and save requests: `{ revision, workspace }`.
-- Required expected workspace revision on writes, incremented revision after successful writes, and returned 409 Conflict on stale writes.
-- Replaced workspace chats atomically and deleted only absent chats for the same owner.
-- Updated AI workspace settings and generated user memory in the same transaction as chat replacement.
-- Preserved current sorting, pagination, defaults, JSONB parsing, not-found behavior, artifact history snapshots, and Docs version cursors.
-- Updated frontend AI workspace persistence to track revision and send it on saves.
-- Kept browser access routed through server APIs only; no direct browser-to-database access was added.
-- Kept Calendar, Workout, Nutrition, Skills, and Automations on their existing repositories.
+- Read the prior handoff, current SQLite-era repositories, shared contracts, route handlers, services, Postgres utilities, and Supabase migrations before editing.
+- Added async Postgres repository adapters for Calendar, Workout, Nutrition, Skills, and Automations.
+- Scoped all new repository operations by validated authenticated Supabase UUID `owner_id`.
+- Kept SQL, Postgres row normalization, JSONB conversion, boolean/numeric/date/timestamptz conversion, and row mapping inside the persistence adapters.
+- Switched Calendar, Workout, Nutrition, Skills, and Automations HTTP handlers to per-request Postgres repositories built from `request.authContext.userId`.
+- Converted Skills and Automations service paths to support async repositories while preserving built-in skill behavior, linked-skill validation, name-conflict handling, and route error mapping.
+- Preserved Calendar defaults, event/task recurrence expansion, occurrence overrides/cancellations, conflict flags, task ordering, settings, trash behavior, and undo rollback semantics.
+- Preserved Workout preset seeding, routine saves, active-session reuse, expired-session completion, routine-session set creation, session replacement, history filtering, and logged-session atomicity.
+- Preserved Nutrition seed foods/goals, brand foods, recipes, diary entries/items, history filtering, search ranking, recent item names, and usage-stat rebuilds.
+- Preserved Skills user skill CRUD, enabled filtering, summary shape, built-in ordering through the service layer, and owner-scoped name uniqueness.
+- Preserved Automations CRUD, scheduling fields, run-report fields, name uniqueness, linked-skill resolution, and due ordering.
+- Implemented concurrency-safe scheduled automation claiming with `FOR UPDATE SKIP LOCKED`, updating claim state, trigger time, next run, and status in one transaction.
+- Updated Nutrition AI food-log context/search hooks to allow async repository-backed dependencies.
+- Added focused Postgres feature repository tests covering cross-owner isolation, Calendar recurrence and undo, Workout compound writes and completion, Nutrition recipe/diary/usage behavior, Skill uniqueness, concurrent automation claims, transaction rollback, and ordering/behavior compatibility.
+- Added the new Postgres feature test file to `npm run test:postgres` / `npm run db:test`.
 
 ## Files Changed
 
 - `handoff.md`
 - `package.json`
-- `server/ai-artifacts.ts`
-- `server/ai-attachments/image-routes.ts`
-- `server/ai-attachments/vision-provider-types.ts`
-- `server/ai-attachments/vision-service.ts`
-- `server/ai-memory-service.ts`
-- `server/ai-memory.ts`
-- `server/ai-workspace.ts`
-- `server/docs.ts`
-- `server/db/postgres-ai-artifacts-repository.ts`
-- `server/db/postgres-ai-workspace-repository.ts`
-- `server/db/postgres-app-settings-repository.ts`
-- `server/db/postgres-docs-repository.ts`
-- `server/db/postgres-owner-workspace-repositories.test.ts`
-- `server/db/postgres-repository-utils.ts`
-- `shared/ai-workspace-contract.ts`
-- `src/components/ai-tab/useAiWorkspacePersistence.ts`
-- `src/lib/ai-workspace-storage.test.ts`
-- `src/lib/ai-workspace-storage.ts`
+- `server/automations-service.test.ts`
+- `server/automations-service.ts`
+- `server/automations.ts`
+- `server/calendar.ts`
+- `server/db/postgres-automations-repository.ts`
+- `server/db/postgres-calendar-repository.ts`
+- `server/db/postgres-feature-repositories.test.ts`
+- `server/db/postgres-nutrition-repository.ts`
+- `server/db/postgres-skills-repository.ts`
+- `server/db/postgres-workout-repository.ts`
+- `server/nutrition-ai-food-log.ts`
+- `server/nutrition.ts`
+- `server/skills-service.test.ts`
+- `server/skills-service.ts`
+- `server/skills.ts`
+- `server/workout.ts`
 
 ## Database Migrations Added
 
-- None. This session used the existing `app_settings`, `ai_chats`, `ai_artifacts`, `ai_artifact_versions`, `docs_*`, and `workspace_revision_state` tables from prior migrations.
+- None. This session used the existing feature tables from `supabase/migrations/20260704000000_owner_workspace_tables.sql` and `supabase/migrations/20260704010000_feature_structured_tables.sql`.
 
 ## Commands and Tests Run
 
-- `npx tsx --test server/db/postgres-owner-workspace-repositories.test.ts` passed: 4 tests passed.
-- `npx tsx --test src/lib/ai-workspace-storage.test.ts server/ai-memory-service.test.ts` passed: 5 tests passed.
-- `npx tsx --test server/ai-attachments/image-routes.test.ts server/ai-attachments/vision-service.test.ts` passed: 12 tests passed.
-- `npm run test:files` passed.
-- `npm run db:test` passed: 26 tests passed, 0 failed, 0 skipped.
 - `npm run lint` passed.
+- `npx tsx --test server/db/postgres-feature-repositories.test.ts` passed: 6 tests passed.
+- `npx tsx --test server/db/postgres-owner-workspace-repositories.test.ts` passed: 4 tests passed.
+- `npx tsx --test server/skills-service.test.ts server/automations-service.test.ts server/nutrition-ai-food-log.test.ts` passed: 11 tests passed.
+- `npm run db:test` passed: 32 tests passed.
+- `npm run test:files` passed.
 - `npm run build` passed with the existing large-chunk warning.
+- `npx tsx --test server/db/calendar-repository.test.ts server/db/workout-repository.test.ts server/db/nutrition-repository.test.ts server/db/skills-repository.test.ts server/db/automations-repository.test.ts` passed: 28 tests passed.
 
 ## Decisions and Invariants
 
 - No credentials, connection strings, access tokens, or user content are recorded here.
-- The Express server remains the primary database caller; browser code must not query Supabase tables directly.
+- Browser code still does not query Supabase tables directly; feature access remains through server APIs.
 - Owner-controlled Postgres adapters require a UUID owner ID from authenticated Supabase request context.
 - Frontend payloads never provide or override ownership.
 - Entity IDs remain application-generated `text` values scoped by `owner_id`.
-- Workspace revision state uses `workspace_revision_state` with key `ai.workspace`.
-- Stale workspace writes fail with HTTP 409 and do not mutate chats, settings, memory, or revision.
-- `npm run test:postgres` now uses `--test-concurrency=1` because Postgres migration/repository tests reset the same local test database.
+- Database row formats, Postgres `Date` values, JSONB values, numeric strings, and booleans are normalized before returning shared domain types.
+- Calendar task recurrence continues to use `calendar_recurrence_rules` with `target_kind = 'task'`, preserving current repository behavior even though the migration also includes `calendar_task_recurrence_rules`.
+- Calendar undo still creates the corresponding inverse undo entry through the same domain operation pattern as the SQLite-era repository.
+- Nutrition `recentItemNames` uses a PostgreSQL-safe grouped query ordered by last logged time.
+- Automation due claims are ordered by `next_run_at ASC, id ASC` and locked with `FOR UPDATE SKIP LOCKED` so concurrent callers do not receive the same scheduled occurrence.
+- `npm run test:postgres` continues to use `--test-concurrency=1` because migration/repository tests reset the same local test database.
 
 ## Known Issues or Blockers
 
-- Calendar, Workout, Nutrition, Skills, and Automations still use the existing SQLite-era repositories.
-- `server/app.ts` still initializes SQLite because unmigrated features need it.
-- Existing SQLite repository factories and tests still use `canonicalOwnerId`; they are retained for unmigrated features and legacy focused tests.
-- Nutrition's current SQLite-era `recentItemNames` query shape still needs a PostgreSQL-safe rewrite when Nutrition repositories are implemented.
+- `server/app.ts` still initializes SQLite with `getDatabase()` at startup. The migrated features no longer use SQLite through their route handlers, but legacy SQLite repository tests and remaining local-era infrastructure still require the SQLite schema path.
+- Existing SQLite repository factories and tests still use `canonicalOwnerId`; they are retained for legacy focused tests.
+- Build still reports the pre-existing large JavaScript chunk warning.
 
 ## Migration Verification Status
 
 - Local Postgres test service was available for validation.
-- The full sorted migration set was applied by `server/db/postgres-migrations.test.ts`.
-- Verified repository behavior for owner isolation, workspace atomicity, stale revision rejection, concurrent writes, JSONB serialization, document pagination, compound document saves, artifact version creation, and transaction rollback.
+- The full sorted migration set was applied by the Postgres test suite.
+- Verified repository behavior for owner isolation, recurrence, undo rollback, routine/session/set atomicity, session completion, recipe/diary writes, usage-stat rebuilds, skill uniqueness, concurrent automation claiming, run reporting, ordering compatibility, and failed transaction rollback.
 
 ## Next Exact Step
 
-Implement the next scoped Postgres repository migration for one remaining feature area, preferably Calendar, while continuing to inject authenticated `request.authContext.userId` as `owner_id` and without changing Workout or Nutrition in the same session.
+Run a production-style smoke test (`npm run build` then `npm run preview`) against a real authenticated session and verify the migrated feature tabs end-to-end through the UI/API.
 
 ## Last Commit
 

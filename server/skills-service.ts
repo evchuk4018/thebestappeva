@@ -7,7 +7,16 @@ import {
 import { getBuiltinSkill, getBuiltinSkillByName, hasBuiltinSkillName, listBuiltinSkills } from './builtin-skills';
 import { skillsRepository } from './db/skills-repository';
 
-type SkillsRepository = Pick<typeof skillsRepository, 'createSkill' | 'deleteSkill' | 'getSkill' | 'getSkillByName' | 'listSkills' | 'setSkillEnabled' | 'updateSkill'>;
+type MaybePromise<T> = T | Promise<T>;
+type SkillsRepository = {
+  createSkill: (request: CreateSkillRequest) => MaybePromise<SkillRecord>;
+  deleteSkill: (id: string) => MaybePromise<boolean>;
+  getSkill: (id: string) => MaybePromise<SkillRecord | null>;
+  getSkillByName: (name: string) => MaybePromise<SkillRecord | null>;
+  listSkills: () => MaybePromise<SkillRecord[]>;
+  setSkillEnabled: (id: string, enabled: boolean) => MaybePromise<SkillRecord | null>;
+  updateSkill: (id: string, request: UpdateSkillRequest) => MaybePromise<SkillRecord | null>;
+};
 
 export class BuiltinSkillMutationError extends Error {}
 export class BuiltinSkillNameConflictError extends Error {}
@@ -36,28 +45,28 @@ function assertAvailableSkillName(name: string) {
 }
 
 export function createSkillsService(repository: SkillsRepository = skillsRepository) {
-  function listSkills() {
-    return sortSkills([...listBuiltinSkills(), ...repository.listSkills()]);
+  async function listSkills() {
+    return sortSkills([...listBuiltinSkills(), ...await repository.listSkills()]);
   }
 
-  function listSkillSummaries() {
-    return listSkills().map(toSkillSummary);
+  async function listSkillSummaries() {
+    return (await listSkills()).map(toSkillSummary);
   }
 
-  function getSkill(skillId: string) {
-    return getBuiltinSkill(skillId) ?? repository.getSkill(skillId);
+  async function getSkill(skillId: string) {
+    return getBuiltinSkill(skillId) ?? await repository.getSkill(skillId);
   }
 
-  function getSkillByName(name: string) {
-    return getBuiltinSkillByName(name) ?? repository.getSkillByName(name);
+  async function getSkillByName(name: string) {
+    return getBuiltinSkillByName(name) ?? await repository.getSkillByName(name);
   }
 
-  function createSkill(request: CreateSkillRequest) {
+  async function createSkill(request: CreateSkillRequest) {
     assertAvailableSkillName(request.name);
     return repository.createSkill(request);
   }
 
-  function updateSkill(skillId: string, request: UpdateSkillRequest) {
+  async function updateSkill(skillId: string, request: UpdateSkillRequest) {
     assertMutableSkillId(skillId);
     if (request.name) {
       assertAvailableSkillName(request.name);
@@ -65,8 +74,8 @@ export function createSkillsService(repository: SkillsRepository = skillsReposit
     return repository.updateSkill(skillId, request);
   }
 
-  function updateSkillByName(skillName: string, request: UpdateSkillRequest) {
-    const existing = getSkillByName(skillName);
+  async function updateSkillByName(skillName: string, request: UpdateSkillRequest) {
+    const existing = await getSkillByName(skillName);
     if (!existing) return null;
     if (existing.readOnly) {
       throw new BuiltinSkillMutationError(`Skill "${skillName}" is built in and read-only.`);
@@ -77,12 +86,12 @@ export function createSkillsService(repository: SkillsRepository = skillsReposit
     return repository.updateSkill(existing.id, request);
   }
 
-  function setSkillEnabled(skillId: string, enabled: boolean) {
+  async function setSkillEnabled(skillId: string, enabled: boolean) {
     assertMutableSkillId(skillId);
     return repository.setSkillEnabled(skillId, enabled);
   }
 
-  function deleteSkill(skillId: string) {
+  async function deleteSkill(skillId: string) {
     assertMutableSkillId(skillId);
     return repository.deleteSkill(skillId);
   }

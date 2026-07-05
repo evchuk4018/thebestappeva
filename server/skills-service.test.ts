@@ -13,41 +13,41 @@ function createTestService() {
   return { database, repository, service: createSkillsService(repository) };
 }
 
-test('lists built-in skills before user skills and supports lookup by id and name', () => {
+test('lists built-in skills before user skills and supports lookup by id and name', async () => {
   const { service } = createTestService();
-  service.createSkill({ name: 'writer', description: 'Draft writing help.', instructions: 'Write clearly.' });
+  await service.createSkill({ name: 'writer', description: 'Draft writing help.', instructions: 'Write clearly.' });
 
-  const skills = service.listSkills();
+  const skills = await service.listSkills();
   assert.deepEqual(skills.map((skill) => `${skill.source}:${skill.name}`), ['builtin:automation-creator', 'builtin:skill-creator', 'user:writer']);
-  assert.equal(service.getSkill('builtin:skill-creator')?.readOnly, true);
-  assert.equal(service.getSkill('builtin:automation-creator')?.readOnly, true);
-  assert.equal(service.getSkillByName('skill-creator')?.source, 'builtin');
-  assert.equal(service.getSkillByName('automation-creator')?.source, 'builtin');
-  assert.equal(service.getSkillByName('writer')?.source, 'user');
+  assert.equal((await service.getSkill('builtin:skill-creator'))?.readOnly, true);
+  assert.equal((await service.getSkill('builtin:automation-creator'))?.readOnly, true);
+  assert.equal((await service.getSkillByName('skill-creator'))?.source, 'builtin');
+  assert.equal((await service.getSkillByName('automation-creator'))?.source, 'builtin');
+  assert.equal((await service.getSkillByName('writer'))?.source, 'user');
 });
 
-test('rejects creating a user skill with a built-in name', () => {
+test('rejects creating a user skill with a built-in name', async () => {
   const { service } = createTestService();
-  assert.throws(
+  await assert.rejects(
     () => service.createSkill({ name: 'skill-creator', description: 'd', instructions: 'i' }),
     BuiltinSkillNameConflictError,
   );
 });
 
-test('rejects built-in mutation operations', () => {
+test('rejects built-in mutation operations', async () => {
   const { service } = createTestService();
 
-  assert.throws(() => service.updateSkill('builtin:skill-creator', { description: 'Nope.' }), BuiltinSkillMutationError);
-  assert.throws(() => service.updateSkillByName('skill-creator', { description: 'Nope.' }), BuiltinSkillMutationError);
-  assert.throws(() => service.setSkillEnabled('builtin:skill-creator', false), BuiltinSkillMutationError);
-  assert.throws(() => service.deleteSkill('builtin:skill-creator'), BuiltinSkillMutationError);
+  await assert.rejects(() => service.updateSkill('builtin:skill-creator', { description: 'Nope.' }), BuiltinSkillMutationError);
+  await assert.rejects(() => service.updateSkillByName('skill-creator', { description: 'Nope.' }), BuiltinSkillMutationError);
+  await assert.rejects(() => service.setSkillEnabled('builtin:skill-creator', false), BuiltinSkillMutationError);
+  await assert.rejects(() => service.deleteSkill('builtin:skill-creator'), BuiltinSkillMutationError);
 });
 
-test('updates a mutable skill by skill name', () => {
+test('updates a mutable skill by skill name', async () => {
   const { service } = createTestService();
-  service.createSkill({ name: 'writer', description: 'd', instructions: 'i' });
+  await service.createSkill({ name: 'writer', description: 'd', instructions: 'i' });
 
-  const updated = service.updateSkillByName('writer', { description: 'Revised writer.' });
+  const updated = await service.updateSkillByName('writer', { description: 'Revised writer.' });
   assert.equal(updated?.description, 'Revised writer.');
-  assert.equal(service.getSkillByName('writer')?.description, 'Revised writer.');
+  assert.equal((await service.getSkillByName('writer'))?.description, 'Revised writer.');
 });
