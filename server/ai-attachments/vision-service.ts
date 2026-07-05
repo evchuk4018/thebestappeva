@@ -1,5 +1,4 @@
 import { serverConfig } from '../config';
-import { loadAiPreferences } from '../db/ai-workspace-repository';
 import { HttpError } from '../http';
 import type { AiVisionMetadata, AiVisionMode } from '../../shared/ai-vision-contract';
 import { createGeminiVisionProvider } from './gemini-vision-provider';
@@ -16,8 +15,8 @@ let testHooks: Partial<{
   onlineProvider: VisionProvider;
 }> = {};
 
-function getEffectiveVisionMode(): AiVisionMode {
-  return testHooks.mode ?? loadAiPreferences().visionMode ?? serverConfig.visionMode;
+function getEffectiveVisionMode(options: VisionRequestOptions = {}): AiVisionMode {
+  return testHooks.mode ?? options.visionMode ?? serverConfig.visionMode;
 }
 
 function getOnlineProvider() {
@@ -108,7 +107,7 @@ async function resolveVisionResult(
   action: (provider: VisionProvider) => Promise<VisionProviderResult>,
   options: VisionRequestOptions = {},
 ): Promise<ResolvedVisionResult> {
-  const mode = getEffectiveVisionMode();
+  const mode = getEffectiveVisionMode(options);
   const startedAt = Date.now();
   if (mode === 'offline') {
     const result = await runProviderWithRetries(getLocalProvider(), action, options, 'Image inspection');

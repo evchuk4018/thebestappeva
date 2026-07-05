@@ -1,14 +1,20 @@
 import { Request, Response } from 'express';
-import { parseAiWorkspaceSnapshot } from '../shared/ai-workspace-contract';
+import { parseSaveAiWorkspaceRequest } from '../shared/ai-workspace-contract';
+import { getRequestAuthContext } from './auth/request-context';
+import { createPostgresAiWorkspaceRepository } from './db/postgres-ai-workspace-repository';
+import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
 import { HttpError } from './http';
-import { loadAiPreferences, loadAiWorkspace, saveAiWorkspace } from './db/ai-workspace-repository';
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
 }
 
-export async function handleGetAiWorkspace(_request: Request, response: Response) {
-  sendJson(response, loadAiWorkspace());
+function createRepository(request: Request) {
+  return createPostgresAiWorkspaceRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
+}
+
+export async function handleGetAiWorkspace(request: Request, response: Response) {
+  sendJson(response, await createRepository(request).loadAiWorkspace());
 }
 
 export async function handlePutAiWorkspace(request: Request, response: Response) {
@@ -16,11 +22,10 @@ export async function handlePutAiWorkspace(request: Request, response: Response)
     throw new HttpError(400, 'Missing AI workspace request body.');
   }
 
-  const snapshot = parseAiWorkspaceSnapshot(request.body);
-  saveAiWorkspace(snapshot);
-  sendJson(response, snapshot);
+  const payload = parseSaveAiWorkspaceRequest(request.body);
+  sendJson(response, await createRepository(request).saveAiWorkspace(payload.workspace, payload.revision));
 }
 
-export async function handleGetAiPreferences(_request: Request, response: Response) {
-  sendJson(response, loadAiPreferences());
+export async function handleGetAiPreferences(request: Request, response: Response) {
+  sendJson(response, await createRepository(request).loadAiPreferences());
 }

@@ -1,5 +1,8 @@
 import type { Request, Response } from 'express';
+import { getRequestAuthContext } from './auth/request-context';
 import { createAiMemoryService } from './ai-memory-service';
+import { createPostgresAiWorkspaceRepository } from './db/postgres-ai-workspace-repository';
+import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
 import { HttpError } from './http';
 
 function isAbortError(error: unknown) {
@@ -29,7 +32,7 @@ function createRequestAbortController(request: Request) {
 export async function handlePostAiMemoryRefresh(
   request: Request,
   response: Response,
-  service = createAiMemoryService(),
+  service = createAiMemoryService(createPostgresAiWorkspaceRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId))),
 ) {
   const chatId = typeof request.params.chatId === 'string' ? request.params.chatId.trim() : '';
   const { controller, cleanup } = createRequestAbortController(request);

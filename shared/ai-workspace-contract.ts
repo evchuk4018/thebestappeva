@@ -89,6 +89,16 @@ export interface AiPreferences {
   visionMode: AiVisionMode;
 }
 
+export interface AiWorkspaceRevisionResponse {
+  revision: number;
+  workspace: AiWorkspaceSnapshot;
+}
+
+export interface SaveAiWorkspaceRequest {
+  revision: number;
+  workspace: AiWorkspaceSnapshot;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -96,6 +106,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function expectString(value: unknown, field: string) {
   if (typeof value !== 'string') {
     throw new Error(`Invalid ${field}. Expected a string.`);
+  }
+
+  return value;
+}
+
+function expectNumber(value: unknown, field: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Invalid ${field}. Expected a number.`);
   }
 
   return value;
@@ -278,5 +296,21 @@ export function parseAiPreferences(value: unknown, field = 'AI preferences'): Ai
         ? null
         : expectString(record.selectedModel, `${field}.selectedModel`),
     visionMode: normalizeVisionMode(record.visionMode),
+  };
+}
+
+export function parseAiWorkspaceRevisionResponse(value: unknown, field = 'AI workspace revision response'): AiWorkspaceRevisionResponse {
+  const record = expectRecord(value, field);
+  return {
+    revision: expectNumber(record.revision, `${field}.revision`),
+    workspace: parseAiWorkspaceSnapshot(record.workspace, `${field}.workspace`),
+  };
+}
+
+export function parseSaveAiWorkspaceRequest(value: unknown, field = 'AI workspace save request'): SaveAiWorkspaceRequest {
+  const record = expectRecord(value, field);
+  return {
+    revision: expectNumber(record.revision, `${field}.revision`),
+    workspace: parseAiWorkspaceSnapshot(record.workspace, `${field}.workspace`),
   };
 }

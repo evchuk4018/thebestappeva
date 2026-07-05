@@ -1,4 +1,4 @@
-import { AiPreferences, AiWorkspaceSnapshot, parseAiPreferences, parseAiWorkspaceSnapshot } from '../../shared/ai-workspace-contract';
+import { AiPreferences, AiWorkspaceSnapshot, parseAiPreferences, parseAiWorkspaceRevisionResponse } from '../../shared/ai-workspace-contract';
 import { requestJson } from './api';
 import { loadAiPreferencesWithStorage } from './ai-preferences-storage';
 
@@ -12,20 +12,24 @@ async function fetchAiPreferencesFromServer(): Promise<AiPreferences> {
 }
 
 export async function loadAiWorkspace() {
-  const workspace = parseAiWorkspaceSnapshot(await requestJson('/ai/workspace'));
+  const response = parseAiWorkspaceRevisionResponse(await requestJson('/ai/workspace'));
   const preferences = await loadAiPreferences();
+  const workspace = response.workspace;
   return {
-    ...workspace,
-    selectedProvider: preferences.selectedProvider,
-    selectedModel: preferences.selectedModel,
-    visionMode: preferences.visionMode,
+    revision: response.revision,
+    workspace: {
+      ...workspace,
+      selectedProvider: preferences.selectedProvider,
+      selectedModel: preferences.selectedModel,
+      visionMode: preferences.visionMode,
+    },
   };
 }
 
-export async function saveAiWorkspace(snapshot: AiWorkspaceSnapshot, options: SaveWorkspaceOptions = {}) {
-  return parseAiWorkspaceSnapshot(await requestJson('/ai/workspace', {
+export async function saveAiWorkspace(snapshot: AiWorkspaceSnapshot, revision: number, options: SaveWorkspaceOptions = {}) {
+  return parseAiWorkspaceRevisionResponse(await requestJson('/ai/workspace', {
     method: 'PUT',
-    json: snapshot,
+    json: { revision, workspace: snapshot },
     keepalive: options.keepalive,
     signal: options.signal,
   }));

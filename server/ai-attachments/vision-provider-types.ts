@@ -1,4 +1,5 @@
 import type { AiVisionMetadata, AiVisionProvider } from '../../shared/ai-vision-contract';
+import type { AiVisionMode } from '../../shared/ai-vision-contract';
 import type { ImageToolTelemetry } from './image-tool-runtime';
 
 export interface VisionProviderHealth {
@@ -19,6 +20,7 @@ export interface VisionProviderResult {
 
 export interface VisionRequestOptions {
   mediaType?: string;
+  visionMode?: AiVisionMode;
   signal?: AbortSignal;
   telemetry?: ImageToolTelemetry;
 }

@@ -2,7 +2,6 @@ import type { AiMemoryRefreshResponse } from '../shared/ai-memory-contract';
 import type { ModelChatMessage } from '../shared/ai-runtime-contract';
 import type { AssistantMessage, Chat, UserMessage } from '../shared/ai-workspace-contract';
 import { HttpError } from './http';
-import { createAiWorkspaceRepository } from './db/ai-workspace-repository';
 import { createDeepSeekProvider, getDeepSeekDefaultModelName } from './model-providers/deepseek';
 import type { ModelProviderDefinition } from './model-providers/types';
 
@@ -12,10 +11,10 @@ interface LatestExchange {
 }
 
 interface MemoryRepository {
-  findChatById: (chatId: string) => Chat | null;
-  loadGeneratedUserMemory: () => string;
-  saveGeneratedUserMemory: (value: string) => void;
-  updateChatSummary: (chatId: string, summary: string, summaryUpdatedAt: string | null) => Chat | null;
+  findChatById: (chatId: string) => Chat | null | Promise<Chat | null>;
+  loadGeneratedUserMemory: () => string | Promise<string>;
+  saveGeneratedUserMemory: (value: string) => void | Promise<void>;
+  updateChatSummary: (chatId: string, summary: string, summaryUpdatedAt: string | null) => Chat | null | Promise<Chat | null>;
 }
 
 type MemoryModelProvider = Pick<ModelProviderDefinition, 'callChatStream'>;
@@ -138,19 +137,19 @@ export function extractLatestCompletedExchange(chat: Chat): LatestExchange | nul
 }
 
 export function createAiMemoryService(
-  repository: MemoryRepository = createAiWorkspaceRepository(),
+  repository: MemoryRepository,
   provider: MemoryModelProvider = createDeepSeekProvider(),
   now: () => string = () => new Date().toISOString(),
 ) {
   return {
     async refreshChatMemory(chatId: string, options: { signal?: AbortSignal } = {}): Promise<AiMemoryRefreshResponse> {
       throwIfAborted(options.signal);
-      const chat = repository.findChatById(chatId);
+      const chat = await repository.findChatById(chatId);
       if (!chat) {
         throw new HttpError(404, `Chat "${chatId}" was not found.`);
       }
 
-      const generatedUserMemory = repository.loadGeneratedUserMemory();
+      const generatedUserMemory = await repository.loadGeneratedUserMemory();
       const exchange = extractLatestCompletedExchange(chat);
       const priorSummary = chat.summary ?? '';
       const priorSummaryUpdatedAt = chat.summaryUpdatedAt ?? null;
@@ -188,7 +187,7 @@ export function createAiMemoryService(
         if (!rewrittenMemory) {
           memoryError = 'The background model returned no usable memory update.';
         } else if (rewrittenMemory !== generatedUserMemory) {
-          repository.saveGeneratedUserMemory(rewrittenMemory);
+          await repository.saveGeneratedUserMemory(rewrittenMemory);
           nextMemory = rewrittenMemory;
           memoryUpdated = true;
         }
@@ -211,7 +210,7 @@ export function createAiMemoryService(
           summaryError = 'The background model returned no usable chat summary.';
         } else if (rewrittenSummary !== priorSummary) {
           nextSummaryUpdatedAt = now();
-          repository.updateChatSummary(chatId, rewrittenSummary, nextSummaryUpdatedAt);
+          await repository.updateChatSummary(chatId, rewrittenSummary, nextSummaryUpdatedAt);
           nextSummary = rewrittenSummary;
           summaryUpdated = true;
         }

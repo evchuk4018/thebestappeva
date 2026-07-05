@@ -70,6 +70,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
   const [hydrationStatus, setHydrationStatus] = useState<HydrationStatus>('loading');
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+  const revisionRef = useRef(0);
   const lastSavedSnapshotRef = useRef(JSON.stringify(createEmptyAiWorkspaceSnapshot()));
   const chatsRef = useRef<Chat[]>([]);
   const generatedUserMemoryRef = useRef('');
@@ -137,8 +138,9 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
     }
 
     try {
-      const savedSnapshot = await saveAiWorkspace(nextSnapshot, { keepalive: options.keepalive });
-      lastSavedSnapshotRef.current = JSON.stringify(savedSnapshot);
+      const saved = await saveAiWorkspace(nextSnapshot, revisionRef.current, { keepalive: options.keepalive });
+      revisionRef.current = saved.revision;
+      lastSavedSnapshotRef.current = JSON.stringify(saved.workspace);
       setPersistenceError(null);
     } catch (error) {
       setPersistenceError(toErrorMessage(error, 'Unable to save the local AI workspace.'));
@@ -150,7 +152,8 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
 
     async function hydrateWorkspace() {
       try {
-        const loadedSnapshot = await loadAiWorkspace();
+        const loaded = await loadAiWorkspace();
+        const loadedSnapshot = loaded.workspace;
         if (cancelled) {
           return;
         }
@@ -159,6 +162,7 @@ export function useAiWorkspacePersistence(): AiWorkspacePersistenceState {
         const nextSnapshot = normalizedChats.changed ? { ...loadedSnapshot, chats: normalizedChats.chats } : loadedSnapshot;
 
         hydratedRef.current = true;
+        revisionRef.current = loaded.revision;
         lastSavedSnapshotRef.current = JSON.stringify(loadedSnapshot);
         chatsRef.current = nextSnapshot.chats;
         generatedUserMemoryRef.current = nextSnapshot.generatedUserMemory;

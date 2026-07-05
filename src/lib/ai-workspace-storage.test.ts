@@ -49,28 +49,34 @@ test('loads chats from the workspace API while hydrating provider preferences fr
     }
 
     return new Response(JSON.stringify({
-      chats: [{
-        id: 'chat-1',
-        title: 'Migrated',
-        messages: [],
-        activeArtifactId: null,
-        includedArtifactIds: [],
-        mode: 'thinking',
-        updatedAt: '2026-06-12T00:00:00.000Z',
-      }],
-      generatedUserMemory: 'Prefers concise replies.',
-      selectedProvider: 'ollama',
-      selectedModel: 'qwen3.5:9b-q4_K_M',
-      enabledTools: { web_search: true },
-      customSystemPrompt: 'Keep it tight.',
+      revision: 7,
+      workspace: {
+        chats: [{
+          id: 'chat-1',
+          title: 'Migrated',
+          messages: [],
+          activeArtifactId: null,
+          includedArtifactIds: [],
+          mode: 'thinking',
+          updatedAt: '2026-06-12T00:00:00.000Z',
+        }],
+        generatedUserMemory: 'Prefers concise replies.',
+        selectedProvider: 'ollama',
+        selectedModel: 'qwen3.5:9b-q4_K_M',
+        visionMode: 'offline',
+        enabledTools: { web_search: true },
+        customSystemPrompt: 'Keep it tight.',
+      },
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   };
 
-  const workspace = await loadAiWorkspace();
+  const response = await loadAiWorkspace();
+  const workspace = response.workspace;
 
+  assert.equal(response.revision, 7);
   assert.equal(workspace.chats.length, 1);
   assert.equal(workspace.chats[0]?.id, 'chat-1');
   assert.equal(workspace.generatedUserMemory, 'Prefers concise replies.');
