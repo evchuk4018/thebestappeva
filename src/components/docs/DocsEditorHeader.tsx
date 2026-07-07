@@ -27,7 +27,7 @@ export function DocsEditorHeader({ doc, error, saveState, onBack, onToggleStar, 
       </div>
       <div className="flex items-center gap-3">
         <div className="rounded-full bg-[#0a0d11] px-4 py-2 text-xs text-zinc-400">
-          {saveState === 'saving' ? 'Saving...' : error ? error : saveState === 'saved' ? 'Saved to SQLite' : 'Editing'}
+          {saveState === 'saving' ? 'Saving...' : error ? error : saveState === 'saved' ? 'Saved to Postgres' : 'Editing'}
         </div>
         <button className="rounded-full border border-[#2d3340] p-2 text-zinc-300 transition hover:border-[#3f4656] hover:text-white">
           <History size={16} />

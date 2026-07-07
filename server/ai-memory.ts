@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
-import { getRequestAuthContext } from './auth/request-context';
-import { createAiMemoryService } from './ai-memory-service';
-import { createPostgresAiWorkspaceRepository } from './db/postgres-ai-workspace-repository';
-import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
+import type { ServerRequestDependencies } from './composition-root';
 import { HttpError } from './http';
+
+type AiMemoryRouteDependencies = Pick<ServerRequestDependencies, 'aiMemoryService'>;
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
@@ -32,8 +31,9 @@ function createRequestAbortController(request: Request) {
 export async function handlePostAiMemoryRefresh(
   request: Request,
   response: Response,
-  service = createAiMemoryService(createPostgresAiWorkspaceRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId))),
+  dependenciesOrService: AiMemoryRouteDependencies | { refreshChatMemory: (chatId: string, options?: { signal?: AbortSignal }) => Promise<unknown> },
 ) {
+  const service = 'aiMemoryService' in dependenciesOrService ? dependenciesOrService.aiMemoryService : dependenciesOrService;
   const chatId = typeof request.params.chatId === 'string' ? request.params.chatId.trim() : '';
   const { controller, cleanup } = createRequestAbortController(request);
 

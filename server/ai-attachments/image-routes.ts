@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { getRequestAuthContext } from '../auth/request-context';
+import type { ServerRequestDependencies } from '../composition-root';
 import { serverConfig } from '../config';
-import { createPostgresAiWorkspaceRepository } from '../db/postgres-ai-workspace-repository';
-import { getOwnerUuidFromRequestContext } from '../db/postgres-repository-utils';
 import { HttpError, getRequiredQueryParam } from '../http';
 import { isStoredImageAttachmentRecord } from './record-guards';
 import { sendAttachmentRouteError } from './route-errors';
@@ -12,6 +10,8 @@ import { compareGeneratedImage } from './image-compare-service';
 import { createImageToolTelemetryFromRequest, createRequestAbortController } from './image-tool-runtime';
 import { answerImageQuestionWithVisionProvider, describeImageWithVisionProvider } from './vision-service';
 import fs from 'node:fs/promises';
+
+type ImageRouteDependencies = Pick<ServerRequestDependencies, 'loadAiVisionMode'>;
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError';
@@ -61,15 +61,11 @@ async function readStoredImageBase64(attachmentId: string, sourceExtension: stri
   return imageBuffer.toString('base64');
 }
 
-async function loadRequestVisionMode(request: Request) {
-  if (!request.authContext?.userId) {
-    return serverConfig.visionMode;
-  }
-  const repository = createPostgresAiWorkspaceRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
-  return (await repository.loadAiPreferences()).visionMode;
+async function loadRequestVisionMode(dependencies?: ImageRouteDependencies) {
+  return dependencies ? await dependencies.loadAiVisionMode() : serverConfig.visionMode;
 }
 
-export async function handlePostAiImageDescribe(request: Request, response: Response) {
+export async function handlePostAiImageDescribe(request: Request, response: Response, dependencies?: ImageRouteDependencies) {
   const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
   const { controller, cleanup } = createRequestAbortController(request);
   const telemetry = createImageToolTelemetryFromRequest(request, { toolName: 'describe_image', imageId: attachmentId });
@@ -82,7 +78,7 @@ export async function handlePostAiImageDescribe(request: Request, response: Resp
     telemetry.log('image_loaded');
     const payload = await describeImageWithVisionProvider(
       await readStoredImageBase64(attachmentId, record.sourceExtension),
-      { mediaType: record.attachment.mediaType, visionMode: await loadRequestVisionMode(request), signal: controller.signal, telemetry },
+      { mediaType: record.attachment.mediaType, visionMode: await loadRequestVisionMode(dependencies), signal: controller.signal, telemetry },
     );
     telemetry.log('tool_result_returned', { provider: payload.metadata.provider, model: payload.metadata.model, finalStatus: 'ok' });
     response.json({
@@ -102,7 +98,7 @@ export async function handlePostAiImageDescribe(request: Request, response: Resp
   }
 }
 
-export async function handlePostAiImageQuestion(request: Request, response: Response) {
+export async function handlePostAiImageQuestion(request: Request, response: Response, dependencies?: ImageRouteDependencies) {
   const attachmentId = getRequiredQueryParam(request.params.attachmentId, 'attachmentId');
   const { controller, cleanup } = createRequestAbortController(request);
   const telemetry = createImageToolTelemetryFromRequest(request, { toolName: 'ask_image_model', imageId: attachmentId });
@@ -118,7 +114,7 @@ export async function handlePostAiImageQuestion(request: Request, response: Resp
     const payload = await answerImageQuestionWithVisionProvider(
       await readStoredImageBase64(attachmentId, record.sourceExtension),
       question,
-      { mediaType: record.attachment.mediaType, visionMode: await loadRequestVisionMode(request), signal: controller.signal, telemetry },
+      { mediaType: record.attachment.mediaType, visionMode: await loadRequestVisionMode(dependencies), signal: controller.signal, telemetry },
     );
     telemetry.log('tool_result_returned', { provider: payload.metadata.provider, model: payload.metadata.model, finalStatus: 'ok' });
     response.json({

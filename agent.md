@@ -17,7 +17,7 @@
 - `src/App.tsx` is the route map for `/ai`, `/docs`, `/calendar`, `/workout`, and `/nutrition`; workspace code lives under `src/components/*`.
 - `server/app.ts` is the API wiring entrypoint. Add or change HTTP routes there, and keep storage logic in `server/db/*`.
 - `shared/*` is the client/server contract boundary. Update shared contracts when request or response shapes change.
-- Runtime data is local-first: Postgres is required at startup through `DATABASE_URL`; existing feature repositories still use SQLite at `.local-data/thebestappeva.sqlite` until their migration phase. Attachments and Python exec workspaces stay under `.local-data/`.
+- Runtime data is local-first: Postgres is required at startup through `DATABASE_URL` and is the only application runtime persistence implementation. Legacy SQLite repository/schema modules remain for one-time importer paths and focused legacy tests only. Attachments and Python exec workspaces stay under `.local-data/`.
 
 ## Gotchas
 

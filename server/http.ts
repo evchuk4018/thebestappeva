@@ -10,6 +10,75 @@ export class HttpError extends Error {
   }
 }
 
+const databaseUnavailableCodes = new Set([
+  '08000',
+  '08003',
+  '08006',
+  '57P01',
+  '57P02',
+  '57P03',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+]);
+
+const invalidPersistenceInputCodes = new Set([
+  '22001',
+  '22007',
+  '22008',
+  '22P02',
+  '23502',
+  '23503',
+  '23514',
+]);
+
+function errorCode(error: unknown) {
+  return error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : '';
+}
+
+function isPgPersistenceError(error: unknown) {
+  return error && typeof error === 'object' && (
+    'code' in error ||
+    'severity' in error ||
+    'routine' in error ||
+    'constraint' in error
+  );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '';
+}
+
+function isDomainPersistenceInputError(message: string) {
+  return /invalid document relationships|food "|recipe "|routine was not found|exercise "/i.test(message);
+}
+
+export function toHttpErrorResponse(error: unknown, fallback = 'The local server failed unexpectedly.') {
+  if (error instanceof HttpError) {
+    return { statusCode: error.statusCode, message: error.message };
+  }
+
+  const code = errorCode(error);
+  const message = errorMessage(error);
+  if (code === '23505' || /duplicate key|unique constraint|unique violation/i.test(message)) {
+    return { statusCode: 409, message: 'Persistence conflict.' };
+  }
+  if (invalidPersistenceInputCodes.has(code) || isDomainPersistenceInputError(message)) {
+    return { statusCode: 400, message: 'Invalid persistence input.' };
+  }
+  if (databaseUnavailableCodes.has(code) || code.startsWith('08')) {
+    return { statusCode: 503, message: 'Database is unavailable.' };
+  }
+  if (isPgPersistenceError(error)) {
+    return { statusCode: 500, message: 'Unexpected persistence failure.' };
+  }
+
+  return { statusCode: 500, message: fallback };
+}
+
 export function toErrorMessage(error: unknown, fallback: string) {
   if (error instanceof HttpError) {
     return error.message;

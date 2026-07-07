@@ -8,17 +8,17 @@ import {
   type DocsMigrationImportRequest,
   type SaveDocRequest,
 } from '../shared/docs-contract';
-import { getRequestAuthContext } from './auth/request-context';
-import { createPostgresDocsRepository } from './db/postgres-docs-repository';
-import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
+import type { ServerRequestDependencies } from './composition-root';
 import { HttpError, getOptionalIntParam, getOptionalQueryParam } from './http';
+
+type DocsRouteDependencies = Pick<ServerRequestDependencies, 'docsRepository'>;
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
 }
 
-function createRepository(request: Request) {
-  return createPostgresDocsRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
+function repository(dependencies: DocsRouteDependencies) {
+  return dependencies.docsRepository;
 }
 
 function expectBody(request: Request) {
@@ -60,134 +60,134 @@ function parseMigrationImportRequest(value: unknown): DocsMigrationImportRequest
   };
 }
 
-export async function handleListDocs(request: Request, response: Response) {
-  sendJson(response, { docs: await createRepository(request).listDocs(getOptionalQueryParam(request.query.query), getOptionalQueryParam(request.query.sort) as never, request.query.showTrash === 'true') });
+export async function handleListDocs(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  sendJson(response, { docs: await repository(dependencies).listDocs(getOptionalQueryParam(request.query.query), getOptionalQueryParam(request.query.sort) as never, request.query.showTrash === 'true') });
 }
 
-export async function handleCreateDoc(request: Request, response: Response) {
+export async function handleCreateDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const body = expectBody(request);
-  const docsRepository = createRepository(request);
+  const docsRepository = repository(dependencies);
   const bundle = typeof body.html === 'string' && typeof body.title === 'string'
     ? await docsRepository.createImportedDoc(body.title, body.html)
     : await docsRepository.createDoc(typeof body.templateId === 'string' ? body.templateId : 'blank');
   sendJson(response, bundle);
 }
 
-export async function handleGetDoc(request: Request, response: Response) {
-  const bundle = await createRepository(request).getDocBundle(request.params.docId, getOptionalQueryParam(request.query.cursor));
+export async function handleGetDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).getDocBundle(request.params.docId, getOptionalQueryParam(request.query.cursor));
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handlePutDoc(request: Request, response: Response) {
+export async function handlePutDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const payload = parseSaveDocRequest(expectBody(request));
   if (payload.doc.id !== request.params.docId) throw new HttpError(400, 'Document ID mismatch.');
-  sendJson(response, await createRepository(request).saveDoc(payload));
+  sendJson(response, await repository(dependencies).saveDoc(payload));
 }
 
-export async function handleDeleteDoc(request: Request, response: Response) {
-  await createRepository(request).deleteDoc(request.params.docId);
+export async function handleDeleteDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  await repository(dependencies).deleteDoc(request.params.docId);
   sendJson(response, { ok: true });
 }
 
-export async function handleDuplicateDoc(request: Request, response: Response) {
-  const bundle = await createRepository(request).duplicateDoc(request.params.docId);
+export async function handleDuplicateDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).duplicateDoc(request.params.docId);
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handleTrashDoc(request: Request, response: Response) {
-  const bundle = await createRepository(request).setDocField(request.params.docId, (doc) => ({ ...doc, trashedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
+export async function handleTrashDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).setDocField(request.params.docId, (doc) => ({ ...doc, trashedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handleRestoreDoc(request: Request, response: Response) {
-  const bundle = await createRepository(request).setDocField(request.params.docId, (doc) => ({ ...doc, trashedAt: null, updatedAt: new Date().toISOString() }));
+export async function handleRestoreDoc(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).setDocField(request.params.docId, (doc) => ({ ...doc, trashedAt: null, updatedAt: new Date().toISOString() }));
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handleGetDocTabs(request: Request, response: Response) {
-  const bundle = await createRepository(request).getDocBundle(request.params.docId);
+export async function handleGetDocTabs(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).getDocBundle(request.params.docId);
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, { tabs: bundle.tabs });
 }
 
-export async function handlePostDocTab(request: Request, response: Response) {
+export async function handlePostDocTab(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const tab = parseDocTabRecord(expectBody(request).tab, 'Document tab');
   if (tab.docId !== request.params.docId) throw new HttpError(400, 'Tab doc ID mismatch.');
-  sendJson(response, await createRepository(request).saveTabs([tab]));
+  sendJson(response, await repository(dependencies).saveTabs([tab]));
 }
 
-export async function handlePutDocTab(request: Request, response: Response) {
+export async function handlePutDocTab(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const tab = parseDocTabRecord(expectBody(request).tab, 'Document tab');
   if (tab.id !== request.params.tabId) throw new HttpError(400, 'Tab ID mismatch.');
-  sendJson(response, await createRepository(request).saveTabs([tab]));
+  sendJson(response, await repository(dependencies).saveTabs([tab]));
 }
 
-export async function handleDeleteDocTab(request: Request, response: Response) {
-  const bundle = await createRepository(request).deleteTab(request.params.docId, request.params.tabId);
+export async function handleDeleteDocTab(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).deleteTab(request.params.docId, request.params.tabId);
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handleListDocVersions(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).listVersions(request.params.docId, getOptionalQueryParam(request.query.cursor), getOptionalIntParam(request.query.limit, 25, 1, 100)));
+export async function handleListDocVersions(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  sendJson(response, await repository(dependencies).listVersions(request.params.docId, getOptionalQueryParam(request.query.cursor), getOptionalIntParam(request.query.limit, 25, 1, 100)));
 }
 
-export async function handleCreateDocVersion(request: Request, response: Response) {
+export async function handleCreateDocVersion(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const payload = parseSaveDocRequest(expectBody(request));
   if (!payload.tab || !payload.version) throw new HttpError(400, 'Creating a version requires tab and version data.');
-  sendJson(response, await createRepository(request).saveDoc(payload));
+  sendJson(response, await repository(dependencies).saveDoc(payload));
 }
 
-export async function handleGetDocVersion(request: Request, response: Response) {
-  const version = await createRepository(request).getVersion(request.params.docId, request.params.versionId);
+export async function handleGetDocVersion(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const version = await repository(dependencies).getVersion(request.params.docId, request.params.versionId);
   if (!version) throw new HttpError(404, `Version "${request.params.versionId}" was not found.`);
   sendJson(response, { version });
 }
 
-export async function handleRestoreDocVersion(request: Request, response: Response) {
-  const bundle = await createRepository(request).restoreVersion(request.params.docId, request.params.versionId);
+export async function handleRestoreDocVersion(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).restoreVersion(request.params.docId, request.params.versionId);
   if (!bundle) throw new HttpError(404, `Version "${request.params.versionId}" was not found.`);
   sendJson(response, bundle);
 }
 
-export async function handleGetDocCitations(request: Request, response: Response) {
-  const bundle = await createRepository(request).getDocBundle(request.params.docId);
+export async function handleGetDocCitations(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const bundle = await repository(dependencies).getDocBundle(request.params.docId);
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, { citations: bundle.citations });
 }
 
-export async function handleSaveDocCitations(request: Request, response: Response) {
+export async function handleSaveDocCitations(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const body = expectBody(request);
   const citations = Array.isArray(body.citations) ? body.citations.map((entry, index) => parseCitationSource(entry, `Citations[${index}]`)) : [];
-  sendJson(response, { citations: await createRepository(request).saveCitations(request.params.docId, citations) });
+  sendJson(response, { citations: await repository(dependencies).saveCitations(request.params.docId, citations) });
 }
 
-export async function handleDeleteDocCitation(request: Request, response: Response) {
-  const docsRepository = createRepository(request);
+export async function handleDeleteDocCitation(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  const docsRepository = repository(dependencies);
   const bundle = await docsRepository.getDocBundle(request.params.docId);
   if (!bundle) throw new HttpError(404, `Document "${request.params.docId}" was not found.`);
   sendJson(response, { citations: await docsRepository.saveCitations(request.params.docId, bundle.citations.filter((citation) => citation.id !== request.params.citationId)) });
 }
 
-export async function handleGetDocPreferences(request: Request, response: Response) {
-  sendJson(response, { preferences: await createRepository(request).loadPreferences() });
+export async function handleGetDocPreferences(_request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  sendJson(response, { preferences: await repository(dependencies).loadPreferences() });
 }
 
-export async function handlePutDocPreferences(request: Request, response: Response) {
-  sendJson(response, { preferences: await createRepository(request).savePreferences(parseDocPreferences(expectBody(request).preferences, 'Docs preferences')) });
+export async function handlePutDocPreferences(request: Request, response: Response, dependencies: DocsRouteDependencies) {
+  sendJson(response, { preferences: await repository(dependencies).savePreferences(parseDocPreferences(expectBody(request).preferences, 'Docs preferences')) });
 }
 
-export async function handleGetDocsMigrationStatus(request: Request, response: Response) {
+export async function handleGetDocsMigrationStatus(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const sourceKey = getOptionalQueryParam(request.query.sourceKey);
-  sendJson(response, { migrated: sourceKey ? await createRepository(request).hasMigration(sourceKey) : false });
+  sendJson(response, { migrated: sourceKey ? await repository(dependencies).hasMigration(sourceKey) : false });
 }
 
-export async function handleImportDocsMigration(request: Request, response: Response) {
+export async function handleImportDocsMigration(request: Request, response: Response, dependencies: DocsRouteDependencies) {
   const payload = parseMigrationImportRequest(expectBody(request));
   if (!payload.sourceKey.trim()) throw new HttpError(400, 'Missing migration source key.');
-  sendJson(response, { ok: true, counts: await createRepository(request).importMigration(payload) });
+  sendJson(response, { ok: true, counts: await repository(dependencies).importMigration(payload) });
 }

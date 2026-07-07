@@ -9,7 +9,6 @@ import { getAttachmentSourcePath, readAttachmentRecord } from './ai-attachments/
 import { HttpError } from './http';
 import { serverConfig } from './config';
 import { createDeepSeekProvider } from './model-providers/deepseek';
-import { nutritionRepository } from './db/nutrition-repository';
 
 interface LoadedImage {
   attachmentId: string;
@@ -71,12 +70,7 @@ async function defaultGemini(image: LoadedImage, question: string) {
 }
 
 async function defaultContext(loggedAt: string) {
-  const bootstrap = nutritionRepository.bootstrap(dateKey(loggedAt));
-  return {
-    recipes: bootstrap.recipes.map((recipe) => ({ name: recipe.name, servings: recipe.servings, totalWeightG: recipe.totalWeightG })),
-    recentItems: bootstrap.recentItemNames,
-    likelyItems: nutritionRepository.searchItems('', loggedAt, 12).map((item) => ({ name: item.name, type: item.itemType, serving: item.defaultServingLabel ?? `${Math.round(item.defaultAmountG)}g` })),
-  };
+  return { loggedAt: dateKey(loggedAt), recipes: [], recentItems: [], likelyItems: [] };
 }
 
 function extractJson(text: string) {
@@ -141,7 +135,7 @@ export async function analyzeNutritionAiFoodLog(attachmentId: string, loggedAt: 
   const loadImage = deps.loadImage ?? defaultLoadImage;
   const deepSeek = deps.deepSeek ?? defaultDeepSeek;
   const gemini = deps.gemini ?? defaultGemini;
-  const searchItems = deps.searchItems ?? ((query, iso, limit) => nutritionRepository.searchItems(query, iso, limit));
+  const searchItems = deps.searchItems ?? (() => []);
   const context = deps.context ?? defaultContext;
   const image = await loadImage(attachmentId);
   const trace: NutritionAiFoodLogResponse['trace'] = [{ provider: 'deepseek', action: 'summary', detail: 'Prepared image summary and nutrition context.' }];

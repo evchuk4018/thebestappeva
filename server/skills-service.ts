@@ -5,10 +5,9 @@ import {
   type UpdateSkillRequest,
 } from '../shared/skills-contract';
 import { getBuiltinSkill, getBuiltinSkillByName, hasBuiltinSkillName, listBuiltinSkills } from './builtin-skills';
-import { skillsRepository } from './db/skills-repository';
 
 type MaybePromise<T> = T | Promise<T>;
-type SkillsRepository = {
+export type SkillsRepository = {
   createSkill: (request: CreateSkillRequest) => MaybePromise<SkillRecord>;
   deleteSkill: (id: string) => MaybePromise<boolean>;
   getSkill: (id: string) => MaybePromise<SkillRecord | null>;
@@ -44,7 +43,7 @@ function assertAvailableSkillName(name: string) {
   }
 }
 
-export function createSkillsService(repository: SkillsRepository = skillsRepository) {
+export function createSkillsService(repository: SkillsRepository) {
   async function listSkills() {
     return sortSkills([...listBuiltinSkills(), ...await repository.listSkills()]);
   }
@@ -108,5 +107,3 @@ export function createSkillsService(repository: SkillsRepository = skillsReposit
     deleteSkill,
   };
 }
-
-export const skillsService = createSkillsService();

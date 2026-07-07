@@ -1,11 +1,9 @@
 import type { AutomationRecord, ClaimDueAutomationsResponse, CreateAutomationRequest, ReportAutomationRunRequest, UpdateAutomationRequest } from '../shared/automations-contract';
 import { normalizeAutomationName } from '../shared/automations-helpers';
 import { computeLatestScheduledRunAt, computeNextScheduledRunAt } from './automations-schedule';
-import { automationsRepository } from './db/automations-repository';
-import { skillsService } from './skills-service';
 
 type MaybePromise<T> = T | Promise<T>;
-type AutomationsRepository = {
+export type AutomationsRepository = {
   claimDue: (nowIso: string, resolveClaim: (automation: AutomationRecord) => { claimedRunAt: string; nextRunAt: string | null }) => MaybePromise<Array<{ automation: AutomationRecord; claimedRunAt: string }>>;
   createAutomation: (request: Omit<CreateAutomationRequest, 'enabled'> & Pick<AutomationRecord, 'action' | 'enabled' | 'nextRunAt'>) => MaybePromise<AutomationRecord>;
   deleteAutomation: (id: string) => MaybePromise<boolean>;
@@ -16,20 +14,31 @@ type AutomationsRepository = {
   setAutomationEnabled: (id: string, enabled: boolean, nextRunAt: string | null) => MaybePromise<AutomationRecord | null>;
   updateAutomation: (id: string, request: UpdateAutomationRequest & Partial<Pick<AutomationRecord, 'nextRunAt'>>) => MaybePromise<AutomationRecord | null>;
 };
-type SkillsLookup = Pick<typeof skillsService, 'getSkill' | 'getSkillByName'>;
+export type SkillsLookup = {
+  getSkill: (id: string) => MaybePromise<unknown>;
+  getSkillByName: (name: string) => MaybePromise<unknown>;
+};
 
 export class LinkedSkillNotFoundError extends Error {}
 export class AutomationNameConflictError extends Error {}
 
+type LinkedSkill = { id: string; name: string };
+
+function asLinkedSkill(value: unknown): LinkedSkill | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === 'string' && typeof record.name === 'string' ? { id: record.id, name: record.name } : null;
+}
+
 async function withValidatedLinkedSkill<T extends { action?: CreateAutomationRequest['action'] }>(record: T, lookup: SkillsLookup): Promise<T> {
   if (!record.action) return record;
   if (record.action.linkedSkillId) {
-    const skill = await lookup.getSkill(record.action.linkedSkillId);
+    const skill = asLinkedSkill(await lookup.getSkill(record.action.linkedSkillId));
     if (!skill) throw new LinkedSkillNotFoundError(`Linked skill "${record.action.linkedSkillId}" was not found.`);
     return { ...record, action: { ...record.action, linkedSkillId: skill.id, linkedSkillName: skill.name } };
   }
   if (record.action.linkedSkillName) {
-    const skill = await lookup.getSkillByName(record.action.linkedSkillName);
+    const skill = asLinkedSkill(await lookup.getSkillByName(record.action.linkedSkillName));
     if (!skill) throw new LinkedSkillNotFoundError(`Linked skill "${record.action.linkedSkillName}" was not found.`);
     return { ...record, action: { ...record.action, linkedSkillId: skill.id, linkedSkillName: skill.name } };
   }
@@ -40,7 +49,7 @@ function nextRunAtFor(automation: AutomationRecord) {
   return automation.kind === 'schedule' && automation.enabled ? computeNextScheduledRunAt(automation)?.toISOString() ?? null : null;
 }
 
-export function createAutomationsService(repository: AutomationsRepository = automationsRepository, skillLookup: SkillsLookup = skillsService) {
+export function createAutomationsService(repository: AutomationsRepository, skillLookup: SkillsLookup) {
   return {
     listAutomations: () => repository.listAutomations(),
     getAutomation: (id: string) => repository.getAutomation(id),
@@ -79,5 +88,3 @@ export function createAutomationsService(repository: AutomationsRepository = aut
     reportRun: (id: string, report: ReportAutomationRunRequest) => repository.reportRun(id, report),
   };
 }
-
-export const automationsService = createAutomationsService();

@@ -45,9 +45,10 @@ import { normalizeEmail, readServerAuthConfig, validateResolvedServerAuthConfig,
 import { createRequireOwnerMiddleware } from './auth/require-owner';
 import { getRequestAuthContext } from './auth/request-context';
 import { createSupabaseTokenValidator, type AccessTokenValidator } from './auth/supabase';
-import { getDatabase } from './db/database';
+import { createServerCompositionRoot, type ServerRequestDependencies } from './composition-root';
 import { closePostgresPool, installPostgresPoolShutdownHandlers } from './db/postgres';
 import { validatePostgresConfig, type PostgresConfigSource } from './db/postgres-config';
+import { toHttpErrorResponse } from './http';
 import { handleUrlFetch } from './url-fetch';
 import { handlePythonExec, handlePythonExecFileDownload } from './python-exec';
 import { handleWebSearch } from './web-search';
@@ -159,6 +160,9 @@ const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, '..');
 const devPortAttempts = 20;
 
+type AsyncRouteHandler = (request: Request, response: Response) => Promise<void> | void;
+type DependencyRouteHandler = (request: Request, response: Response, dependencies: ServerRequestDependencies) => Promise<void> | void;
+
 interface CreateAppOptions {
   authConfig?: Partial<ServerAuthConfig>;
   attachFrontend?: boolean;
@@ -218,7 +222,18 @@ async function listenWithDevFallback(app: Express, mode: 'dev' | 'preview') {
   throw new Error('Unable to find an available dev server port.');
 }
 
-function registerApiRoutes(app: Express) {
+function route(handler: AsyncRouteHandler) {
+  return (request: Request, response: Response, next: NextFunction) => {
+    Promise.resolve(handler(request, response)).catch(next);
+  };
+}
+
+function routeWithDependencies(root: ReturnType<typeof createServerCompositionRoot>, handler: DependencyRouteHandler) {
+  return route((request, response) => handler(request, response, root.forRequest(request)));
+}
+
+function registerApiRoutes(app: Express, root: ReturnType<typeof createServerCompositionRoot>) {
+  const withDeps = (handler: DependencyRouteHandler) => routeWithDependencies(root, handler);
   app.get('/api/auth/session', (request, response) => {
     const authContext = getRequestAuthContext(request);
     response
@@ -226,141 +241,140 @@ function registerApiRoutes(app: Express) {
       .status(200)
       .json({ ok: true, user: { email: authContext.email } });
   });
-  app.get('/api/ai/attachments/health', (_req, res) => void handleGetAiAttachmentHealth(_req, res));
-  app.post('/api/ai/attachments/parse', express.json({ limit: '35mb' }), (req, res) => void handleParseAiAttachment(req, res));
+  app.get('/api/ai/attachments/health', route(handleGetAiAttachmentHealth));
+  app.post('/api/ai/attachments/parse', express.json({ limit: '35mb' }), route(handleParseAiAttachment));
   app.use(express.json({ limit: '2mb' }));
-  app.get('/api/ai/workspace', (_req, res) => void handleGetAiWorkspace(_req, res));
-  app.put('/api/ai/workspace', (req, res) => void handlePutAiWorkspace(req, res));
-  app.get('/api/ai/preferences', (_req, res) => void handleGetAiPreferences(_req, res));
-  app.get('/api/ai/runtime-config', (_req, res) => void handleGetAiRuntimeConfig(_req, res));
-  app.get('/api/ai/model-capabilities', (req, res) => void handleGetAiModelCapabilities(req, res));
-  app.post('/api/ai/chat/stream', (req, res) => void handlePostAiChatStream(req, res));
-  app.post('/api/ai/chats/:chatId/memory-refresh', (req, res) => void handlePostAiMemoryRefresh(req, res));
-  app.get('/api/ai/chats/:chatId/artifacts', (req, res) => void handleListArtifacts(req, res));
-  app.post('/api/ai/chats/:chatId/artifacts', (req, res) => void handleCreateArtifact(req, res));
-  app.get('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleGetArtifact(req, res));
-  app.patch('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handlePatchArtifact(req, res));
-  app.delete('/api/ai/chats/:chatId/artifacts/:artifactId', (req, res) => void handleDeleteArtifact(req, res));
-  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/lines', (req, res) => void handleFetchArtifactLines(req, res));
-  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/search', (req, res) => void handleSearchArtifact(req, res));
-  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/outline', (req, res) => void handleGetArtifactOutline(req, res));
-  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/versions', (req, res) => void handleListArtifactVersions(req, res));
-  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/versions/:versionId/restore', (req, res) => void handleRestoreArtifactVersion(req, res));
-  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/export-to-doc', (req, res) => void handleExportArtifactToDoc(req, res));
-  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/table', (req, res) => void handleUpdateArtifactTable(req, res));
-  app.get('/api/docs', (req, res) => void handleListDocs(req, res));
-  app.post('/api/docs', (req, res) => void handleCreateDoc(req, res));
-  app.get('/api/docs/preferences', (req, res) => void handleGetDocPreferences(req, res));
-  app.put('/api/docs/preferences', (req, res) => void handlePutDocPreferences(req, res));
-  app.get('/api/docs/migration/status', (req, res) => void handleGetDocsMigrationStatus(req, res));
-  app.post('/api/docs/migration/import', (req, res) => void handleImportDocsMigration(req, res));
-  app.get('/api/docs/:docId', (req, res) => void handleGetDoc(req, res));
-  app.put('/api/docs/:docId', (req, res) => void handlePutDoc(req, res));
-  app.delete('/api/docs/:docId', (req, res) => void handleDeleteDoc(req, res));
-  app.post('/api/docs/:docId/duplicate', (req, res) => void handleDuplicateDoc(req, res));
-  app.post('/api/docs/:docId/trash', (req, res) => void handleTrashDoc(req, res));
-  app.delete('/api/docs/:docId/trash', (req, res) => void handleRestoreDoc(req, res));
-  app.get('/api/docs/:docId/tabs', (req, res) => void handleGetDocTabs(req, res));
-  app.post('/api/docs/:docId/tabs', (req, res) => void handlePostDocTab(req, res));
-  app.put('/api/docs/:docId/tabs/:tabId', (req, res) => void handlePutDocTab(req, res));
-  app.delete('/api/docs/:docId/tabs/:tabId', (req, res) => void handleDeleteDocTab(req, res));
-  app.get('/api/docs/:docId/versions', (req, res) => void handleListDocVersions(req, res));
-  app.post('/api/docs/:docId/versions', (req, res) => void handleCreateDocVersion(req, res));
-  app.get('/api/docs/:docId/versions/:versionId', (req, res) => void handleGetDocVersion(req, res));
-  app.post('/api/docs/:docId/versions/:versionId/restore', (req, res) => void handleRestoreDocVersion(req, res));
-  app.get('/api/docs/:docId/citations', (req, res) => void handleGetDocCitations(req, res));
-  app.post('/api/docs/:docId/citations', (req, res) => void handleSaveDocCitations(req, res));
-  app.put('/api/docs/:docId/citations', (req, res) => void handleSaveDocCitations(req, res));
-  app.delete('/api/docs/:docId/citations/:citationId', (req, res) => void handleDeleteDocCitation(req, res));
-  app.get('/api/workout/bootstrap', (req, res) => void handleGetWorkoutBootstrap(req, res));
-  app.get('/api/workout/history', (req, res) => void handleGetWorkoutHistory(req, res));
-  app.post('/api/workout/routines', (req, res) => void handleCreateWorkoutRoutine(req, res));
-  app.put('/api/workout/routines/:routineId', (req, res) => void handlePutWorkoutRoutine(req, res));
-  app.delete('/api/workout/routines/:routineId', (req, res) => void handleDeleteWorkoutRoutine(req, res));
-  app.post('/api/workout/exercises', (req, res) => void handleCreateWorkoutExercise(req, res));
-  app.post('/api/workout/sessions/empty', (req, res) => void handleStartEmptyWorkoutSession(req, res));
-  app.post('/api/workout/sessions/log', (req, res) => void handleLogWorkoutSession(req, res));
-  app.post('/api/workout/sessions/from-routine/:routineId', (req, res) => void handleStartRoutineWorkoutSession(req, res));
-  app.get('/api/workout/sessions/:sessionId', (req, res) => void handleGetWorkoutSession(req, res));
-  app.put('/api/workout/sessions/:sessionId', (req, res) => void handlePutWorkoutSession(req, res));
-  app.post('/api/workout/sessions/:sessionId/finish', (req, res) => void handleFinishWorkoutSession(req, res));
-  app.delete('/api/workout/sessions/:sessionId', (req, res) => void handleDeleteWorkoutSession(req, res));
-  app.get('/api/nutrition/bootstrap', (req, res) => void handleGetNutritionBootstrap(req, res));
-  app.get('/api/nutrition/search', (req, res) => void handleSearchNutritionItems(req, res));
-  app.post('/api/nutrition/ai-food-log', (req, res) => void handlePostNutritionAiFoodLog(req, res));
-  app.get('/api/nutrition/history', (req, res) => void handleGetNutritionHistory(req, res));
-  app.get('/api/nutrition/goals', (req, res) => void handleGetNutritionGoals(req, res));
-  app.put('/api/nutrition/goals', (req, res) => void handlePutNutritionGoals(req, res));
-  app.get('/api/nutrition/recipes', (req, res) => void handleListNutritionRecipes(req, res));
-  app.post('/api/nutrition/recipes', (req, res) => void handleCreateNutritionRecipe(req, res));
-  app.put('/api/nutrition/recipes/:recipeId', (req, res) => void handlePutNutritionRecipe(req, res));
-  app.post('/api/nutrition/foods/brands', (req, res) => void handleCreateNutritionBrandFood(req, res));
-  app.put('/api/nutrition/foods/brands/:foodId', (req, res) => void handlePutNutritionBrandFood(req, res));
-  app.post('/api/nutrition/entries', (req, res) => void handleCreateNutritionEntry(req, res));
-  app.put('/api/nutrition/entries/:entryId', (req, res) => void handlePutNutritionEntry(req, res));
-  app.delete('/api/nutrition/entries/:entryId', (req, res) => void handleDeleteNutritionEntry(req, res));
-  app.post('/api/nutrition/entries/:entryId/items', (req, res) => void handleCreateNutritionEntryItem(req, res));
-  app.put('/api/nutrition/entries/:entryId/items/:itemId', (req, res) => void handlePutNutritionEntryItem(req, res));
-  app.delete('/api/nutrition/entries/:entryId/items/:itemId', (req, res) => void handleDeleteNutritionEntryItem(req, res));
-  app.get('/api/ai/attachments/:attachmentId', (req, res) => void handleGetAiAttachment(req, res));
-  app.get('/api/ai/attachments/:attachmentId/context', (req, res) => void handleGetAiAttachmentContext(req, res));
-  app.post('/api/ai/attachments/:attachmentId/image-analysis', (req, res) => void handlePostAiImageAnalysis(req, res));
-  app.post('/api/ai/attachments/:attachmentId/image-compare', (req, res) => void handlePostAiImageCompare(req, res));
-  app.post('/api/ai/attachments/:attachmentId/image-describe', (req, res) => void handlePostAiImageDescribe(req, res));
-  app.post('/api/ai/attachments/:attachmentId/image-query', (req, res) => void handlePostAiImageQuestion(req, res));
-  app.get('/api/ai/attachments/:attachmentId/pdf/search', (req, res) => void handleSearchAiPdf(req, res));
-  app.get('/api/ai/attachments/:attachmentId/pdf/pages', (req, res) => void handleGetAiPdfPages(req, res));
-  app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber', (req, res) => void handleGetAiPdfPage(req, res));
-  app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber/image', (req, res) => void handleGetAiPdfPageImage(req, res));
-  app.delete('/api/ai/attachments/:attachmentId', (req, res) => void handleDeleteAiAttachment(req, res));
-  app.get('/api/web-search', (req, res) => void handleWebSearch(req, res));
-  app.get('/api/fetch-url', (req, res) => void handleUrlFetch(req, res));
-  app.post('/api/python-exec', (req, res) => void handlePythonExec(req, res));
-  app.get('/api/ai/chats/:chatId/python-exec/files/*', (req, res) => void handlePythonExecFileDownload(req, res));
-  app.get('/api/automations', (req, res) => void handleListAutomations(req, res));
-  app.post('/api/automations', (req, res) => void handleCreateAutomation(req, res));
-  app.post('/api/automations/claim-due', (req, res) => void handleClaimDueAutomations(req, res));
-  app.get('/api/automations/:automationId', (req, res) => void handleGetAutomation(req, res));
-  app.put('/api/automations/:automationId', (req, res) => void handlePutAutomation(req, res));
-  app.delete('/api/automations/:automationId', (req, res) => void handleDeleteAutomation(req, res));
-  app.post('/api/automations/:automationId/toggle', (req, res) => void handleToggleAutomation(req, res));
-  app.post('/api/automations/:automationId/report-run', (req, res) => void handleReportAutomationRun(req, res));
-  app.get('/api/calendar/bootstrap', (req, res) => void handleGetCalendarBootstrap(req, res));
-  app.get('/api/calendar/calendars', (req, res) => void handleListCalendarCalendars(req, res));
-  app.post('/api/calendar/calendars', (req, res) => void handleCreateCalendarCalendar(req, res));
-  app.put('/api/calendar/calendars/:calendarId', (req, res) => void handlePutCalendarCalendar(req, res));
-  app.delete('/api/calendar/calendars/:calendarId', (req, res) => void handleDeleteCalendarCalendar(req, res));
-  app.get('/api/calendar/categories', (req, res) => void handleListCalendarCategories(req, res));
-  app.post('/api/calendar/categories', (req, res) => void handleCreateCalendarCategory(req, res));
-  app.put('/api/calendar/categories/:categoryId', (req, res) => void handlePutCalendarCategory(req, res));
-  app.delete('/api/calendar/categories/:categoryId', (req, res) => void handleDeleteCalendarCategory(req, res));
-  app.get('/api/calendar/events', (req, res) => void handleListCalendarEvents(req, res));
-  app.post('/api/calendar/events', (req, res) => void handleCreateCalendarEvent(req, res));
-  app.put('/api/calendar/events/:eventId', (req, res) => void handlePutCalendarEvent(req, res));
-  app.post('/api/calendar/events/:eventId/duplicate', (req, res) => void handleDuplicateCalendarEvent(req, res));
-  app.post('/api/calendar/events/:eventId/trash', (req, res) => void handleTrashCalendarEvent(req, res));
-  app.delete('/api/calendar/events/:eventId/trash', (req, res) => void handleRestoreCalendarEvent(req, res));
-  app.delete('/api/calendar/events/:eventId', (req, res) => void handleDeleteCalendarEvent(req, res));
-  app.post('/api/calendar/events/:eventId/occurrences/:occurrenceKey', (req, res) => void handleSaveCalendarOccurrence(req, res));
-  app.get('/api/calendar/tasks', (req, res) => void handleListCalendarTasks(req, res));
-  app.post('/api/calendar/tasks', (req, res) => void handleCreateCalendarTask(req, res));
-  app.put('/api/calendar/tasks/:taskId', (req, res) => void handlePutCalendarTask(req, res));
-  app.delete('/api/calendar/tasks/:taskId', (req, res) => void handleDeleteCalendarTask(req, res));
-  app.put('/api/calendar/settings', (req, res) => void handlePutCalendarSettings(req, res));
-  app.post('/api/calendar/undo', (req, res) => void handlePostCalendarUndo(req, res));
-  app.get('/api/skills', (req, res) => void handleListSkills(req, res));
-  app.post('/api/skills', (req, res) => void handleCreateSkill(req, res));
-  app.get('/api/skills/by-name/:name', (req, res) => void handleGetSkillByName(req, res));
-  app.get('/api/skills/:skillId', (req, res) => void handleGetSkill(req, res));
-  app.put('/api/skills/:skillId', (req, res) => void handlePutSkill(req, res));
-  app.delete('/api/skills/:skillId', (req, res) => void handleDeleteSkill(req, res));
-  app.post('/api/skills/:skillId/toggle', (req, res) => void handleToggleSkill(req, res));
+  app.get('/api/ai/workspace', withDeps(handleGetAiWorkspace));
+  app.put('/api/ai/workspace', withDeps(handlePutAiWorkspace));
+  app.get('/api/ai/preferences', withDeps(handleGetAiPreferences));
+  app.get('/api/ai/runtime-config', route(handleGetAiRuntimeConfig));
+  app.get('/api/ai/model-capabilities', route(handleGetAiModelCapabilities));
+  app.post('/api/ai/chat/stream', route(handlePostAiChatStream));
+  app.post('/api/ai/chats/:chatId/memory-refresh', withDeps(handlePostAiMemoryRefresh));
+  app.get('/api/ai/chats/:chatId/artifacts', withDeps(handleListArtifacts));
+  app.post('/api/ai/chats/:chatId/artifacts', withDeps(handleCreateArtifact));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId', withDeps(handleGetArtifact));
+  app.patch('/api/ai/chats/:chatId/artifacts/:artifactId', withDeps(handlePatchArtifact));
+  app.delete('/api/ai/chats/:chatId/artifacts/:artifactId', withDeps(handleDeleteArtifact));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/lines', withDeps(handleFetchArtifactLines));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/search', withDeps(handleSearchArtifact));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/outline', withDeps(handleGetArtifactOutline));
+  app.get('/api/ai/chats/:chatId/artifacts/:artifactId/versions', withDeps(handleListArtifactVersions));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/versions/:versionId/restore', withDeps(handleRestoreArtifactVersion));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/export-to-doc', withDeps(handleExportArtifactToDoc));
+  app.post('/api/ai/chats/:chatId/artifacts/:artifactId/table', withDeps(handleUpdateArtifactTable));
+  app.get('/api/docs', withDeps(handleListDocs));
+  app.post('/api/docs', withDeps(handleCreateDoc));
+  app.get('/api/docs/preferences', withDeps(handleGetDocPreferences));
+  app.put('/api/docs/preferences', withDeps(handlePutDocPreferences));
+  app.get('/api/docs/migration/status', withDeps(handleGetDocsMigrationStatus));
+  app.post('/api/docs/migration/import', withDeps(handleImportDocsMigration));
+  app.get('/api/docs/:docId', withDeps(handleGetDoc));
+  app.put('/api/docs/:docId', withDeps(handlePutDoc));
+  app.delete('/api/docs/:docId', withDeps(handleDeleteDoc));
+  app.post('/api/docs/:docId/duplicate', withDeps(handleDuplicateDoc));
+  app.post('/api/docs/:docId/trash', withDeps(handleTrashDoc));
+  app.delete('/api/docs/:docId/trash', withDeps(handleRestoreDoc));
+  app.get('/api/docs/:docId/tabs', withDeps(handleGetDocTabs));
+  app.post('/api/docs/:docId/tabs', withDeps(handlePostDocTab));
+  app.put('/api/docs/:docId/tabs/:tabId', withDeps(handlePutDocTab));
+  app.delete('/api/docs/:docId/tabs/:tabId', withDeps(handleDeleteDocTab));
+  app.get('/api/docs/:docId/versions', withDeps(handleListDocVersions));
+  app.post('/api/docs/:docId/versions', withDeps(handleCreateDocVersion));
+  app.get('/api/docs/:docId/versions/:versionId', withDeps(handleGetDocVersion));
+  app.post('/api/docs/:docId/versions/:versionId/restore', withDeps(handleRestoreDocVersion));
+  app.get('/api/docs/:docId/citations', withDeps(handleGetDocCitations));
+  app.post('/api/docs/:docId/citations', withDeps(handleSaveDocCitations));
+  app.put('/api/docs/:docId/citations', withDeps(handleSaveDocCitations));
+  app.delete('/api/docs/:docId/citations/:citationId', withDeps(handleDeleteDocCitation));
+  app.get('/api/workout/bootstrap', withDeps(handleGetWorkoutBootstrap));
+  app.get('/api/workout/history', withDeps(handleGetWorkoutHistory));
+  app.post('/api/workout/routines', withDeps(handleCreateWorkoutRoutine));
+  app.put('/api/workout/routines/:routineId', withDeps(handlePutWorkoutRoutine));
+  app.delete('/api/workout/routines/:routineId', withDeps(handleDeleteWorkoutRoutine));
+  app.post('/api/workout/exercises', withDeps(handleCreateWorkoutExercise));
+  app.post('/api/workout/sessions/empty', withDeps(handleStartEmptyWorkoutSession));
+  app.post('/api/workout/sessions/log', withDeps(handleLogWorkoutSession));
+  app.post('/api/workout/sessions/from-routine/:routineId', withDeps(handleStartRoutineWorkoutSession));
+  app.get('/api/workout/sessions/:sessionId', withDeps(handleGetWorkoutSession));
+  app.put('/api/workout/sessions/:sessionId', withDeps(handlePutWorkoutSession));
+  app.post('/api/workout/sessions/:sessionId/finish', withDeps(handleFinishWorkoutSession));
+  app.delete('/api/workout/sessions/:sessionId', withDeps(handleDeleteWorkoutSession));
+  app.get('/api/nutrition/bootstrap', withDeps(handleGetNutritionBootstrap));
+  app.get('/api/nutrition/search', withDeps(handleSearchNutritionItems));
+  app.post('/api/nutrition/ai-food-log', withDeps(handlePostNutritionAiFoodLog));
+  app.get('/api/nutrition/history', withDeps(handleGetNutritionHistory));
+  app.get('/api/nutrition/goals', withDeps(handleGetNutritionGoals));
+  app.put('/api/nutrition/goals', withDeps(handlePutNutritionGoals));
+  app.get('/api/nutrition/recipes', withDeps(handleListNutritionRecipes));
+  app.post('/api/nutrition/recipes', withDeps(handleCreateNutritionRecipe));
+  app.put('/api/nutrition/recipes/:recipeId', withDeps(handlePutNutritionRecipe));
+  app.post('/api/nutrition/foods/brands', withDeps(handleCreateNutritionBrandFood));
+  app.put('/api/nutrition/foods/brands/:foodId', withDeps(handlePutNutritionBrandFood));
+  app.post('/api/nutrition/entries', withDeps(handleCreateNutritionEntry));
+  app.put('/api/nutrition/entries/:entryId', withDeps(handlePutNutritionEntry));
+  app.delete('/api/nutrition/entries/:entryId', withDeps(handleDeleteNutritionEntry));
+  app.post('/api/nutrition/entries/:entryId/items', withDeps(handleCreateNutritionEntryItem));
+  app.put('/api/nutrition/entries/:entryId/items/:itemId', withDeps(handlePutNutritionEntryItem));
+  app.delete('/api/nutrition/entries/:entryId/items/:itemId', withDeps(handleDeleteNutritionEntryItem));
+  app.get('/api/ai/attachments/:attachmentId', route(handleGetAiAttachment));
+  app.get('/api/ai/attachments/:attachmentId/context', route(handleGetAiAttachmentContext));
+  app.post('/api/ai/attachments/:attachmentId/image-analysis', route(handlePostAiImageAnalysis));
+  app.post('/api/ai/attachments/:attachmentId/image-compare', route(handlePostAiImageCompare));
+  app.post('/api/ai/attachments/:attachmentId/image-describe', withDeps(handlePostAiImageDescribe));
+  app.post('/api/ai/attachments/:attachmentId/image-query', withDeps(handlePostAiImageQuestion));
+  app.get('/api/ai/attachments/:attachmentId/pdf/search', route(handleSearchAiPdf));
+  app.get('/api/ai/attachments/:attachmentId/pdf/pages', route(handleGetAiPdfPages));
+  app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber', route(handleGetAiPdfPage));
+  app.get('/api/ai/attachments/:attachmentId/pdf/pages/:pageNumber/image', route(handleGetAiPdfPageImage));
+  app.delete('/api/ai/attachments/:attachmentId', route(handleDeleteAiAttachment));
+  app.get('/api/web-search', route(handleWebSearch));
+  app.get('/api/fetch-url', route(handleUrlFetch));
+  app.post('/api/python-exec', route(handlePythonExec));
+  app.get('/api/ai/chats/:chatId/python-exec/files/*', route(handlePythonExecFileDownload));
+  app.get('/api/automations', withDeps(handleListAutomations));
+  app.post('/api/automations', withDeps(handleCreateAutomation));
+  app.post('/api/automations/claim-due', withDeps(handleClaimDueAutomations));
+  app.get('/api/automations/:automationId', withDeps(handleGetAutomation));
+  app.put('/api/automations/:automationId', withDeps(handlePutAutomation));
+  app.delete('/api/automations/:automationId', withDeps(handleDeleteAutomation));
+  app.post('/api/automations/:automationId/toggle', withDeps(handleToggleAutomation));
+  app.post('/api/automations/:automationId/report-run', withDeps(handleReportAutomationRun));
+  app.get('/api/calendar/bootstrap', withDeps(handleGetCalendarBootstrap));
+  app.get('/api/calendar/calendars', withDeps(handleListCalendarCalendars));
+  app.post('/api/calendar/calendars', withDeps(handleCreateCalendarCalendar));
+  app.put('/api/calendar/calendars/:calendarId', withDeps(handlePutCalendarCalendar));
+  app.delete('/api/calendar/calendars/:calendarId', withDeps(handleDeleteCalendarCalendar));
+  app.get('/api/calendar/categories', withDeps(handleListCalendarCategories));
+  app.post('/api/calendar/categories', withDeps(handleCreateCalendarCategory));
+  app.put('/api/calendar/categories/:categoryId', withDeps(handlePutCalendarCategory));
+  app.delete('/api/calendar/categories/:categoryId', withDeps(handleDeleteCalendarCategory));
+  app.get('/api/calendar/events', withDeps(handleListCalendarEvents));
+  app.post('/api/calendar/events', withDeps(handleCreateCalendarEvent));
+  app.put('/api/calendar/events/:eventId', withDeps(handlePutCalendarEvent));
+  app.post('/api/calendar/events/:eventId/duplicate', withDeps(handleDuplicateCalendarEvent));
+  app.post('/api/calendar/events/:eventId/trash', withDeps(handleTrashCalendarEvent));
+  app.delete('/api/calendar/events/:eventId/trash', withDeps(handleRestoreCalendarEvent));
+  app.delete('/api/calendar/events/:eventId', withDeps(handleDeleteCalendarEvent));
+  app.post('/api/calendar/events/:eventId/occurrences/:occurrenceKey', withDeps(handleSaveCalendarOccurrence));
+  app.get('/api/calendar/tasks', withDeps(handleListCalendarTasks));
+  app.post('/api/calendar/tasks', withDeps(handleCreateCalendarTask));
+  app.put('/api/calendar/tasks/:taskId', withDeps(handlePutCalendarTask));
+  app.delete('/api/calendar/tasks/:taskId', withDeps(handleDeleteCalendarTask));
+  app.put('/api/calendar/settings', withDeps(handlePutCalendarSettings));
+  app.post('/api/calendar/undo', withDeps(handlePostCalendarUndo));
+  app.get('/api/skills', withDeps(handleListSkills));
+  app.post('/api/skills', withDeps(handleCreateSkill));
+  app.get('/api/skills/by-name/:name', withDeps(handleGetSkillByName));
+  app.get('/api/skills/:skillId', withDeps(handleGetSkill));
+  app.put('/api/skills/:skillId', withDeps(handlePutSkill));
+  app.delete('/api/skills/:skillId', withDeps(handleDeleteSkill));
+  app.post('/api/skills/:skillId/toggle', withDeps(handleToggleSkill));
 }
 
 function registerErrorHandler(app: Express) {
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    const message = error instanceof Error ? error.message : 'The local server failed unexpectedly.';
-    const statusCode = error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
+    const { statusCode, message } = toHttpErrorResponse(error);
     res.status(statusCode).json({ ok: false, error: message });
   });
 }
@@ -401,7 +415,10 @@ function attachPreviewApp(app: Express) {
 
 export async function createApp(mode: 'dev' | 'preview', options: CreateAppOptions = {}) {
   validatePostgresConfig(options.postgresConfig, options.environment);
-  getDatabase();
+  const compositionRoot = createServerCompositionRoot({
+    environment: options.environment,
+    postgresConfig: options.postgresConfig,
+  });
   const authConfig = resolveAuthConfig(options);
   const app = express();
   app.disable('x-powered-by');
@@ -409,7 +426,7 @@ export async function createApp(mode: 'dev' | 'preview', options: CreateAppOptio
     ownerEmail: options.ownerEmail ?? authConfig.ownerEmail,
     tokenValidator: options.tokenValidator ?? createSupabaseTokenValidator(authConfig),
   }));
-  registerApiRoutes(app);
+  registerApiRoutes(app, compositionRoot);
 
   if (options.attachFrontend !== false) {
     if (mode === 'preview') {

@@ -31,7 +31,7 @@ Browser code only uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. The ser
 
 The dev server starts at `http://localhost:3000`. If that port is already in use, `npm run dev` tries the next available port and prints the final URL. Set `PORT` in `.env` to choose a different starting port.
 The Node host runs through `tsx watch`, so backend and shared-code changes restart it automatically. Generated data under `.local-data`, `dist`, and `node_modules` is excluded from restart watching.
-Local Postgres uses `docker-compose.postgres.yml` with separate dev and test services: `npm run db:up`, `npm run db:down`, `npm run db:reset`, and `npm run db:test`. Feature repositories still use the existing SQLite store until their explicit migration phase, so do not remove `LOCAL_DB_PATH` yet.
+Local Postgres uses `docker-compose.postgres.yml` with separate dev and test services: `npm run db:up`, `npm run db:down`, `npm run db:reset`, and `npm run db:test`. Runtime feature persistence is Postgres-only; legacy SQLite modules and dependencies remain only for one-time importer paths and focused legacy tests.
 On Windows, `npm run dev` now also ensures a repo-local Ollama install under `.local-bin/ollama`, starts `ollama serve` if needed, and then continues booting the app. If the Ollama bootstrap fails, the app still starts but local AI features may be unavailable.
 
 If you want the `/ai` tab to work, run Ollama locally and keep its API available at `http://127.0.0.1:11434`.
@@ -60,7 +60,7 @@ npm run lint
 npm run build
 ```
 
-`npm run test:files` enforces the repo rule that authored project files stay at or below 300 lines. It checks `src/**` plus owned root config and documentation files, and ignores generated or vendor content such as `node_modules`, `dist`, and `package-lock.json`.
+`npm run test:files` enforces the repo rule that authored project files stay at or below 300 lines and runs the server persistence-boundary architecture check. The line-length pass checks `src/**` plus owned root config and documentation files, and ignores generated or vendor content such as `node_modules`, `dist`, and `package-lock.json`.
 
 For a production-style local smoke test, build first and then run:
 
@@ -86,17 +86,17 @@ The app now includes a `/docs` module with:
 
 - `/docs`: template gallery, recent files, local search, `.docx` import, trash, duplicate, rename, and star actions.
 - `/docs/new`: blank-document creation redirect.
-- `/docs/:docId`: desktop-first document editor with server-backed SQLite persistence, autosave, unlimited version history, document tabs, outline, citations, voice typing, `.docx` export, print/PDF flow, and selected-text Ollama rewrites opened with `/`.
+- `/docs/:docId`: desktop-first document editor with server-backed Postgres persistence, autosave, unlimited version history, document tabs, outline, citations, voice typing, `.docx` export, print/PDF flow, and selected-text Ollama rewrites opened with `/`.
 
 Implementation notes:
 
 - Editor stack: `@tiptap/react`
-- Local persistence: same-origin docs APIs backed by the repo-owned SQLite database
+- Local persistence: same-origin docs APIs backed by Postgres
 - AI rewrites: local Ollama flash-style requests with approve/reject preview flow
 - `.docx` import: `mammoth`
 - `.docx` export: `docx`
 
-Existing browser-stored docs data is migrated once into the local SQLite workspace and then removed from IndexedDB/localStorage. The docs feature remains single-user with no collaboration or comments in this implementation.
+Existing browser-stored docs data is migrated once into the authenticated Postgres workspace and then removed from IndexedDB/localStorage. The docs feature remains single-user with no collaboration or comments in this implementation.
 
 ## Calendar workspace
 
@@ -114,8 +114,8 @@ The app now includes a `/calendar` module with:
 
 Implementation notes:
 
-- Local persistence: same-origin `/api/calendar/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: calendar rows are scoped to the canonical server-side owner until the app has a real auth layer
+- Local persistence: same-origin `/api/calendar/*` APIs backed by Postgres
+- Owner guard: calendar rows are scoped to the validated Supabase authenticated owner id
 - Recurrence: `rrule` stores normalized recurrence rows plus the generated RRULE text
 - Reminders, sharing, attendees, invitations, RSVPs, booking pages, collaboration, and calendar import are intentionally not included
 
@@ -128,7 +128,7 @@ The app now includes a `/workout` module with:
 - create-only routine building plus duplicate/delete routine actions
 - a seeded exercise library across barbell, dumbbell, cable, machine, bodyweight, and cardio movements
 - popup-based library search for explore and add-exercise flows
-- custom exercise creation with name, muscle-group, and weight-type inputs saved into the local SQLite database
+- custom exercise creation with name, muscle-group, and weight-type inputs saved through the Postgres API
 - one active unfinished session that resumes after closing and reopening the app until it auto-finishes 24 hours after `startedAt`
 - a sticky home-page workout resume bar and an in-tab resume card for active sessions
 - autosaved workout sets with RIR, reps, weight, and completion state
@@ -141,8 +141,8 @@ The app now includes a `/workout` module with:
 
 Implementation notes:
 
-- Local persistence: same-origin `/api/workout/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: workout rows are scoped to the canonical server-side owner until the app has a real auth layer
+- Local persistence: same-origin `/api/workout/*` APIs backed by Postgres
+- Owner guard: workout rows are scoped to the validated Supabase authenticated owner id
 - Session model: only one unfinished workout is active at a time; starting another routine resumes that active session unless it has crossed the 24-hour auto-finish limit
 - History API: `/api/workout/history`, `/api/workout/sessions/:sessionId`, and `/api/workout/sessions/log` expose finished-session summaries, full session detail, and create-only completed workout logging
 - Social feeds, plate calculators, body measurements, rest timers, graphs, wearable sync, and import/export are intentionally not included in this first pass
@@ -155,7 +155,7 @@ The app now includes a `/nutrition` module with:
 - a two-tab nutrition footer for Dashboard and Home, with recipes reachable from the nutrition toolbar
 - an all-meals diary list instead of breakfast/lunch/dinner buckets
 - one fuzzy add-food search ranked by text match, recency, frequency, and time-of-day usage signals
-- several hundred seeded whole foods stored in the local SQLite database
+- several hundred seeded whole foods stored in Postgres per owner
 - manual branded-food creation with barcode placeholder fields
 - local recipe building from seeded foods and user-created branded foods
 - quick-log recipe support using servings and computed total weight
@@ -164,8 +164,8 @@ The app now includes a `/nutrition` module with:
 
 Implementation notes:
 
-- Local persistence: same-origin `/api/nutrition/*` APIs backed by the repo-owned SQLite database
-- Local owner guard: nutrition rows are scoped to the canonical server-side owner until the app has a real auth layer
+- Local persistence: same-origin `/api/nutrition/*` APIs backed by Postgres
+- Owner guard: nutrition rows are scoped to the validated Supabase authenticated owner id
 - History API: `/api/nutrition/history` exposes diary lookup by exact date or inclusive date range
 - Seed behavior: branded foods are not seeded; they are created and stored locally by the user
 - Search ranking: food and recipe results blend fuzzy text relevance with personal usage frequency, recency decay, and coarse morning/midday/evening/late-night affinity
@@ -177,7 +177,7 @@ Implementation notes:
 The app now includes a `/ai` module backed by the local Ollama runtime with optional DeepSeek BYOK support:
 
 - installed models are loaded from the local Ollama API and shown in the in-app model picker
-- chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in the local SQLite database through the repo-owned Node server
+- chats, per-chat mode, selected model, enabled tools, and custom system prompt persist in Postgres through the repo-owned Node server
 - the server also maintains a hidden generated user-memory note, capped at two paragraphs, for durable preferences, life facts, and ongoing projects; this note is injected into live prompts but is not user-editable in the UI
 - each chat now keeps a rolling generated summary, capped at three paragraphs, which is refreshed after normally completed assistant turns and stored against that chat for future retrieval work
 - automatic post-turn memory refresh now runs as a background queue instead of part of the visible reply flow, so completed assistant answers settle immediately; text-only turns can overlap with that queue, while image-bearing turns pause and abort queued background refresh work until the foreground turn finishes
@@ -215,7 +215,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - malformed streamed tool calls that end with Ollama's `unexpected end of JSON input` error are retried once without streaming; affected models then use non-streamed tool rounds for the rest of the browser session
 - malformed streamed DeepSeek tool arguments now wait for valid accumulated JSON before surfacing tool calls, and final invalid streamed tool rounds retry once without streaming before that model is pinned to non-streamed tool rounds for the rest of the browser session
 - live `/ai` turns render an in-memory assistant bubble while the model is generating, including streamed thinking blocks and streamed final text, and the settled assistant message replaces that bubble when the turn finishes, fails, or is stopped
-- in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to the local SQLite store
+- in-progress streamed `/ai` output is not restored after a page reload; only the settled workspace state is persisted to Postgres
 - artifact bodies are stored outside chat payload JSON; chat persistence keeps only lightweight artifact metadata such as active and included artifact IDs plus assistant artifact cards
 - PDFs with 1-3 pages are fully loaded into the model prompt and the assistant is told to mention that no PDF tool was needed; PDFs with 4+ pages or unknown page counts load summary context first and use `pdf_reader` on demand
 - complete PDF audits use `read_pdf_pages`, which returns up to 25 consecutive pages per call; larger documents continue with explicit page bounds
@@ -227,7 +227,7 @@ The app now includes a `/ai` module backed by the local Ollama runtime with opti
 - assistant replies now render rich Markdown with GFM formatting, tables, task lists, fenced code blocks, and LaTeX math via `$...$` / `$$...$$`
 - assistant replies now show copy and regenerate controls, plus placeholder thumbs-up and thumbs-down actions in the reply footer
 - the `Add models` flow supports curated downloads and manual `model[:tag]` pulls without leaving the app
-- the AI sidebar footer now opens a settings modal where custom system instructions and the selected vision mode persist in the local SQLite workspace, while the selected AI provider/model persist in browser localStorage and the built-in Markdown and tool guidance stay visible as read-only runtime context
+- the AI sidebar footer now opens a settings modal where custom system instructions and the selected vision mode persist in the Postgres workspace, while the selected AI provider/model persist in browser localStorage and the built-in Markdown and tool guidance stay visible as read-only runtime context
 - DeepSeek BYOK models are discovered from the server-side `GET /models` API and appear in the same model picker as local Ollama models
 
 Implementation notes:
@@ -242,7 +242,7 @@ Implementation notes:
 - Background memory refresh API: same-origin `POST /api/ai/chats/:chatId/memory-refresh`, using server-side DeepSeek V4 Flash with thinking disabled to rewrite the hidden user-memory note and the per-chat rolling summary in fresh contexts
 - Local attachment APIs: `GET /api/ai/attachments/health`, `POST /api/ai/attachments/parse`, `GET /api/ai/attachments/:id`, `GET /api/ai/attachments/:id/context`, `POST /api/ai/attachments/:id/image-analysis`, `POST /api/ai/attachments/:id/image-compare`, `POST /api/ai/attachments/:id/image-describe`, `POST /api/ai/attachments/:id/image-query`, and `DELETE /api/ai/attachments/:id`
 - PDF reader APIs: `GET /api/ai/attachments/:id/pdf/search`, `GET /api/ai/attachments/:id/pdf/pages`, `GET /api/ai/attachments/:id/pdf/pages/:pageNumber`, and `GET /api/ai/attachments/:id/pdf/pages/:pageNumber/image`
-- Local database: SQLite via `better-sqlite3`, defaulting to `.local-data/thebestappeva.sqlite`
+- Runtime database: Postgres via `DATABASE_URL`; browser code never receives database credentials
 - Local attachment storage: `.local-data/ai-attachments`
 - Model discovery: `GET /api/tags` for Ollama and `GET /models` for DeepSeek BYOK
 - Chat requests: `POST /api/chat`
@@ -253,7 +253,7 @@ Implementation notes:
 - Tool execution: mixed local runtime under `src/components/ai-tab/tools`, attached through Ollama native function tools; server-backed tools now include same-origin `/api/calendar/*`, same-origin `/api/nutrition/*`, same-origin `/api/workout/*`, `GET /api/web-search`, `GET /api/fetch-url`, and `POST /api/python-exec`
 - Automation APIs: same-origin `GET/POST /api/automations`, `GET/PUT/DELETE /api/automations/:automationId`, `POST /api/automations/:automationId/toggle`, `POST /api/automations/claim-due`, and `POST /api/automations/:automationId/report-run`
 - Internal clarification tool: browser-side `ask_user`, which pauses only `Thinking` turns and resumes them locally from persisted transcript state
-- Artifact persistence: SQLite `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
+- Artifact persistence: Postgres `ai_artifacts` and `ai_artifact_versions` tables with Markdown as the canonical storage format
 - PDF page images are sent to Ollama as transient base64 `images` on the active tool response; chat history stores only metadata and text fallback
 - Browser context tools: `navigator.geolocation`, `navigator.language`, `navigator.languages`, `navigator.onLine`, and optional Network Information API fields when supported
 - Local proxy tools: same-origin `GET /api/web-search` and `GET /api/fetch-url`, served by the repo-owned Node host under `server/`

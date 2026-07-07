@@ -1,16 +1,16 @@
 import type { Request, Response } from 'express';
 import { ArtifactContextMode, UpdateArtifactRequest, UpdateArtifactTableRequest } from '../shared/ai-artifacts-contract';
-import { getRequestAuthContext } from './auth/request-context';
-import { createPostgresAiArtifactsRepository } from './db/postgres-ai-artifacts-repository';
-import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
+import type { ServerRequestDependencies } from './composition-root';
 import { HttpError, getOptionalIntParam, getOptionalQueryParam } from './http';
+
+type AiArtifactsRouteDependencies = Pick<ServerRequestDependencies, 'aiArtifactsRepository'>;
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
 }
 
-function createRepository(request: Request) {
-  return createPostgresAiArtifactsRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
+function repository(dependencies: AiArtifactsRouteDependencies) {
+  return dependencies.aiArtifactsRepository;
 }
 
 function expectBody(request: Request) {
@@ -76,13 +76,13 @@ function requireChatId(request: Request) {
   return chatId;
 }
 
-export async function handleListArtifacts(request: Request, response: Response) {
-  sendJson(response, { artifacts: await createRepository(request).listArtifacts(requireChatId(request), request.query.includePreview === 'true') });
+export async function handleListArtifacts(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, { artifacts: await repository(dependencies).listArtifacts(requireChatId(request), request.query.includePreview === 'true') });
 }
 
-export async function handleCreateArtifact(request: Request, response: Response) {
+export async function handleCreateArtifact(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
   const body = expectBody(request);
-  sendJson(response, await createRepository(request).createArtifact(requireChatId(request), {
+  sendJson(response, await repository(dependencies).createArtifact(requireChatId(request), {
     title: String(body.title ?? ''),
     type: String(body.type ?? 'markdown'),
     content: String(body.content ?? ''),
@@ -91,23 +91,23 @@ export async function handleCreateArtifact(request: Request, response: Response)
   }));
 }
 
-export async function handleGetArtifact(request: Request, response: Response) {
-  const artifact = await createRepository(request).getArtifact(requireChatId(request), String(request.params.artifactId ?? ''));
+export async function handleGetArtifact(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  const artifact = await repository(dependencies).getArtifact(requireChatId(request), String(request.params.artifactId ?? ''));
   if (!artifact) throw new HttpError(404, `Artifact "${request.params.artifactId}" was not found.`);
   sendJson(response, artifact);
 }
 
-export async function handlePatchArtifact(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).updateArtifact(requireChatId(request), parseUpdateArtifactRequest(expectBody(request)), 'assistant'));
+export async function handlePatchArtifact(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, await repository(dependencies).updateArtifact(requireChatId(request), parseUpdateArtifactRequest(expectBody(request)), 'assistant'));
 }
 
-export async function handleDeleteArtifact(request: Request, response: Response) {
-  await createRepository(request).deleteArtifact(requireChatId(request), String(request.params.artifactId ?? ''));
+export async function handleDeleteArtifact(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  await repository(dependencies).deleteArtifact(requireChatId(request), String(request.params.artifactId ?? ''));
   sendJson(response, { ok: true });
 }
 
-export async function handleFetchArtifactLines(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).fetchArtifactLines(
+export async function handleFetchArtifactLines(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, await repository(dependencies).fetchArtifactLines(
     requireChatId(request),
     String(request.params.artifactId ?? ''),
     getOptionalIntParam(request.query.startLine, 1, 1, 100000),
@@ -115,9 +115,9 @@ export async function handleFetchArtifactLines(request: Request, response: Respo
   ));
 }
 
-export async function handleSearchArtifact(request: Request, response: Response) {
+export async function handleSearchArtifact(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
   const body = expectBody(request);
-  sendJson(response, await createRepository(request).searchArtifact(
+  sendJson(response, await repository(dependencies).searchArtifact(
     requireChatId(request),
     String(request.params.artifactId ?? ''),
     String(body.query ?? ''),
@@ -126,26 +126,26 @@ export async function handleSearchArtifact(request: Request, response: Response)
   ));
 }
 
-export async function handleGetArtifactOutline(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).getOutline(requireChatId(request), String(request.params.artifactId ?? '')));
+export async function handleGetArtifactOutline(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, await repository(dependencies).getOutline(requireChatId(request), String(request.params.artifactId ?? '')));
 }
 
-export async function handleListArtifactVersions(request: Request, response: Response) {
-  sendJson(response, { versions: await createRepository(request).listVersions(requireChatId(request), String(request.params.artifactId ?? '')) });
+export async function handleListArtifactVersions(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, { versions: await repository(dependencies).listVersions(requireChatId(request), String(request.params.artifactId ?? '')) });
 }
 
-export async function handleRestoreArtifactVersion(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).restoreVersion(requireChatId(request), String(request.params.artifactId ?? ''), String(request.params.versionId ?? '')));
+export async function handleRestoreArtifactVersion(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, await repository(dependencies).restoreVersion(requireChatId(request), String(request.params.artifactId ?? ''), String(request.params.versionId ?? '')));
 }
 
-export async function handleExportArtifactToDoc(request: Request, response: Response) {
+export async function handleExportArtifactToDoc(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
   const body = expectBody(request);
-  sendJson(response, await createRepository(request).exportArtifactToDoc(requireChatId(request), String(request.params.artifactId ?? ''), {
+  sendJson(response, await repository(dependencies).exportArtifactToDoc(requireChatId(request), String(request.params.artifactId ?? ''), {
     mode: (getOptionalQueryParam(body.mode) ?? 'create_or_update_linked') as 'create_new' | 'update_linked' | 'create_or_update_linked',
     title: typeof body.title === 'string' ? body.title : undefined,
   }));
 }
 
-export async function handleUpdateArtifactTable(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).updateArtifactTable(requireChatId(request), parseUpdateArtifactTableRequest(expectBody(request)), 'assistant'));
+export async function handleUpdateArtifactTable(request: Request, response: Response, dependencies: AiArtifactsRouteDependencies) {
+  sendJson(response, await repository(dependencies).updateArtifactTable(requireChatId(request), parseUpdateArtifactTableRequest(expectBody(request)), 'assistant'));
 }

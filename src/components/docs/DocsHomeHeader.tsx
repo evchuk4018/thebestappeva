@@ -71,7 +71,7 @@ export function DocsHomeHeader({
           <option value="title">Sort: Title</option>
         </select>
         <div className="rounded-full border border-zinc-800 bg-[#090b0f] px-4 py-3 text-sm text-zinc-500">
-          {busy ? 'Working...' : error ? error : 'Stored in the local SQLite workspace'}
+          {busy ? 'Working...' : error ? error : 'Stored in the local Postgres workspace'}
         </div>
       </div>
     </header>

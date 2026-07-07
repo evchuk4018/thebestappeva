@@ -1,31 +1,31 @@
 import { Request, Response } from 'express';
 import { parseSaveAiWorkspaceRequest } from '../shared/ai-workspace-contract';
-import { getRequestAuthContext } from './auth/request-context';
-import { createPostgresAiWorkspaceRepository } from './db/postgres-ai-workspace-repository';
-import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
+import type { ServerRequestDependencies } from './composition-root';
 import { HttpError } from './http';
+
+type AiWorkspaceRouteDependencies = Pick<ServerRequestDependencies, 'aiWorkspaceRepository'>;
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
 }
 
-function createRepository(request: Request) {
-  return createPostgresAiWorkspaceRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
+function repository(dependencies: AiWorkspaceRouteDependencies) {
+  return dependencies.aiWorkspaceRepository;
 }
 
-export async function handleGetAiWorkspace(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).loadAiWorkspace());
+export async function handleGetAiWorkspace(_request: Request, response: Response, dependencies: AiWorkspaceRouteDependencies) {
+  sendJson(response, await repository(dependencies).loadAiWorkspace());
 }
 
-export async function handlePutAiWorkspace(request: Request, response: Response) {
+export async function handlePutAiWorkspace(request: Request, response: Response, dependencies: AiWorkspaceRouteDependencies) {
   if (!request.body) {
     throw new HttpError(400, 'Missing AI workspace request body.');
   }
 
   const payload = parseSaveAiWorkspaceRequest(request.body);
-  sendJson(response, await createRepository(request).saveAiWorkspace(payload.workspace, payload.revision));
+  sendJson(response, await repository(dependencies).saveAiWorkspace(payload.workspace, payload.revision));
 }
 
-export async function handleGetAiPreferences(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).loadAiPreferences());
+export async function handleGetAiPreferences(_request: Request, response: Response, dependencies: AiWorkspaceRouteDependencies) {
+  sendJson(response, await repository(dependencies).loadAiPreferences());
 }

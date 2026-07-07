@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 import { parseNutritionDiaryEntryInput, parseNutritionFoodInput, parseNutritionGoalsInput, parseNutritionHistoryQuery, parseNutritionRecipeInput } from '../shared/nutrition-contract';
 import { parseNutritionAiFoodLogRequest } from '../shared/nutrition-ai-food-log-contract';
-import { getRequestAuthContext } from './auth/request-context';
-import { createPostgresNutritionRepository } from './db/postgres-nutrition-repository';
-import { getOwnerUuidFromRequestContext } from './db/postgres-repository-utils';
+import type { ServerRequestDependencies } from './composition-root';
 import { HttpError, getOptionalIntParam, getOptionalQueryParam } from './http';
 import { analyzeNutritionAiFoodLog } from './nutrition-ai-food-log';
+
+type NutritionRouteDependencies = Pick<ServerRequestDependencies, 'nutritionRepository'>;
 
 function sendJson(response: Response, payload: unknown) {
   response.status(200).json(payload);
@@ -36,98 +36,98 @@ function loggedAt(value: unknown) {
   return text;
 }
 
-function createRepository(request: Request) {
-  return createPostgresNutritionRepository(getOwnerUuidFromRequestContext(getRequestAuthContext(request).userId));
+function repository(dependencies: NutritionRouteDependencies) {
+  return dependencies.nutritionRepository;
 }
 
-export async function handleGetNutritionBootstrap(request: Request, response: Response) {
-  sendJson(response, await createRepository(request).bootstrap(selectedDate(request.query.date)));
+export async function handleGetNutritionBootstrap(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, await repository(dependencies).bootstrap(selectedDate(request.query.date)));
 }
 
-export async function handleSearchNutritionItems(request: Request, response: Response) {
-  sendJson(response, { items: await createRepository(request).searchItems(getOptionalQueryParam(request.query.query) ?? '', loggedAt(request.query.loggedAt)) });
+export async function handleSearchNutritionItems(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { items: await repository(dependencies).searchItems(getOptionalQueryParam(request.query.query) ?? '', loggedAt(request.query.loggedAt)) });
 }
 
-export async function handlePostNutritionAiFoodLog(request: Request, response: Response) {
+export async function handlePostNutritionAiFoodLog(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
   const input = parseOrBadRequest(() => parseNutritionAiFoodLogRequest(body(request)));
-  const repository = createRepository(request);
+  const nutritionRepository = repository(dependencies);
   sendJson(response, await analyzeNutritionAiFoodLog(input.attachmentId, input.loggedAt, {
-    searchItems: (query, iso, limit) => repository.searchItems(query, iso, limit),
+    searchItems: (query, iso, limit) => nutritionRepository.searchItems(query, iso, limit),
     context: async (iso) => {
-      const bootstrap = await repository.bootstrap(new Intl.DateTimeFormat('en-CA').format(new Date(iso)));
+      const bootstrap = await nutritionRepository.bootstrap(new Intl.DateTimeFormat('en-CA').format(new Date(iso)));
       return {
         recipes: bootstrap.recipes.map((recipe) => ({ name: recipe.name, servings: recipe.servings, totalWeightG: recipe.totalWeightG })),
         recentItems: bootstrap.recentItemNames,
-        likelyItems: (await repository.searchItems('', iso, 12)).map((item) => ({ name: item.name, type: item.itemType, serving: item.defaultServingLabel ?? `${Math.round(item.defaultAmountG)}g` })),
+        likelyItems: (await nutritionRepository.searchItems('', iso, 12)).map((item) => ({ name: item.name, type: item.itemType, serving: item.defaultServingLabel ?? `${Math.round(item.defaultAmountG)}g` })),
       };
     },
   }));
 }
 
-export async function handleGetNutritionHistory(request: Request, response: Response) {
+export async function handleGetNutritionHistory(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
   const query = parseOrBadRequest(() => parseNutritionHistoryQuery({
     date: request.query.date,
     startDate: request.query.startDate,
     endDate: request.query.endDate,
     limit: getOptionalIntParam(request.query.limit, 20, 1, 100),
   }));
-  sendJson(response, { entries: await createRepository(request).listDiaryEntries(query) });
+  sendJson(response, { entries: await repository(dependencies).listDiaryEntries(query) });
 }
 
-export async function handleGetNutritionGoals(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).getGoals() });
+export async function handleGetNutritionGoals(_request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).getGoals() });
 }
 
-export async function handlePutNutritionGoals(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveGoals(parseOrBadRequest(() => parseNutritionGoalsInput(body(request)))) });
+export async function handlePutNutritionGoals(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveGoals(parseOrBadRequest(() => parseNutritionGoalsInput(body(request)))) });
 }
 
-export async function handleListNutritionRecipes(request: Request, response: Response) {
-  sendJson(response, { items: (await createRepository(request).bootstrap(new Intl.DateTimeFormat('en-CA').format(new Date()))).recipes });
+export async function handleListNutritionRecipes(_request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { items: (await repository(dependencies).bootstrap(new Intl.DateTimeFormat('en-CA').format(new Date()))).recipes });
 }
 
-export async function handleCreateNutritionRecipe(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveRecipe(null, parseOrBadRequest(() => parseNutritionRecipeInput(body(request)))) });
+export async function handleCreateNutritionRecipe(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveRecipe(null, parseOrBadRequest(() => parseNutritionRecipeInput(body(request)))) });
 }
 
-export async function handlePutNutritionRecipe(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveRecipe(request.params.recipeId, parseOrBadRequest(() => parseNutritionRecipeInput(body(request)))) });
+export async function handlePutNutritionRecipe(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveRecipe(request.params.recipeId, parseOrBadRequest(() => parseNutritionRecipeInput(body(request)))) });
 }
 
-export async function handleCreateNutritionBrandFood(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveBrandFood(null, parseOrBadRequest(() => parseNutritionFoodInput(body(request)))) });
+export async function handleCreateNutritionBrandFood(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveBrandFood(null, parseOrBadRequest(() => parseNutritionFoodInput(body(request)))) });
 }
 
-export async function handlePutNutritionBrandFood(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveBrandFood(request.params.foodId, parseOrBadRequest(() => parseNutritionFoodInput(body(request)))) });
+export async function handlePutNutritionBrandFood(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveBrandFood(request.params.foodId, parseOrBadRequest(() => parseNutritionFoodInput(body(request)))) });
 }
 
-export async function handleCreateNutritionEntry(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveDiaryEntry(null, parseOrBadRequest(() => parseNutritionDiaryEntryInput(body(request)))) });
+export async function handleCreateNutritionEntry(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveDiaryEntry(null, parseOrBadRequest(() => parseNutritionDiaryEntryInput(body(request)))) });
 }
 
-export async function handlePutNutritionEntry(request: Request, response: Response) {
-  sendJson(response, { item: await createRepository(request).saveDiaryEntry(request.params.entryId, parseOrBadRequest(() => parseNutritionDiaryEntryInput(body(request)))) });
+export async function handlePutNutritionEntry(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  sendJson(response, { item: await repository(dependencies).saveDiaryEntry(request.params.entryId, parseOrBadRequest(() => parseNutritionDiaryEntryInput(body(request)))) });
 }
 
-export async function handleDeleteNutritionEntry(request: Request, response: Response) {
-  if (!await createRepository(request).deleteDiaryEntry(request.params.entryId)) throw new HttpError(404, 'Nutrition entry was not found.');
+export async function handleDeleteNutritionEntry(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  if (!await repository(dependencies).deleteDiaryEntry(request.params.entryId)) throw new HttpError(404, 'Nutrition entry was not found.');
   sendJson(response, { ok: true });
 }
 
-export async function handleCreateNutritionEntryItem(request: Request, response: Response) {
-  const entry = await createRepository(request).addDiaryItem(request.params.entryId, parseOrBadRequest(() => parseNutritionDiaryEntryInput({ loggedAt: new Date().toISOString(), items: [body(request)] }).items[0]));
+export async function handleCreateNutritionEntryItem(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  const entry = await repository(dependencies).addDiaryItem(request.params.entryId, parseOrBadRequest(() => parseNutritionDiaryEntryInput({ loggedAt: new Date().toISOString(), items: [body(request)] }).items[0]));
   if (!entry) throw new HttpError(404, 'Nutrition entry was not found.');
   sendJson(response, { item: entry });
 }
 
-export async function handlePutNutritionEntryItem(request: Request, response: Response) {
-  const entry = await createRepository(request).updateDiaryItem(request.params.entryId, request.params.itemId, parseOrBadRequest(() => parseNutritionDiaryEntryInput({ loggedAt: new Date().toISOString(), items: [body(request)] }).items[0]));
+export async function handlePutNutritionEntryItem(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  const entry = await repository(dependencies).updateDiaryItem(request.params.entryId, request.params.itemId, parseOrBadRequest(() => parseNutritionDiaryEntryInput({ loggedAt: new Date().toISOString(), items: [body(request)] }).items[0]));
   if (!entry) throw new HttpError(404, 'Nutrition entry was not found.');
   sendJson(response, { item: entry });
 }
 
-export async function handleDeleteNutritionEntryItem(request: Request, response: Response) {
-  if (!await createRepository(request).deleteDiaryItem(request.params.entryId, request.params.itemId)) throw new HttpError(404, 'Nutrition entry item was not found.');
+export async function handleDeleteNutritionEntryItem(request: Request, response: Response, dependencies: NutritionRouteDependencies) {
+  if (!await repository(dependencies).deleteDiaryItem(request.params.entryId, request.params.itemId)) throw new HttpError(404, 'Nutrition entry item was not found.');
   sendJson(response, { ok: true });
 }
