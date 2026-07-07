@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-The application runtime now uses Postgres as the only persistence implementation. Legacy SQLite repositories, schema modules, and `better-sqlite3` remain only for one-time importer paths and focused legacy tests. A temporary one-time SQLite-to-Postgres importer command has been added, but the requested Supabase import has not run because `DATABASE_URL` and the destination owner UUID were not available in this shell.
+The application runtime now uses Postgres as the only persistence implementation. Legacy SQLite repositories, schema modules, and `better-sqlite3` remain only for one-time importer paths and focused legacy tests. A temporary one-time SQLite-to-Postgres importer command has been added, but the requested Supabase import has not run because the provided direct Supabase database host is IPv6-only from this environment and could not be reached.
 
 ## Completed Work
 
@@ -70,6 +70,9 @@ The application runtime now uses Postgres as the only persistence implementation
 - Local test database dry run passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
 - Local test database import passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
 - Local test database idempotency rerun passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
+- Supabase dry run attempted for owner UUID `5a3ad7db-387f-40f5-94cc-88c3b37f168c`; it failed before migration with `getaddrinfo ENOTFOUND db.ukursibkusxhpnntoyty.supabase.co`.
+- DNS/connectivity checks found the Supabase API host resolves over IPv4, while `db.ukursibkusxhpnntoyty.supabase.co` resolves only to an IPv6 address and `Test-NetConnection` to port 5432 failed from this environment.
+- Generic Supabase pooler region probes reached port 6543 but returned tenant/user-not-found; the exact dashboard-provided connection pooler URL is needed to retry over IPv4.
 
 ## Decisions and Invariants
 
@@ -86,21 +89,22 @@ The application runtime now uses Postgres as the only persistence implementation
 
 - Legacy SQLite repository factories, schema modules, and `LOCAL_DB_PATH` config still exist for focused legacy tests and one-time importer support; they are not application runtime persistence.
 - Build still reports the pre-existing large JavaScript chunk warning when `npm run build` is run.
-- Supabase API URL and publishable key were provided, but the importer requires a direct Postgres `DATABASE_URL` and an explicit destination Supabase owner UUID. The requested Supabase dry run, import, verification, and idempotency rerun were not executed.
+- Supabase direct database URL and destination owner UUID were provided, but the direct database host could not be reached from this environment because it resolves only to IPv6. The requested Supabase import, verification, and idempotency rerun were not executed.
 
 ## Migration Verification Status
 
-- FAILED for the requested Supabase migration because required live inputs were unavailable: `DATABASE_URL` and the destination owner UUID.
+- FAILED for the requested Supabase migration because the direct database endpoint could not be reached from this environment before any migration transaction began.
 - Runtime persistence remains confirmed Postgres-only through startup validation, composition-root wiring, and the SQLite import guard.
 - Inspected the current SQLite source schema read-only from the default `LOCAL_DB_PATH` and inspected all current Postgres migration files before writing importer logic.
 - Source owner scan found 1160 rows mappable from `owner-local-default` or `local-user` and 0 unmapped owner rows.
 - Source row counts used for validation: app settings 7, AI chats 15, AI artifacts 4, AI artifact versions 0, docs documents 4, docs tabs 4, docs versions 821, docs citations 0, docs migration sources 1, calendar calendars 1, calendar categories 3, calendar events 0, calendar recurrence rules 0, calendar recurrence exceptions 0, calendar tasks 0, calendar task recurrence rules 0, calendar settings 1, calendar undo actions 0, workout exercises 81, workout routines 3, workout routine exercises 11, workout sessions 0, workout session exercises 0, workout sets 0, nutrition foods 202, nutrition recipes 0, nutrition recipe ingredients 0, nutrition diary entries 0, nutrition diary items 0, nutrition goals 1, nutrition usage stats 0, skills 1, automations 0, workspace revision state 0.
 - Local test database dry run/import/idempotency rerun all passed. Each processed 1160 rows and verified row counts, entity IDs, owner mapping, foreign-key validity, JSON validity, timestamp min/max ranges, document tab/version counts, calendar recurrence/exception counts, workout session/set counts, nutrition entry/item counts, and skill/automation counts.
+- Supabase dry run did not reach schema validation or migration verification; no Supabase rows were imported by this command.
 
 ## Next Exact Step
 
-Provide a direct Postgres `DATABASE_URL` for the Supabase target and the destination Supabase owner UUID, then run `npm run db:migrate-to-postgres -- --owner-id <uuid> --dry-run`, `npm run db:migrate-to-postgres -- --owner-id <uuid>`, and a second `npm run db:migrate-to-postgres -- --owner-id <uuid>` to prove idempotency.
+Provide the Supabase dashboard's IPv4-compatible connection pooler URL for the project, then run `npm run db:migrate-to-postgres -- --owner-id 5a3ad7db-387f-40f5-94cc-88c3b37f168c --dry-run`, `npm run db:migrate-to-postgres -- --owner-id 5a3ad7db-387f-40f5-94cc-88c3b37f168c`, and a second import command to prove idempotency.
 
 ## Last Commit
 
-- Before this session: `87dd5ad Implement Postgres feature repositories`.
+- Before this retry: `a769532 Add SQLite to Postgres migration command`.
