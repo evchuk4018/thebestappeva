@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-The application runtime now uses Postgres as the only persistence implementation. Legacy SQLite repositories, schema modules, and `better-sqlite3` remain only for one-time importer paths and focused legacy tests.
+The application runtime now uses Postgres as the only persistence implementation. Legacy SQLite repositories, schema modules, and `better-sqlite3` remain only for one-time importer paths and focused legacy tests. A temporary one-time SQLite-to-Postgres importer command has been added, but the requested Supabase import has not run because `DATABASE_URL` and the destination owner UUID were not available in this shell.
 
 ## Completed Work
 
@@ -18,6 +18,7 @@ The application runtime now uses Postgres as the only persistence implementation
 - Added API integration coverage through the real Express API for authentication plus owner isolation, AI workspace, Docs, Calendar, Workout, Nutrition, Skills, Automations, invalid relation handling, unexpected persistence failure handling, and database outage handling.
 - Added an architecture check preventing runtime feature modules from importing `better-sqlite3`, SQLite `getDatabase`, or SQLite schema modules while allowing legacy SQLite tests and importer modules to remain.
 - Updated README, `agent.md`, `AGENTS.md`, and visible Docs UI copy from SQLite-era wording to Postgres runtime persistence.
+- Added `npm run db:migrate-to-postgres` as a temporary one-time importer. It reads `LOCAL_DB_PATH` with SQLite `readonly` and `query_only`, writes to `DATABASE_URL`, requires `--owner-id <uuid>`, supports `--dry-run`, validates target Postgres schema compatibility, imports with transactions and idempotent upserts, maps `owner-local-default` and `local-user` to the supplied owner UUID, converts integer booleans, parses JSON text to JSONB, preserves entity IDs/timestamps, and emits a content-free verification report.
 
 ## Files Changed
 
@@ -27,6 +28,7 @@ The application runtime now uses Postgres as the only persistence implementation
 - `handoff.md`
 - `package.json`
 - `scripts/check-server-persistence-boundaries.mjs`
+- `scripts/db-migrate-to-postgres.ts`
 - `server/ai-artifacts.ts`
 - `server/ai-attachments/image-routes.ts`
 - `server/ai-memory.ts`
@@ -59,6 +61,15 @@ The application runtime now uses Postgres as the only persistence implementation
 - `npx tsx --test server/skills-service.test.ts server/automations-service.test.ts server/nutrition-ai-food-log.test.ts server/ai-memory.test.ts` passed: 12 tests passed.
 - `npx tsx --test server/auth/require-owner.test.ts` passed: 10 tests passed.
 - `npm run build` passed with the existing large-chunk warning.
+- `npm run db:migrate-to-postgres -- --help` passed.
+- `npm run db:migrate-to-postgres -- --owner-id 11111111-1111-4111-8111-111111111111 --dry-run` refused to run because `DATABASE_URL` was not set.
+- `npm run lint` passed after adding the importer.
+- `npm run test:files` passed after adding the importer.
+- `npm run db:test` passed: 34 tests passed.
+- `npx tsx --test server/db/postgres-migrations.test.ts` passed: 10 tests passed.
+- Local test database dry run passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
+- Local test database import passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
+- Local test database idempotency rerun passed with synthetic owner UUID: 1160 rows processed and verification `PASSED`.
 
 ## Decisions and Invariants
 
@@ -75,18 +86,20 @@ The application runtime now uses Postgres as the only persistence implementation
 
 - Legacy SQLite repository factories, schema modules, and `LOCAL_DB_PATH` config still exist for focused legacy tests and one-time importer support; they are not application runtime persistence.
 - Build still reports the pre-existing large JavaScript chunk warning when `npm run build` is run.
+- Supabase API URL and publishable key were provided, but the importer requires a direct Postgres `DATABASE_URL` and an explicit destination Supabase owner UUID. The requested Supabase dry run, import, verification, and idempotency rerun were not executed.
 
 ## Migration Verification Status
 
-- Local Postgres test service was available for validation.
-- The full sorted migration set was applied by the Postgres test suite.
-- Verified focused Postgres adapters for owner isolation, workspace revisions, documents, artifacts, calendar recurrence/undo, workout atomicity, nutrition behavior, skills, and automations.
-- Verified real API behavior for authenticated owner resolution, migrated feature routes, owner isolation, automation background claiming/reporting, stable persistence error translation, and database outage handling.
-- Verified static architecture guard blocks runtime feature imports of SQLite persistence APIs.
+- FAILED for the requested Supabase migration because required live inputs were unavailable: `DATABASE_URL` and the destination owner UUID.
+- Runtime persistence remains confirmed Postgres-only through startup validation, composition-root wiring, and the SQLite import guard.
+- Inspected the current SQLite source schema read-only from the default `LOCAL_DB_PATH` and inspected all current Postgres migration files before writing importer logic.
+- Source owner scan found 1160 rows mappable from `owner-local-default` or `local-user` and 0 unmapped owner rows.
+- Source row counts used for validation: app settings 7, AI chats 15, AI artifacts 4, AI artifact versions 0, docs documents 4, docs tabs 4, docs versions 821, docs citations 0, docs migration sources 1, calendar calendars 1, calendar categories 3, calendar events 0, calendar recurrence rules 0, calendar recurrence exceptions 0, calendar tasks 0, calendar task recurrence rules 0, calendar settings 1, calendar undo actions 0, workout exercises 81, workout routines 3, workout routine exercises 11, workout sessions 0, workout session exercises 0, workout sets 0, nutrition foods 202, nutrition recipes 0, nutrition recipe ingredients 0, nutrition diary entries 0, nutrition diary items 0, nutrition goals 1, nutrition usage stats 0, skills 1, automations 0, workspace revision state 0.
+- Local test database dry run/import/idempotency rerun all passed. Each processed 1160 rows and verified row counts, entity IDs, owner mapping, foreign-key validity, JSON validity, timestamp min/max ranges, document tab/version counts, calendar recurrence/exception counts, workout session/set counts, nutrition entry/item counts, and skill/automation counts.
 
 ## Next Exact Step
 
-Run a production-style smoke test (`npm run build` then `npm run preview`) against a real authenticated Supabase session and manually exercise the migrated tabs end-to-end.
+Provide a direct Postgres `DATABASE_URL` for the Supabase target and the destination Supabase owner UUID, then run `npm run db:migrate-to-postgres -- --owner-id <uuid> --dry-run`, `npm run db:migrate-to-postgres -- --owner-id <uuid>`, and a second `npm run db:migrate-to-postgres -- --owner-id <uuid>` to prove idempotency.
 
 ## Last Commit
 

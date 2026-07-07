@@ -21,7 +21,8 @@
     "db:up": "docker compose -f docker-compose.postgres.yml up -d",
     "db:down": "docker compose -f docker-compose.postgres.yml down",
     "db:reset": "docker compose -f docker-compose.postgres.yml down -v && docker compose -f docker-compose.postgres.yml up -d",
-    "db:test": "npm run test:postgres"
+    "db:test": "npm run test:postgres",
+    "db:migrate-to-postgres": "tsx scripts/db-migrate-to-postgres.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
